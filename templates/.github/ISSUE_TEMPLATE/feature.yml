@@ -1,0 +1,11 @@
+name: Feature / 体验
+description: 想要一个新功能，或觉得某处不好用
+labels: ["triage"]
+body:
+  - type: textarea
+    id: problem
+    attributes: {label: 你想解决什么问题, description: 一句话也可以，例如"这个按钮一直显示太丑了"}
+    validations: {required: true}
+  - type: textarea
+    id: idea
+    attributes: {label: 你设想的做法（可选）}
