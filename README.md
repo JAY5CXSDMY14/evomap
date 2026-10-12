@@ -97,7 +97,7 @@ evoloop/
 
 ```bash
 # 1. 装进目标仓库（不会覆盖已有文件，冲突会生成 .evoloop.new）
-git clone git@github.com:JAY5CXSDMY14/evoloop.git
+git clone https://github.com/JAY5CXSDMY14/evomap.git evoloop
 ./evoloop/scripts/install.sh /path/to/your-repo
 
 # 2. 填写占位符（搜索 {{ 即可）
