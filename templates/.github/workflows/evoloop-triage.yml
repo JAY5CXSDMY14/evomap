@@ -1,0 +1,21 @@
+# 新 Issue 自动分诊（第 4 期再开启）。
+name: evoloop-triage
+on:
+  issues:
+    types: [opened, edited]
+permissions:
+  issues: write
+  contents: read
+jobs:
+  triage:
+    if: ${{ !contains(github.event.issue.labels.*.name, 'evo:ready') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: {fetch-depth: 200}
+      - uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          prompt: |
+            按 prompts/triage.md 分诊 Issue #${{ github.event.issue.number }}，用 gh 打标签并评论。
+          claude_args: "--allowedTools Bash(gh issue:*),Bash(gh search:*),Bash(git log:*),Read"

@@ -1,0 +1,32 @@
+# 机械守卫：PR 正文必须有 Red / Ran / Not run；LESSONS.md 格式与 sha 校验。
+name: evoloop-guard
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+permissions:
+  contents: read
+  pull-requests: read
+jobs:
+  guard:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: {fetch-depth: 0}
+      - name: PR body has evidence sections
+        if: ${{ !contains(github.event.pull_request.labels.*.name, 'evo:retro') }}
+        env:
+          BODY: ${{ github.event.pull_request.body }}
+        run: |
+          missing=0
+          for s in "## Red" "## Ran" "## Not run"; do
+            grep -qF "$s" <<<"$BODY" || { echo "::error::PR body missing section '$s'"; missing=1; }
+          done
+          nr=$(awk '/^## Not run/{f=1;next}/^## /{f=0}f' <<<"$BODY" | grep -v '^<!--' | tr -d '[:space:]')
+          [ -n "$nr" ] || { echo "::error::'Not run' is empty — list what wasn't run, or write 'none'"; missing=1; }
+          exit $missing
+      - name: LESSONS.md lint & verify
+        run: |
+          if [ -f LESSONS.md ]; then
+            python3 scripts/lessons.py lint
+            python3 scripts/lessons.py verify
+          fi
