@@ -2,7 +2,7 @@
 
 > 让 AI Agent 不只是写代码，而是**发现问题 → 解决问题 → 自证 → 互审 → 合并发布 → 复盘 → 把教训写回规则**，每转一圈，系统就更难犯同样的错。
 
-evoloop 是一套**可直接套进任何代码仓库的 AI 开发循环架构**：一组文档模板、Agent 提示词、自动化脚本和 CI 工作流。它提炼自 [yetone/magpie](https://github.com/yetone/magpie) 的公开实践（19 天 2,862 个 commit、1,204 个版本，写、审、合、发全部由 agent 完成），并补齐了 magpie 仓库没有公开的部分：**夜审触发器、复盘提示词、派活与编排**。
+evoloop 是一套**可直接套进任何代码仓库的 AI 开发循环架构**：一组文档模板、Agent 提示词、自动化脚本和 CI 工作流。它提炼自 [yetone/magpie](https://github.com/yetone/magpie) 的公开实践（19 天 2,862 个 commit、1,204 个版本，写、审、合、发全部由 agent 完成），并结合作者 2026-10-13 公开的做法（Claude Code `/loop` 并行 3 条循环），把编排补成可落地的四档方案：**常驻 loop 会话、手动、GitHub Actions、调度器**，以及配套的复盘提示词。
 
 ---
 
@@ -64,7 +64,7 @@ evoloop/
 ├── docs/
 │   ├── loop.md                  ← 八个阶段的详细规格（输入 / 动作 / 输出 / 闸门 / 反模式）
 │   ├── lessons-system.md        ← 错题本机制：格式、计次、升级、降级、清理
-│   ├── orchestration.md         ← 夜审触发、派活、并行、agent 选型（magpie 未公开的部分）
+│   ├── orchestration.md         ← 四档编排（L0 = magpie 实际的 /loop 做法）、派活、并行、agent 选型
 │   ├── adoption.md              ← 分阶段接入一个现有项目（以 tubu-platform 为例）
 │   └── magpie-reference.md      ← 原始调研：magpie 的循环、数据、来源
 ├── templates/                   ← 拷进目标仓库根目录的文件
@@ -80,7 +80,8 @@ evoloop/
 │   ├── builder.md
 │   ├── reviewer.md
 │   ├── release.md
-│   └── nightly-retro.md
+│   ├── nightly-retro.md
+│   └── loops/                   ← L0 档的三条 /loop 提示词（渠道 / 社媒反馈 / 清理复盘）
 └── scripts/
     ├── install.sh               ← 一键把 templates 装进目标仓库
     ├── claim.sh                 ← 认领 Issue + 建 worktree
