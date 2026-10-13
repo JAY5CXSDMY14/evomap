@@ -21,6 +21,7 @@ evoloop 因此分四档：L0 是 magpie 的实际做法，L1～L3 是更结构�
 
 L0 的取舍：
 - 优点：几乎零基础设施，Agent 拥有完整上下文，从发现到回复一条龙。
+- **冲突**：作者在评论区没回答，但 magpie 的 LESSONS 里有答案——"Two sessions never commit from the same checkout"：10-09 两个会话共用主 checkout 的 index，一个会话把另一个暂存的文件提交到了错误的 subject 下。规则是每个会话用自己的 worktree（`git worktree add --detach`）。
 - 风险：没有显式派活与锁，多个 loop 可能撞同一个 Issue → 仍然要求 `scripts/claim.sh` 认领 + `evo:in-progress` 标签；Builder 与 Reviewer 同在一个会话里，**自审偏差**更大 → 合并前至少用 `merge-reviewed.sh` 锁 sha，高风险改动另开会话审。
 - 成本：常驻会话持续消耗 token，入口一定要有廉价过滤层（见 ②）。
 - **权限隔离**：每条 loop 一份独立的权限配置（Claude Code 的 allow / deny），只给它这条职责需要的命令和目录；社媒 loop 不需要合并权限，清理 loop 不需要回复外部的权限。共用一份时，一条 loop 出事会连带放行其它 loop。

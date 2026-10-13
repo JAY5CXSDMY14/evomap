@@ -183,6 +183,11 @@ Reviewed `9bfed616`, merged onto main `238f0d92`, then onto main `8df15fd4`. Mer
 - **真实运行环境是关键**："你要把真实的运行环境提供给 Agent。比如你要有一台 macOS 电脑以及一台 Windows 电脑，然后在 Windows 上再创建个 Linux 虚拟机……让 Agent 每次都要在这三端上去真实地复现 bug 并去修复。" 追问后说明：**只有一端装 Agent**，其它机器不装，由这一个 Agent 去操作。
 - **决策和审美靠什么**："比较依赖 Claude Code 那套简陋但有效的记忆系统和 repo 中的设计文档。开发之初跟 Claude Code 讨论、头脑风暴了很多内容，它都记在记忆文件里了，所以某些决策、审美偏好上，它可以做出跟我比较契合的决策和设计。" 有人问产品取舍谁来把关时，他指向 `docs/subsystems/` 这套 design system（由社区成员构建）。
 
+仓库同日的相关更新：
+- LESSONS 新增 "A squash merge's message is written, not GitHub's default"：#852、#1028 的默认 squash 信息约 520KB（分支合过 main，列出了所有 commit），#1028 自己的运行记录根本没进 git。规则：`gh pr merge --squash` 必须给 `--subject` 和 `--body-file`，推送前确认 `git log -1 --format=%B | wc -c` 最多几 KB。
+- contributors.md 作者分三级：Blocked（5 条拉黑条件 + 固定关闭语）、Reviewed with extra care、新增 **Watched**（有用但反复出同类缺口，合并前专查点名的缺口，不算拉黑）。首个 Watched 作者的必查项是"手动改坏看新测试变红"和"grep 漏掉的兄弟路径"。
+- 关于 loop 冲突，LESSONS 早有 "Two sessions never commit from the same checkout"（10-09 两个会话共用 index 提交了彼此的文件），每个会话自己的 worktree。
+
 评论区提出、作者**没有回答**的问题（自建时要自己解决）：3 个 loop 改同一仓库如何避免冲突（worktree？）；3 路 loop 的权限 / deny 规则是否共用；Issue 里夹带恶意脚本怎么办；云端还是本地常驻；token 成本。另有评论指出：长期运行积累的新记忆可能污染早期的核心决策；子系统文档过期会把 agent 带偏。
 
 结论：

@@ -9,5 +9,5 @@
 3. **清理屎山**：重复实现、死代码、绕过项目既有抽象、无理由的新依赖 → 开清理 Issue，或在独立分支上小步清理（同样要过全部验收闸门）。
 4. **恶意代码**：外发请求、读取凭证、混淆代码、偷偷修改 CI / 安装 / 更新逻辑 → 立即加 evo:needs-human 并通知维护者，不要自行处理。
 5. **写经验**：哪些不该合并、哪些验证不缜密，按 docs/lessons-system.md 的格式写进 LESSONS.md，防止以后的 agent 犯同样的错误；Seen 满 3 个不同日期的升级进 code-standards.md。
-6. **黑名单**：反复提交低质量代码的作者，在 docs/contributors.md 信誉表里记录证据，累计达到阈值时**提议**拉黑，由维护者决定。
+6. **黑名单与分级**：反复提交低质量代码的作者，按 docs/contributors.md 第 4 节的条件**提议**拉黑；有用但总漏同样东西的，提议列入 Watched 并写明合并前必查项。都由维护者决定。
 7. 用 `python3 scripts/lessons.py lint && python3 scripts/lessons.py verify` 校验后，开 PR 提交，附 5 行摘要给维护者。
