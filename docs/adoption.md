@@ -12,6 +12,8 @@
 3. 测试如何与真实数据隔离？（示例：每个测试用临时 Postgres schema / testcontainers；MinIO 用临时 bucket；永不连生产库）
 4. 有哪些已拍板的产品决定？（例如配色生成必须保留土布原始纹样比例）
 5. 哪些改动必须人放行？（例如数据库迁移、删除资产、改鉴权、改 CI）
+6. Agent 能用哪些**真实复现环境**？（tubu 示例：Chrome / Safari / Firefox 三引擎看 3D 预览、移动端浏览器、与生产同构的 Postgres + MinIO 测试实例）
+7. **产品决策与审美**沉淀了没有？没有的话安排一次和 Agent 的头脑风暴，把结论写进 `docs/product-decisions.md`，只由人修改。
 
 ## 第 1 期：规则层（第 1～3 天）
 
