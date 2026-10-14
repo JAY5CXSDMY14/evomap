@@ -129,6 +129,10 @@ cd /path/to/your-repo
 
 ---
 
+## 第二个参考案例
+
+Readest 在 magpie 基础上加了人工审批台、只处理自己的 PR、事件唤醒、人工发版和种子错题本，见 [docs/readest-case.md](docs/readest-case.md)。
+
 ## 致谢与来源
 
 - [yetone/magpie](https://github.com/yetone/magpie)：`AGENTS.md`、`LESSONS.md`、`docs/code-standards.md`、`docs/contributors.md`
