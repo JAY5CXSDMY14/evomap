@@ -139,7 +139,7 @@ Telegram 环境变量改名 `EVO_TG_TOKEN` / `EVO_TG_CHAT`，旧名 `TUBU_TG_TOK
 - **夜审补跑**：过了 23:30 当天没跑的下一轮照跑；第二天中午前开机先补昨天的（只补一天，新项目不补）。日志时间统一走 `evo_time` 的钟。
 - **install.sh 防睡眠检查**：macOS 上 `pmset -g` 显示 sleep / disksleep 不是 0 就警告，并给出 `sudo pmset -a sleep 0 disksleep 0`（只提示，不替你跑 sudo）。
 
-## 第十一轮：看效果指纹 + 死工人自动重启 + ponytail + 模型核对与面板覆盖（均有自动测试，共 138 个）
+## 第十一轮：看效果指纹 + 死工人自动重启 + ponytail + 模型核对与面板覆盖（均有自动测试，共 137 个）
 - **看效果指纹**：老板「看效果 通过」时记下本件自己改动的 patch-id（复用 `patch_id()`）和提交号。之后这件又返工（C6 冲突 / 合并前测试红、决策岗返工），合并前重算：指纹相同 → 不重看直接合并；不同 → 在合并任务上重开看效果闸门「看效果（改动后重看）」，说明「解冲突/返工时改了你看过的内容」，和普通看效果闸门一样 5 分钟没人点就推（带按钮）。打回会清掉指纹。配置 `relook_on_change`（默认 true）。
 - **C7 死工人自动重启**：`check_stalls` 发现工人进程不在了（`worker-show` 的 orphaned / observation 不是 live），且这次派工的任务还没交 worker_done，就在原工作区、同岗位、同模型重启一次：关旧终端、旧任务标 failed、新建任务（施工连带新验收）、立刻派工，记日志和 `worker_restarted` 事件（只进 outbox）。次数记在派工上（`dispatch.restarts`），重启出来的派工再死 → 老路：标疑似卡住并推送。新一轮返工的派工重新计数。
 - **ponytail 进岗位**：`kit/vendor/ponytail/` 放官方仓库固定提交 `09c434ab73ca43761c5d8b0c5d341926c2fba710` 的 `ponytail/SKILL.md`、`ponytail-review/SKILL.md` 和 MIT `LICENSE`（README 写来源和升级办法）。`roles/builder.md` 第 13–16 条：full 档、不用 ultra；任务书验收标准压过「最少代码」；收尾的跳过/没查/风险写进交卷 unfinished / risks；允许 `shortcut:` 注释。`roles/verifier.md` 第 14–18 条：按 review 清单读调用方；必须修 → 打回；应该修 → 结论里建议另开 issue，不挡合并；每条发现要有具体触发情形。工人没装 skill 时提示词里的 `{KIT}` 换成本机套件路径，指向固定副本。

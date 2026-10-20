@@ -2037,8 +2037,9 @@ def cmd_panel(a):
             rc, o, e = run(*args)
             self.send(200, json.dumps({"ok": rc == 0, "error": (e or o)[-200:]}, ensure_ascii=False))
 
+    srv = ThreadingHTTPServer((a.host, a.port), H)        # 先占好端口再报地址：脚本看到这行就能连
     print(f"面板：http://{a.host}:{a.port}/（要口令）", flush=True)
-    ThreadingHTTPServer((a.host, a.port), H).serve_forever()
+    srv.serve_forever()
 
 
 # ---------- 提醒通道 ----------
