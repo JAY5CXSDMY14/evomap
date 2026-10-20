@@ -7,6 +7,7 @@
   tubu run   [--every 30]         一直接棒
   tubu status                     给老板看：等你的、进行中、卡住的、可收菜的
   tubu suite -- <测试命令>   岗位跑全量测试时用，整机排队、日志留全
+  tubu retro             每晚错题本：今天的返工/打回/受阻 → 一件文档件，自动走完验收合并推送
   tubu feedback "原话"   以用户视角随口提意见 → 记成 issue，决策岗分拣
   tubu approve <闸门ID> 通过|打回 [一句原话]   你点头；打回时那句话原样进返工说明
   tubu ship                       把已合并的攒成一批，建「上线」闸门
@@ -229,16 +230,51 @@ def do_merge(s, key, it):
                    f"{it.get('premerge', {}).get('at', '?')[:8]} 跑 `{t or '（未配置测试）'}`：通过。"
                    + ("" if t else "\n未跑：全量测试（未配置）"))
     git(repo, "merge", "--no-ff", br, "-m", f"merge {key}: {it['title']}")
-    pc = CFG.get("push_cmd")   # 例：HTTPS_PROXY=socks5h://127.0.0.1:1082 git push origin main
-    if pc:
-        git(repo, "fetch", "origin", check=False)
-        if subprocess.run(["git", "-C", repo, "merge-base", "--is-ancestor", f"origin/{CFG['main_branch']}", "HEAD"]).returncode:
-            return "已本地合并，但远端有新提交，不能快进推送（不强推），交决策岗"
-        r = subprocess.run(pc, shell=True, cwd=repo, capture_output=True, text=True)
-        if r.returncode:
-            return "已本地合并，推送失败：" + (r.stdout + r.stderr)[-200:]
-        it["pushed"] = git(repo, "rev-parse", "HEAD")
     return None
+
+
+def do_push(s):
+    """推送是流程的一步：本地已合并的件，推到 GitHub 才算「已合并」。
+    远端先前进了就普通合并远端 → 重跑测试 → 再推；永不强推。失败下轮自动重试，连续 3 次才喊人。"""
+    pend = [k for k, it in s["items"].items() if it["state"] == "pushing"]
+    pc = CFG.get("push_cmd")
+    if not pend:
+        return
+    if not pc:   # 没配推送：直接视为合并完成（本地模式）
+        for k in pend:
+            s["items"][k]["state"] = "merged"
+        return
+    repo, mb = CFG["repo"], CFG["main_branch"]
+    def fail(why):
+        s["push_fail"] = s.get("push_fail", 0) + 1
+        log(s, f"推送未成（第 {s['push_fail']} 次）：{why[:120]}")
+        if s["push_fail"] == 3:
+            notify("推送连续失败", why[:120])
+    if git(repo, "status", "--porcelain", "--untracked-files=no"):
+        return fail("主工作区有未提交改动，不碰")
+    git(repo, "checkout", mb)
+    git(repo, "fetch", "origin", check=False)
+    if subprocess.run(["git", "-C", repo, "merge-base", "--is-ancestor", f"origin/{mb}", "HEAD"]).returncode:
+        try:
+            git(repo, "merge", "--no-ff", f"origin/{mb}", "-m", "merge origin/" + mb)
+        except RuntimeError as e:
+            git(repo, "merge", "--abort", check=False)
+            for k in pend:
+                s["items"][k]["state"] = "escalated"; s["items"][k]["resume"] = "pushing"
+            notify("远端冲突", "本地合并与远端冲突，交决策岗"); return log(s, f"远端冲突，交决策岗：{e}")
+        t = CFG.get("test_cmd")
+        if t:
+            rc, logf, reds = run_suite(t, repo, "push")
+            if rc:
+                return fail(f"并入远端后测试不绿（{logf}）：" + " | ".join(reds))
+    r = subprocess.run(pc, shell=True, cwd=repo, capture_output=True, text=True)
+    if r.returncode:
+        return fail((r.stdout + r.stderr)[-200:])
+    head = git(repo, "rev-parse", "HEAD"); s["push_fail"] = 0
+    for k in pend:
+        it = s["items"][k]; it["state"] = "merged"; it["pushed"] = head
+        log(s, f"{k} 已推送到 GitHub（{head[:8]}）")
+        gh_comment(it, f"已验收、合并并推送到主线（{head[:8]}），等上线批次。")
 
 
 def patch_id(wt):
@@ -367,11 +403,12 @@ def cmd_tick(a=None):
                 it["state"] = "escalated"; it["resume"] = "verified"; log(s, f"{k} 合并受阻：{err}"); notify("合并受阻", it["title"])
             else:
                 orca("orchestration", "task-update", "--from", c, "--id", it["merge"], "--status", "completed")
-                it["state"] = "merged"; log(s, f"{k} 已合并，待上线")
-                gh_comment(it, f"已验收并合并到主线（{it.get('pushed', '本地')[:8]}），等上线批次。")
+                it["state"] = "pushing"; log(s, f"{k} 已本地合并，等推送")
                 cleanup(it)
         elif it["gates"].get("do") and st("build") == "failed":
             it["state"] = "dropped"
+
+    do_push(s)
 
     # 3) 停滞：超过阈值没有任何回报
     now = time.time()
@@ -435,12 +472,43 @@ def cmd_digest(a):
         notify("今晚汇总", f"可收菜 {len(ready)} 件，卡住 {len(stuck)} 件")
 
 
+def cmd_retro(a):
+    """每晚错题本：把今天的返工、打回原话、合并受阻、卡住、交决策岗整理成材料，
+    作为一件普通的「文档件」走施工→验收→合并→推送，由施工岗按 roles/retro.md 更新错题本。"""
+    s = load()
+    since = time.time() - 86400
+    today = time.strftime("%m-%d"); yday = time.strftime("%m-%d", time.localtime(since))
+    pick = ("返工", "打回", "受阻", "不绿", "卡住", "交决策岗", "冲突", "推送未成", "未试")
+    ev = [l for l in s["log"] if l[:5] in (today, yday) and any(w in l for w in pick)]
+    if not ev:
+        print("今天没有返工/受阻/打回，错题本不用动。"); return
+    lf = CFG.get("lessons_file", "docs/LESSONS.md"); sf = CFG.get("standards_file", "docs/code-standards.md")
+    promote = subprocess.run([sys.executable, os.path.join(KIT, "bin", "lessons.py"), "promote", "--file",
+                              os.path.join(CFG["repo"], lf)], capture_output=True, text=True).stdout.strip()
+    spec = (role_prompt("retro") + f"错题本：{lf}\n规范：{sf}\n\n## 今天的事件（接棒器日志）\n" + "\n".join(ev)
+            + "\n\n## 已满 3 天、该升级的条目\n" + (promote or "（无）"))
+    ns = argparse.Namespace(title=time.strftime("%m-%d 夜间错题本"), scope=",".join({os.path.dirname(lf) or ".", os.path.dirname(sf) or "."}),
+                            ui=False, product=False, issue=None, spec=spec)
+    cmd_add(ns)
+
+
+def nightly():
+    """每天到点（默认 23:30）自动：错题本一件 + 夜间汇总，各一次。"""
+    at = CFG.get("nightly_at", "23:30"); today = time.strftime("%Y-%m-%d")
+    st = load()
+    if time.strftime("%H:%M") < at or st.get("nightly_done") == today:
+        return
+    st["nightly_done"] = today; save(st)
+    cmd_retro(None); cmd_digest(argparse.Namespace(post=True))
+
+
 def cmd_run(a):
     while True:
         try:
             if CFG.get("github_repo"):
                 cmd_pull(None)
             cmd_tick()
+            nightly()
         except SystemExit as e:
             print("本轮出错：", e)
         time.sleep(a.every)
@@ -474,7 +542,7 @@ def cmd_status(a):
     if not pend:
         print("  （没有）")
     names = {"queued": "排队", "building": "施工中", "built": "待验收", "verifying": "验收中", "verified": "验收通过",
-             "merged": "已合并·可收菜", "shipped": "已上线", "escalated": "交决策岗", "asking": "有提问", "dropped": "不做"}
+             "pushing": "已合并·等推送", "merged": "已合并·可收菜", "shipped": "已上线", "escalated": "交决策岗", "asking": "有提问", "dropped": "不做"}
     print("■ 每件进度")
     for k, it in s["items"].items():
         flag = " ⚠疑似卡住" if it.get("stalled") else ""
@@ -533,7 +601,8 @@ if __name__ == "__main__":
     sp.add_parser("ship"); sp.add_parser("pull")
     x = sp.add_parser("feedback"); x.add_argument("words")
     x = sp.add_parser("suite"); x.add_argument("command", nargs=argparse.REMAINDER)
+    sp.add_parser("retro")
     x = sp.add_parser("retry"); x.add_argument("key")
     x = sp.add_parser("digest"); x.add_argument("--post", action="store_true")
     a = p.parse_args()
-    {"add": cmd_add, "tick": cmd_tick, "run": cmd_run, "status": cmd_status, "approve": cmd_approve, "ship": cmd_ship, "pull": cmd_pull, "digest": cmd_digest, "retry": cmd_retry, "feedback": cmd_feedback, "suite": cmd_suite}[a.cmd](a)
+    {"add": cmd_add, "tick": cmd_tick, "run": cmd_run, "status": cmd_status, "approve": cmd_approve, "ship": cmd_ship, "pull": cmd_pull, "digest": cmd_digest, "retry": cmd_retry, "feedback": cmd_feedback, "suite": cmd_suite, "retro": cmd_retro}[a.cmd](a)
