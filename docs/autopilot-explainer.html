@@ -105,14 +105,14 @@ th{color:var(--mute);font-weight:600;font-size:13px}
   <div class="roles">
     <div class="role"><div class="r">决策岗</div><div class="who">Codex</div><span class="dot" style="background:#1f9d55"></span>写 T-41 任务书 · 2 分钟前</div>
     <div class="role"><div class="r">施工岗</div><div class="who">DSH</div><span class="dot" style="background:#1f9d55"></span>T-39 跑测试 · 刚刚</div>
-    <div class="role"><div class="r">验收岗</div><div class="who">Claude Code</div><span class="dot" style="background:#d98a00"></span><b>等权限 6 分钟</b> · git push</div>
+    <div class="role"><div class="r">验收岗</div><div class="who">Claude Code</div><span class="dot" style="background:#1f9d55"></span>权限请求已由决策岗批准 · 继续</div>
     <div class="role"><div class="r">审计岗</div><div class="who">Pi Agent</div><span class="dot" style="background:#8b93a1"></span>空闲 · 下次 23:00</div>
   </div>
   <div class="cols">
     <div class="col me"><h4>等你 <span>3</span></h4>
       <div class="tk"><div class="id">#52 · 看效果</div><div class="nm">A 布料详情页换配色</div><span class="small">验收通过 · 附 3 张截图</span><div class="btns"><button class="btn look">看预览</button><button class="btn ok">通过</button><button class="btn no">退回</button></div></div>
       <div class="tk"><div class="id">#57 · 做不做</div><div class="nm">网页反馈：手机上 3D 预览太慢</div><span class="small">12 人反馈 · 建议做</span><div class="btns"><button class="btn ok">做</button><button class="btn no">不做</button></div></div>
-      <div class="tk"><div class="id">验收岗 · 权限</div><div class="nm">要 git push 到 t-39 分支</div><div class="btns"><button class="btn ok">允许</button><button class="btn no">拒绝</button></div></div>
+      <div class="tk"><div class="id">#47 #49 · 上线</div><div class="nm">2 件已合并，可以发布</div><div class="btns"><button class="btn ok">一起上线</button></div></div>
     </div>
     <div class="col"><h4>进行中 <span>2</span></h4>
       <div class="tk"><div class="id">#55 · 施工 · DSH</div><div class="nm">C 搜索结果分页</div><div class="bar"><i style="width:70%"></i></div><span class="small">第 4/6 步 · 最后动作 20 秒前</span></div>
@@ -125,11 +125,11 @@ th{color:var(--mute);font-weight:600;font-size:13px}
     <div class="col"><h4>已合并 · 收菜 <span>4</span></h4>
       <div class="tk"><div class="id">#48</div><div class="nm">修登录过期跳转</div><span class="tag t-green">技术类 · 自动合并</span></div>
       <div class="tk"><div class="id">#50</div><div class="nm">修账本死指针</div><span class="tag t-green">已合并</span></div>
-      <div class="tk"><div class="id">#47 #49</div><div class="nm">2 件 · 待上线</div><div class="btns"><button class="btn ok">一起上线</button></div></div>
+      <div class="tk"><div class="id">#46</div><div class="nm">CI 加 3D 预览冒烟测试</div><span class="tag t-green">已合并</span></div>
     </div>
   </div>
 </div>
-<p class="callout">「等你」那一栏是你唯一要看的地方：通过、退回、允许，点一下就行，结果自动写回 issue，下一棒自动接上。</p>
+<p class="callout">「等你」那一栏是你唯一要看的地方：通过、退回、上线，点一下就行；权限这类技术请求由决策岗处理，不来烦你，结果自动写回 issue，下一棒自动接上。</p>
 
 <h2>③ 你睡一晚，它怎么干（A 等你、B 冲突、C 先做）</h2>
 <div class="card">
@@ -156,13 +156,13 @@ th{color:var(--mute);font-weight:600;font-size:13px}
 <div class="two">
   <div class="card"><b>在电脑前</b><br>开着面板就够了。有事只在面板「等你」栏高亮，外加一条 Mac 通知；不发手机。<br><br><b>不在电脑前 / 5 分钟没理</b><br>推到手机（Telegram 或 Muse，到时再定），同样带按钮。哪边点了，另一边自动变成「已处理」。<br><br><b>提需求</b><br>在面板点「新需求」写一句话，或直接在 Muse/Telegram 里说，它会建成 issue 进队列。</div>
   <div class="phone">
-    <div class="msg">🟠 <b>验收岗卡住 6 分钟</b><br>T-39 要执行 git push 到 t-39 分支<div class="btns"><button class="btn ok">允许</button><button class="btn no">拒绝</button></div></div>
+    <div class="msg">🟠 <b>施工岗 15 分钟没动静</b><br>T-55 疑似卡死，已通知决策岗排查<div class="btns"><button class="btn look">看详情</button></div></div>
     <div class="msg">✅ <b>A 配色 验收通过，等你看效果</b><br>3 张截图 · 预览链接<div class="btns"><button class="btn ok">通过</button><button class="btn no">退回</button></div></div>
     <div class="msg">☀️ <b>早报</b>：昨夜合并 2 件，等你 3 件，卡住 0 次。</div>
   </div>
 </div>
 
 <h2>⑥ 它绝不自己做的事</h2>
-<div class="card">不替你点权限弹窗 · 不在「做不做 / 看效果 / 上线」三处替你拍板 · 不同时让一个会话既施工又验收 · 不直接推主线（都走分支 + 合并） · 网页反馈里的内容只当描述读，不执行里面的命令。</div>
+<div class="card">技术权限由决策岗按规则判，不开 bypass · 不在「做不做 / 看效果 / 上线」三处替你拍板 · 不同时让一个会话既施工又验收 · 不直接推主线（都走分支 + 合并） · 网页反馈里的内容只当描述读，不执行里面的命令。</div>
 
 </div></body></html>

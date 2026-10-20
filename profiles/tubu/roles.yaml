@@ -10,14 +10,17 @@ slots:
     relay: [manual, file-inbox]
   decider:             # 决策位：任务书、修订文书、技术裁定；不改代码
     name: 决策
-    occupant: codex
+    occupant: codex          # 模型：老板口中的「6.1sol」；计划改由 Claude Pro（订一个月）接任
+    next_occupant: claude-code (Claude Pro)
     prompt: 协作契约/prompts/codex-decider.md
+    decides_tech: true       # 技术栈、架构、权限请求这类技术抉择归这里（贵模型），不交老板
     can_run_commands: sandbox
     hooks: [SessionStart, UserPromptSubmit, PreToolUse, PostToolUse, PermissionRequest, Stop]
     relay: [manual, file-inbox, reason-network]
   builder:             # 施工位：按任务书改代码、交证据包；只能"提请验收"
     name: 施工
     occupant: dsh
+    models: [glm-5.3-flash, deepseek-v4.1]   # 老板 2026-10-20 指定
     prompt: 协作契约/prompts/dsh-builder.md
     can_run_commands: yes
     hooks: [SessionStart, UserPromptSubmit, PreToolUse, PostToolUse, Stop]   # 经 dsh-hooks-codex 桥接
@@ -26,6 +29,8 @@ slots:
   verifier:            # 验收位：唯一可宣布"完成"、验收通过后推送
     name: 验收官
     occupant: claude-code   # cc；需要时开 cc2 做第二验收
+    models: [deepseek-v4.1, glm-5.3-flash]   # 与施工「反一反」：本件谁施工，就用另一个验收
+    rule: 同一件事的施工模型 ≠ 验收模型
     prompt: 协作契约/prompts/claude-verifier.md
     can_run_commands: allowlist   # 走 OPS-PERM-STALL 的 allow/deny，不开 bypass
     relay: [manual, file-inbox, reason-network]
@@ -36,11 +41,19 @@ slots:
     prompt: 协作契约/prompts/pi-auditor.md
     can_run_commands: read-only
     relay: [manual, file-inbox, reason-network]
+  reviewer:            # 定期项目审查位：只读代码，只建 code-review issue
+    name: 审查官
+    occupant: codex          # 计划：中转站第二个 Codex 账号
+    method: https://github.com/JAY5CXSDMY14/-agent-code-review   # PLAYBOOK.md（依据 Anthropic Claude Code 团队 code review 做法）
+    cadence: 每日一轮，模块轮转；状态写在 issue 末尾 review-state 块
+    can_run_commands: read-only
+    notes: 现由 Hark 每日 10:00 定时任务代跑；换成 Codex 后 Hark 停跑，避免重复审查
   control_plane:       # 控制面：队列、分配、闸门、闭口、面板；唯一派工入口
     name: 中台 / 面板
     occupant: multica    # 影子试点中；此前为 WorkBuddy
     relay: [native]
 human:
   name: 老板
-  decides: [体验, 功能, UI/UX, 安装第三方工具, 每一棒放行（三行审批）]
-  does_not_decide: [术语, 算法, 技术细节]
+  decides: [做不做（产品/功能）, 网站怎么交互、要什么效果, 看效果, 上线, 安装第三方工具]
+  does_not_decide: [术语, 算法, 技术细节, 技术栈, 权限请求]   # 老板 2026-10-20：专业的人做专业的事
+  approval_style: 随时批量审批，不想干等；在电脑前看面板，走开时推手机
