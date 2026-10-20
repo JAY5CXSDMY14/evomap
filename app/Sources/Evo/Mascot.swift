@@ -186,9 +186,11 @@ struct SpeechBubble: View {
     var side: Side = .evo
     var tone: LoopState.Tone = .neutral
 
+    // 两块形状先用不透明色画、合成后再整体调透明度，交叠处才不会更深
     private var fill: Color {
-        side == .me ? Theme.accent : (tone == .danger ? Theme.danger.opacity(0.14) : Theme.surfaceSunk)
+        side == .me ? Theme.accent : (tone == .danger ? Theme.danger : Theme.surfaceSunk)
     }
+    private var fillOpacity: Double { side == .evo && tone == .danger ? 0.14 : 1 }
 
     var body: some View {
         Text(text)
@@ -202,6 +204,7 @@ struct SpeechBubble: View {
                     BubbleShape(tailLeft: side == .evo).fill(fill)
                 }
                 .compositingGroup()
+                .opacity(fillOpacity)
             )
             .accessibilityLabel(side == .evo ? "evo 说：\(text)" : "你说：\(text)")
     }

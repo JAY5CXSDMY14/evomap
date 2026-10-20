@@ -490,9 +490,12 @@ struct QuickChips: View {
             .disabled(state.loopRunning == nil || state.busy != nil)
             .help(state.loopRunning == nil ? "没装 launchd 常驻" : "")
             Button { withAnimation(Motion.or(Motion.softSpring)) { state.showHarvest.toggle() } } label: {
-                Label(state.harvest.isEmpty ? "收菜清单" : "收菜 \(state.harvest.count)", systemImage: "basket")
+                Label(state.harvest.isEmpty ? "收菜" : "收菜 \(state.harvest.count)", systemImage: "basket")
             }
+            .accessibilityLabel(state.harvest.isEmpty ? "收菜清单" : "收菜清单，\(state.harvest.count) 件")
         }
+        .lineLimit(1)
+        .fixedSize(horizontal: true, vertical: false)
         .labelStyle(.titleAndIcon)
         .buttonStyle(BouncyStyle(kind: .chip, compact: true))
         .frame(maxWidth: .infinity, alignment: .leading)
