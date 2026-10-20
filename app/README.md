@@ -4,7 +4,7 @@ evo 自动循环的 macOS 菜单栏外壳。SwiftUI 写的小壳，界面直接�
 **全部用命令行维护**：Swift Package Manager + Makefile，没有 Xcode 工程，不用打开 Xcode。
 
 - 系统：macOS 13 及以上；本机要有 Xcode 命令行工具或 Xcode（提供 `swift`、`codesign`、`hdiutil`）
-- 体积：应用本身不到 5 MB（python3 用系统/Homebrew 的，不打包）
+- 体积：Evo.app 约 1 MB、Evo.dmg 约 400 KB（python3 用系统/Homebrew 的，不打包）
 - 设计取舍见 `docs/app-packaging.md`
 
 ## 常用命令（都在 `app/` 目录下）
