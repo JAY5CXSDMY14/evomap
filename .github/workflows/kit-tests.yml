@@ -1,0 +1,18 @@
+name: kit-tests
+on:
+  push:
+    paths: ["kit/**", ".github/workflows/kit-tests.yml"]
+  pull_request:
+    paths: ["kit/**", ".github/workflows/kit-tests.yml"]
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install pytest
+      - name: 跑 kit 测试（假 Orca + 临时仓库 + 裸远端）
+        run: python -m pytest kit/tests -q

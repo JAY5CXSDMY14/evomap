@@ -1,0 +1,5 @@
+#!/bin/bash
+# 假 gh：记下参数，issue list 返回空列表
+printf '%s\n' "$*" >> "$FAKE_ORCA_DIR/gh.log"
+[[ "$1 $2" == "issue list" ]] && echo "[]"
+exit 0

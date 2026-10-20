@@ -1,0 +1,3 @@
+#!/bin/bash
+# 假 curl：只记下参数（用来断言提醒发没发），不联网
+printf '%s\n' "$*" >> "$FAKE_ORCA_DIR/curl.log"

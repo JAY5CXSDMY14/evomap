@@ -1,0 +1,177 @@
+#!/usr/bin/env python3
+"""假 Orca：只模拟 evo 用到的子命令。状态存在 $FAKE_ORCA_DIR/state.json。
+
+派工（orchestration dispatch）时同步跑终端里 send 过的那条命令（假工人），
+工作目录是终端所在工作区；假工人用 `orca orchestration send` 回报，回报进协调终端的收件箱。
+任务状态：pending（依赖没完）/ ready / blocked（有未决闸门）/ dispatched / completed / failed。
+"""
+import fcntl, json, os, subprocess, sys
+
+D = os.environ["FAKE_ORCA_DIR"]
+os.makedirs(D, exist_ok=True)
+SP = os.path.join(D, "state.json")
+
+
+def out(result=None, ok=True, error=None):
+    print(json.dumps({"ok": ok, "result": result or {}, "error": error}, ensure_ascii=False))
+    sys.exit(0)
+
+
+def opts(argv):
+    o, flags, i = {}, set(), 0
+    while i < len(argv):
+        a = argv[i]
+        if a.startswith("--"):
+            if i + 1 < len(argv) and not argv[i + 1].startswith("--"):
+                o[a[2:]] = argv[i + 1]; i += 2; continue
+            flags.add(a[2:])
+        i += 1
+    return o, flags
+
+
+class St:
+    def __enter__(self):
+        self.lk = open(SP + ".lock", "w"); fcntl.flock(self.lk, fcntl.LOCK_EX)
+        self.s = json.load(open(SP)) if os.path.exists(SP) else {
+            "n": 0, "terminals": {}, "tasks": {}, "gates": {}, "dispatches": {}, "inbox": {}, "worktrees": {}, "calls": []}
+        return self.s
+
+    def __exit__(self, *e):
+        json.dump(self.s, open(SP + ".tmp", "w"), ensure_ascii=False, indent=1); os.replace(SP + ".tmp", SP)
+        fcntl.flock(self.lk, fcntl.LOCK_UN); self.lk.close()
+
+
+def nid(s, p):
+    s["n"] += 1
+    return f"{p}_{s['n']}"
+
+
+def status(s, t):
+    if t["status"] in ("dispatched", "completed", "failed"):
+        return t["status"]
+    if any(g["task"] == t["id"] and g["status"] == "pending" for g in s["gates"].values()):
+        return "blocked"
+    return "ready" if all(s["tasks"].get(d, {}).get("status") == "completed" for d in t["deps"]) else "pending"
+
+
+def main():
+    argv = sys.argv[1:]
+    if argv and argv[-1] == "--json":
+        argv = argv[:-1]
+    if argv[:1] == ["--version"]:
+        print("fake-orca 0.0"); return
+    cmd = argv[:2]; o, flags = opts(argv[2:])
+    run_after = None
+    with St() as s:
+        s["calls"].append(argv[:2])
+        if cmd == ["status"] or argv[:1] == ["status"]:
+            out({"reachable": True})
+        if cmd == ["skills", "install"] or cmd == ["repo", "add"]:
+            out({})
+        if cmd == ["terminal", "create"]:
+            h = nid(s, "term")
+            s["terminals"][h] = {"cwd": o["worktree"].split(":", 1)[1], "title": o.get("title"), "cmd": None, "open": True}
+            out({"terminal": {"handle": h}})
+        if cmd == ["terminal", "show"]:
+            t = s["terminals"].get(o["terminal"])
+            out({"terminal": t}) if t and t["open"] else out(ok=False, error={"code": "not_found"})
+        if cmd == ["terminal", "send"]:
+            t = s["terminals"][o["terminal"]]
+            if t["cmd"] is None:
+                t["cmd"] = o["text"]
+            out({})
+        if cmd == ["terminal", "close"]:
+            if o["terminal"] in s["terminals"]:
+                s["terminals"][o["terminal"]]["open"] = False
+            out({})
+        if cmd == ["worktree", "create"]:
+            repo = o["repo"].split(":", 1)[1]; name = o["name"]
+            path = os.path.join(D, "worktrees", name)
+            if not os.path.isdir(path):
+                hasb = subprocess.run(["git", "-C", repo, "rev-parse", "--verify", name], capture_output=True).returncode == 0
+                subprocess.run(["git", "-C", repo, "worktree", "add"] + ([path, name] if hasb else ["-b", name, path]),
+                               check=True, capture_output=True)
+            s["worktrees"][path] = repo
+            out({"worktree": {"path": path}})
+        if cmd == ["worktree", "rm"]:
+            path = o["worktree"].split(":", 1)[1]
+            repo = s["worktrees"].pop(path, None)
+            if repo:
+                subprocess.run(["git", "-C", repo, "worktree", "remove", "--force", path], capture_output=True)
+            out({})
+        if argv[0] == "orchestration":
+            sub = argv[1]
+            if sub == "run-create":
+                out({"run": {"id": nid(s, "run")}})
+            if sub == "task-create":
+                tid = nid(s, "task")
+                s["tasks"][tid] = {"id": tid, "title": o["task-title"], "spec": o.get("spec", ""),
+                                   "deps": json.loads(o.get("deps", "[]")), "status": "pending"}
+                out({"task": {"id": tid}})
+            if sub == "task-list":
+                out({"tasks": [{"id": t["id"], "title": t["title"], "status": status(s, t), "deps": json.dumps(t["deps"])}
+                               for t in s["tasks"].values()]})
+            if sub == "task-update":
+                s["tasks"][o["id"]]["status"] = o["status"]
+                out({})
+            if sub == "gate-create":
+                gid = nid(s, "gate")
+                s["gates"][gid] = {"id": gid, "task": o["task"], "question": o["question"], "options": o["options"],
+                                   "status": "pending", "resolution": None}
+                out({"gate": {"id": gid}})
+            if sub == "gate-resolve":
+                g = s["gates"].get(o["id"])
+                if not g or g["status"] != "pending":
+                    out(ok=False, error={"code": "gate_not_pending"})
+                g["status"] = "resolved"; g["resolution"] = o["resolution"]
+                out({})
+            if sub == "gate-list":
+                out({"gates": list(s["gates"].values())})
+            if sub == "dispatch":
+                t = s["tasks"][o["task"]]
+                if status(s, t) != "ready":
+                    out(ok=False, error={"code": "task_not_ready", "message": status(s, t)})
+                did = nid(s, "disp")
+                term = s["terminals"][o["to"]]
+                s["dispatches"][did] = {"id": did, "task": t["id"], "terminal": o["to"], "from": o["from"]}
+                t["status"] = "dispatched"
+                spec_file = os.path.join(D, f"{did}.spec")
+                open(spec_file, "w").write(t["spec"])
+                run_after = (term["cmd"], term["cwd"], {"ORCA_TASK_ID": t["id"], "ORCA_DISPATCH_ID": did,
+                                                        "ORCA_TERMINAL_HANDLE": o["to"], "ORCA_SPEC_FILE": spec_file,
+                                                        "ORCA_TASK_TITLE": t["title"]})
+                result = {"dispatch": {"id": did}}
+            if sub == "dispatch-show":
+                out({"preamble": ""})
+            if sub == "send":
+                dsp = s["dispatches"].get(o.get("dispatch-id"), {})
+                to = dsp.get("from")
+                msg = {"id": nid(s, "msg"), "type": o["type"], "subject": o.get("subject"), "body": o.get("body"),
+                       "task_id": o.get("task-id"), "payload": {"outcome": o.get("outcome"), "taskId": o.get("task-id")}}
+                if o["type"] == "worker_done" and o.get("task-id") in s["tasks"]:
+                    s["tasks"][o["task-id"]]["status"] = "completed" if o.get("outcome") == "succeeded" else "failed"
+                s["inbox"].setdefault(to, []).append(msg)
+                out({"message": {"id": msg["id"]}})
+            if sub == "check":
+                box = s["inbox"].setdefault(o["terminal"], [])
+                if "ack" in o:
+                    did = o["ack"]
+                    s["inbox"][o["terminal"]] = [m for m in box if m.get("delivery") != did]
+                    out({})
+                did = nid(s, "deliv")
+                for m in box:
+                    m["delivery"] = did
+                out({"messages": box, "deliveryId": did if box else None})
+            if sub == "worker-show":
+                out({"observation": {"status": os.environ.get("FAKE_WORKER_STATUS", "live")}, "terminal": {"orphaned": False}})
+        if run_after is None:
+            out(ok=False, error={"code": "unknown_command", "message": " ".join(argv[:2])})
+    # 锁外跑假工人（它自己会回调 orca send）
+    c, cwd, extra = run_after
+    if c:
+        subprocess.run(c, shell=True, cwd=cwd, env={**os.environ, **extra})
+    out(result)
+
+
+if __name__ == "__main__":
+    main()
