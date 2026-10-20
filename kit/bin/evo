@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """evo —— 通用自动循环的接棒器（跑在 Orca 之上）。任何项目都能 new/import 进来循环；土布(TB)只是第一个。
 旧名 tubu 保留为别名，~/.tubu 里已有的项目自动沿用。
+配置两层：全局 ~/.evoloop/config.json（岗位/模型、上限、提醒）← 项目 ~/.evoloop/projects/<代号>/config.json（仓库、命令）。
 
 一件事 = 施工 → 验收（换模型）→ [看效果：凡用户能感知的] → 合并。上线另攒一批。
   多项目：命令前加 -p <代号>（只有一个项目时可省）；不加 -p 的 status 是全部项目总览，run 轮流接棒全部项目
@@ -30,7 +31,78 @@ _old = os.path.expanduser("~/.tubu/projects")
 HOME_DIR = os.environ.get("EVO_HOME") or os.environ.get("TUBU_HOME") or (
     _old if os.path.isdir(_old) and not os.path.isdir(os.path.expanduser("~/.evoloop/projects"))
     else os.path.expanduser("~/.evoloop/projects"))
+EVO_ROOT = os.path.dirname(os.path.abspath(HOME_DIR))   # 默认 ~/.evoloop：全局配置、常驻日志都在这
 KINDS = {"feat": "新功能", "fix": "修 bug", "ux": "体验/交互/界面", "ops": "运维/自动化/CI", "doc": "文档/错题本", "chore": "清理/重构"}
+
+# ---------- 配置：内置默认 ← 全局 ~/.evoloop/config.json ← 项目 config.json（顶层同名键 + overrides）----------
+# 全局管「这台机器、这个老板」：岗位/模型、并行上限、提醒、夜间时间、magpie 地址。
+# 项目管「这个仓库」：repo、主分支、GitHub、可信作者、测试/推送/上线命令、脱敏词表、错题本/规范路径。
+# 老的项目 config.json 里如果还带着全局键（roles、limits、notify……），照旧生效，视为对本项目的覆盖。
+DEFAULTS = {
+    "orca": "orca",
+    "magpie_url": "http://127.0.0.1:3425",
+    "main_branch": "main",
+    "nightly_at": "23:30",
+    "limits": {"builders_total": 2, "owner_queue_pause": 5, "rework_rounds": 2, "stall_minutes": 15},
+    "roles": {"build": {"cmd": "dsh", "models": [], "prompt": "roles/builder.md"},
+              "verify": {"cmd": "claude", "models": [], "prompt": "roles/verifier.md"},
+              "retro": {"prompt": "roles/retro.md"}},
+    "notify": {"macos": True, "telegram_bot_token_env": "EVO_TG_TOKEN", "telegram_chat_id_env": "EVO_TG_CHAT"},
+    "lessons_file": "docs/LESSONS.md",
+    "standards_file": "docs/code-standards.md",
+}
+PROJECT_KEYS = ("code", "name", "repo", "main_branch", "github_repo", "trusted_authors", "test_cmd", "push_cmd", "deploy_cmd",
+                "policy_terms", "lessons_file", "standards_file", "digest_issue")
+# 旧环境变量名照认（先认新名，没有再认旧名）
+ENV_ALIASES = {"EVO_TG_TOKEN": "TUBU_TG_TOKEN", "EVO_TG_CHAT": "TUBU_TG_CHAT", "TUBU_TG_TOKEN": "EVO_TG_TOKEN",
+               "TUBU_TG_CHAT": "EVO_TG_CHAT", "EVO_PROJECT": "TUBU_PROJECT", "EVO_CONFIG": "TUBU_CONFIG",
+               "EVO_STATE": "TUBU_STATE", "EVO_DEBUG": "TUBU_DEBUG"}
+
+
+def env(name, default=None):
+    v = os.environ.get(name)
+    if not v and name in ENV_ALIASES:
+        v = os.environ.get(ENV_ALIASES[name])
+    return v or default
+
+
+def _global_path():
+    if os.environ.get("EVO_GLOBAL_CONFIG"):
+        return os.environ["EVO_GLOBAL_CONFIG"]
+    p = os.path.join(EVO_ROOT, "config.json")
+    if not os.path.isfile(p) and not (os.environ.get("EVO_HOME") or os.environ.get("TUBU_HOME")):
+        alt = os.path.expanduser("~/.evoloop/config.json")      # 项目还在旧 ~/.tubu 时，全局配置照样放 ~/.evoloop
+        if os.path.isfile(alt):
+            return alt
+    return p
+
+
+def _read_json(p):
+    if not p or not os.path.isfile(p):
+        return {}
+    try:
+        return json.load(open(p, encoding="utf-8"))
+    except ValueError as e:
+        sys.exit(f"配置文件读不出：{p}（{e}）")
+
+
+def merge(base, over):
+    """深合并：字典逐层合并，其它值整个覆盖；下划线开头的键（说明文字）忽略。"""
+    out = dict(base)
+    for k, v in (over or {}).items():
+        if k.startswith("_"):
+            continue
+        out[k] = merge(out[k], v) if isinstance(v, dict) and isinstance(out.get(k), dict) else v
+    return out
+
+
+def effective_config(project_cfg):
+    g = merge(DEFAULTS, _read_json(_global_path()))
+    pc = {k: v for k, v in (project_cfg or {}).items() if k != "overrides"}
+    c = merge(merge(g, pc), (project_cfg or {}).get("overrides") or {})
+    # 整机并行上限只认全局（项目改不了别人的份额）；项目里的 limits.builders 是本项目自己的上限
+    c["limits"]["builders_total"] = g["limits"].get("builders_total", g["limits"].get("builders", 2))
+    return c
 
 
 def list_projects():
@@ -39,25 +111,27 @@ def list_projects():
 
 
 def _pick():
-    code = os.environ.get("TUBU_PROJECT")
+    code = env("EVO_PROJECT")
     if "-p" in sys.argv:
         i = sys.argv.index("-p"); code = sys.argv[i + 1]; del sys.argv[i:i + 2]
-    if os.environ.get("TUBU_CONFIG"):                      # 单项目/测试用的老方式
-        return code, os.environ["TUBU_CONFIG"], os.environ.get("TUBU_STATE", os.path.join(KIT, ".state"))
+    if env("EVO_CONFIG"):                                   # 单项目/测试用的老方式
+        return code, env("EVO_CONFIG"), env("EVO_STATE", os.path.join(KIT, ".state"))
     ps = list_projects()
     if not code and len(ps) == 1:
         code = ps[0]
     if not code:
         return None, None, None
+    code = code.upper()
     if code not in ps:
         sys.exit(f"没有项目 {code}。现有：{', '.join(ps) or '（无）'}。新开用 evo new，导入用 evo import")
     return code, os.path.join(HOME_DIR, code, "config.json"), os.path.join(HOME_DIR, code, "state")
 
 
 PROJECT, _cfgp, STATE_DIR = _pick()
-CFG = json.load(open(_cfgp, encoding="utf-8")) if _cfgp else {}
+HAS_PROJECT = bool(_cfgp)
+CFG = effective_config(_read_json(_cfgp)) if _cfgp else {}
 STATE = os.path.join(STATE_DIR, "state.json") if STATE_DIR else None
-ORCA = shlex.split(CFG.get("orca", "orca"))
+ORCA = shlex.split((CFG or merge(DEFAULTS, _read_json(_global_path()))).get("orca", "orca"))  # 没选项目时也认全局的 orca
 LIM = CFG.get("limits", {})
 CODE = (CFG.get("code") or PROJECT or "TB").upper()
 
@@ -120,7 +194,7 @@ def notify(title, body):
     n = CFG.get("notify", {})
     if n.get("macos") and sys.platform == "darwin":
         subprocess.run(["osascript", "-e", f'display notification {json.dumps(body)} with title {json.dumps(title)}'])
-    tok, chat = os.environ.get(n.get("telegram_bot_token_env", "")), os.environ.get(n.get("telegram_chat_id_env", ""))
+    tok, chat = env(n.get("telegram_bot_token_env") or "EVO_TG_TOKEN"), env(n.get("telegram_chat_id_env") or "EVO_TG_CHAT")
     if tok and chat:
         subprocess.run(["curl", "-s", "-m", "10", f"https://api.telegram.org/bot{tok}/sendMessage",
                         "-d", f"chat_id={chat}", "--data-urlencode", f"text={title}\n{body}"], capture_output=True)
@@ -358,7 +432,7 @@ SUITE_LOCK = os.path.join(os.environ.get("TMPDIR", "/tmp"), "evo-suite.lock")
 
 def run_suite(cmd, cwd, tag):
     """一台机器同一时间只跑一套全量测试（magpie LESSONS：并发跑全量全部超时）。日志整份留下。"""
-    ld = os.path.join(STATE_DIR or os.path.join(os.path.dirname(HOME_DIR), "logs"), "logs")
+    ld = os.path.join(STATE_DIR, "logs") if STATE_DIR else os.path.join(EVO_ROOT, "logs")
     os.makedirs(ld, exist_ok=True)
     logf = os.path.join(ld, f"{tag}-{time.strftime('%m%d-%H%M%S')}-{os.getpid()}.log")
     with open(SUITE_LOCK, "w") as lk:
@@ -446,7 +520,7 @@ def cmd_tick(a=None):
     did = res.get("deliveryId") or res.get("delivery_id") or (res.get("delivery") or {}).get("id")
     if did:
         orca("orchestration", "check", "--terminal", c, "--ack", did, ok=False)
-    if os.environ.get("TUBU_DEBUG"):
+    if env("EVO_DEBUG"):
         print("check keys:", list(res.keys()))
     T = tasks(s)
 
@@ -455,16 +529,18 @@ def cmd_tick(a=None):
         sum(1 for it in s["items"].values() if it["gates"].get("do") and T.get(it["build"], {}).get("status") == "blocked")
     building = sum(1 for it in s["items"].values() if it["state"] == "building")
     ob, ow = other_projects_load()          # 多项目共用一台机器、一个老板：并行上限和「等你」上限按全部项目算
-    building += ob; waiting_owner += ow
+    total = building + ob; waiting_owner += ow
+    cap_total = LIM.get("builders_total", 2)              # 整机上限（只认全局配置）
+    cap_own = LIM.get("builders", cap_total)               # 本项目上限（可选覆盖）
     for k, it in s["items"].items():
         st = lambda r: T.get(it[r], {}).get("status")
         if it["state"] == "queued" and st("build") == "ready":
             # 自己再核一遍依赖：Orca 的闸门放行会无视依赖（沙箱实测）
             if any(T.get(d, {}).get("status") != "completed" for d in it.get("after", [])):
                 continue
-            if building >= LIM["builders"] or waiting_owner > LIM["owner_queue_pause"]:
+            if building >= cap_own or total >= cap_total or waiting_owner > LIM["owner_queue_pause"]:
                 continue
-            start_worker(s, k, it, "build"); building += 1
+            start_worker(s, k, it, "build"); building += 1; total += 1
         elif it["state"] == "built" and st("verify") == "ready":
             start_worker(s, k, it, "verify")
         elif it["state"] == "verified" and st("merge") == "pending":
@@ -590,7 +666,7 @@ def cmd_once(a=None):
 
 
 def cmd_run(a):
-    if not PROJECT and not CFG:              # 多项目：一个常驻进程轮流接棒每个项目
+    if not HAS_PROJECT:              # 多项目：一个常驻进程轮流接棒每个项目
         while True:
             for code in list_projects():
                 r = subprocess.run([sys.executable, os.path.abspath(__file__), "-p", code, "once"], capture_output=True, text=True)
@@ -615,18 +691,21 @@ LABELS = [("autopilot:ready", "0e8a16", "决策岗分拣完，接棒器可登记
 
 
 def _setup_project(code, name, path, github, test_cmd, notes):
+    """只写项目自己的 config.json；岗位、模型、上限、提醒都在全局 ~/.evoloop/config.json。"""
     code = code.upper()
     if not re.fullmatch(r"[A-Z]{2,4}", code):
         raise SystemExit("项目代号用 2–4 个大写字母，例如 TB")
     if code in list_projects():
         raise SystemExit(f"{code} 已存在")
-    base = json.load(open(os.path.join(KIT, "config.example.json"), encoding="utf-8"))
-    base.pop("_说明", None)
-    base.update({"code": code, "name": name, "repo": os.path.abspath(path), "github_repo": github or "",
-                 "test_cmd": test_cmd or ""})
-    for k in ("build", "verify", "retro"):
-        if base["roles"].get(k, {}).get("prompt"):
-            base["roles"][k]["prompt"] = os.path.join(KIT, base["roles"][k]["prompt"])
+    path = os.path.abspath(path)
+    mb = subprocess.run(["git", "-C", path, "symbolic-ref", "--short", "HEAD"], capture_output=True, text=True).stdout.strip() or "main"
+    has_origin = subprocess.run(["git", "-C", path, "remote", "get-url", "origin"], capture_output=True).returncode == 0
+    base = {"code": code, "name": name, "repo": path, "main_branch": mb, "github_repo": github or "",
+            "trusted_authors": [github.split("/")[0]] if github else [], "test_cmd": test_cmd or "",
+            "push_cmd": f"git push origin {mb}" if has_origin else "", "deploy_cmd": "", "policy_terms": "",
+            "lessons_file": DEFAULTS["lessons_file"], "standards_file": DEFAULTS["standards_file"], "digest_issue": None}
+    if not has_origin:
+        notes.append("没有 origin 远端：push_cmd 留空，合并后只在本地（之后在 config.json 补 push_cmd）")
     d = os.path.join(HOME_DIR, code); os.makedirs(os.path.join(d, "state"), exist_ok=True)
     json.dump(base, open(os.path.join(d, "config.json"), "w", encoding="utf-8"), ensure_ascii=False, indent=2)
     if github:
@@ -803,7 +882,7 @@ def cmd_overview(a=None):
 
 
 def cmd_status(a):
-    if not PROJECT and not CFG:
+    if not HAS_PROJECT:
         return cmd_overview()
     s = load()
     res, _ = orca("orchestration", "gate-list", "--from", coord(s), ok=False)
@@ -898,6 +977,6 @@ if __name__ == "__main__":
     x = sp.add_parser("retry"); x.add_argument("key")
     x = sp.add_parser("digest"); x.add_argument("--post", action="store_true")
     a = p.parse_args()
-    if not CFG and a.cmd not in ("new", "import", "projects", "status", "run", "suite", "panel"):
+    if not HAS_PROJECT and a.cmd not in ("new", "import", "projects", "status", "run", "suite", "panel"):
         sys.exit(f"有多个项目，请加 -p <代号>：{', '.join(list_projects()) or '（还没有项目）'}")
     {"panel": cmd_panel, "new": cmd_new, "import": cmd_import, "projects": cmd_projects, "once": cmd_once, "add": cmd_add, "tick": cmd_tick, "run": cmd_run, "status": cmd_status, "approve": cmd_approve, "ship": cmd_ship, "pull": cmd_pull, "digest": cmd_digest, "retry": cmd_retry, "feedback": cmd_feedback, "suite": cmd_suite, "retro": cmd_retro}[a.cmd](a)

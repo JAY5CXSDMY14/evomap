@@ -1,0 +1,16 @@
+{
+  "_说明": "土布（TB）的项目配置实例，复制为 ~/.evoloop/projects/TB/config.json。土布是 evo 的第一个项目。",
+  "code": "TB",
+  "name": "土布",
+  "repo": "~/Desktop/项目/土布/tubu-platform",
+  "main_branch": "main",
+  "github_repo": "JAY5CXSDMY14/tubu-platform",
+  "trusted_authors": ["JAY5CXSDMY14"],
+  "test_cmd": "pytest api/tests tools/tests",
+  "push_cmd": "HTTPS_PROXY=socks5h://127.0.0.1:1082 git push origin main",
+  "deploy_cmd": "",
+  "policy_terms": "~/Desktop/项目/土布/协作契约/hooks/policy-terms.txt",
+  "lessons_file": "docs/LESSONS.md",
+  "standards_file": "docs/code-standards.md",
+  "digest_issue": null
+}

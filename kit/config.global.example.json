@@ -1,0 +1,33 @@
+{
+  "_说明": "全局配置：复制到 ~/.evoloop/config.json（install.sh --apply 会在没有时自动放一份）。管这台机器和这个老板：岗位/模型、并行上限、提醒、夜间时间、magpie 地址。模型名用 magpie 里的 provider/model。项目自己的东西不写这里，写在 ~/.evoloop/projects/<代号>/config.json。",
+  "orca": "orca",
+  "magpie_url": "http://127.0.0.1:3425",
+  "nightly_at": "23:30",
+  "limits": {
+    "_说明": "builders_total 是整机所有项目合计的并行施工上限；owner_queue_pause 是全部项目「等你点头」超过多少件就暂停新施工",
+    "builders_total": 2,
+    "owner_queue_pause": 5,
+    "rework_rounds": 2,
+    "stall_minutes": 15
+  },
+  "roles": {
+    "build": {
+      "cmd": "dsh",
+      "models": ["glm/glm-5.3-flash", "deepseek/deepseek-v4.1"],
+      "prompt": "roles/builder.md"
+    },
+    "verify": {
+      "cmd": "claude",
+      "models": ["deepseek/deepseek-v4.1", "glm/glm-5.3-flash"],
+      "prompt": "roles/verifier.md"
+    },
+    "retro": {
+      "prompt": "roles/retro.md"
+    }
+  },
+  "notify": {
+    "macos": true,
+    "telegram_bot_token_env": "EVO_TG_TOKEN",
+    "telegram_chat_id_env": "EVO_TG_CHAT"
+  }
+}

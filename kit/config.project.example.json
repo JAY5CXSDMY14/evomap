@@ -1,0 +1,20 @@
+{
+  "_说明": "项目配置：evo new / evo import 会自动生成到 ~/.evoloop/projects/<代号>/config.json，一般只需改 test_cmd、push_cmd。只写这个仓库自己的东西；想让本项目和全局不一样（例如换模型、少开一路施工），写在 overrides 里。",
+  "code": "AB",
+  "name": "示例项目",
+  "repo": "/path/to/your-repo",
+  "main_branch": "main",
+  "github_repo": "owner/repo",
+  "trusted_authors": ["owner"],
+  "test_cmd": "pytest",
+  "push_cmd": "git push origin main",
+  "deploy_cmd": "",
+  "policy_terms": "",
+  "lessons_file": "docs/LESSONS.md",
+  "standards_file": "docs/code-standards.md",
+  "digest_issue": null,
+  "overrides": {
+    "_说明": "可选：覆盖全局配置里的任意键。limits.builders 是本项目自己的并行上限（整机上限 builders_total 只认全局）。",
+    "limits": {"builders": 1}
+  }
+}
