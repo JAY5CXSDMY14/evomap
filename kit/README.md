@@ -1,4 +1,4 @@
-# 精装房 · 土布自动循环套件
+# 精装房 · evo 自动循环套件（土布是第一个项目）
 
 一条命令装到 Mac mini，之后你只在三处点头：**做不做**（仅产品功能）、**看效果**（凡用户能感知的：界面、交互、流程、文案、报错、速度）、**上线**（可攒一批）。其余接棒、并行、排队、返工、合并、停滞提醒全自动。
 
@@ -14,10 +14,20 @@
 | 解释页 | answer-me-with-html | 复杂流程出 HTML 给你看 |
 | 规矩 | Mac mini 协作契约 | 红线、验收即命令、证据、脱敏全部保留；5 条修订见 `contract-revisions/` |
 
-## 你要做的三步
+## 你要做的四步
 1. 批准 `contract-revisions/` 的 5 条修订，并同意装 Orca。
-2. 在 Mac mini 上：`bash kit/install.sh` 看缺什么，补齐后 `bash kit/install.sh --apply`。
-3. 手机装 Orca App 扫码配对。之后看 `kit/bin/evo status` 或手机。
+2. 在 Mac mini 上：`bash kit/install.sh` 只检查（python3、git、gh、orca、magpie），补齐后 `bash kit/install.sh --apply [--link]`：装 Orca 技能、放全局配置（已有不覆盖）、装 launchd 常驻 `evo run --every 30`（日志 `~/.evoloop/logs/`），`--link` 再放 `~/.local/bin/evo`。反复跑无副作用。
+3. 登记项目（安装脚本不登记）：`evo import TB --name 土布 --path <仓库>`，或 `evo new AB --name 名字 --path <目录>`。
+4. 手机装 Orca App 扫码配对。之后看 `evo status` 或手机。
+
+## 配置：全局 + 项目
+| 文件 | 管什么 | 样例 |
+|---|---|---|
+| `~/.evoloop/config.json` | 这台机器、这个老板：岗位/模型、`limits`（含整机并行上限 `builders_total`）、提醒、`nightly_at`、`magpie_url`、`orca` | `config.global.example.json` |
+| `~/.evoloop/projects/<代号>/config.json` | 这个仓库：`repo`、`main_branch`、`github_repo`、`trusted_authors`、`test_cmd`、`push_cmd`、`deploy_cmd`、`policy_terms`、`lessons_file`、`standards_file`；可选 `overrides` | `config.project.example.json`，土布实例 `profiles/tubu/project.json` |
+
+生效顺序：内置默认 ← 全局 ← 项目（顶层同名键）← 项目 `overrides`。老的项目配置里带着 `roles`/`limits`/`notify` 照旧生效（当本项目覆盖）。整机上限 `builders_total` 只认全局；项目里的 `limits.builders` 是本项目自己的上限。`evo new/import` 只写项目配置。
+Telegram 环境变量改名 `EVO_TG_TOKEN` / `EVO_TG_CHAT`，旧名 `TUBU_TG_TOKEN` / `TUBU_TG_CHAT` 仍认。
 
 ## 已在 Hark 沙箱实测（假工人）
 - 两件不冲突并行；同目录的件自动排在前一件合并之后。
@@ -59,11 +69,22 @@
 ## 第六轮：统一命名 + 多项目 + 面板（已实测）
 **件号**：`<项目>-<类别>-<序号>`，自动生成，例 `TB-FIX-012`。类别固定六种：FEAT 新功能、FIX 修 bug、UX 体验/交互/界面、OPS 运维/自动化/CI、DOC 文档/错题本、CHORE 清理/重构。
 **标题**：动作开头、说清用户得到什么、24 字以内，例「修复注册页验证码不刷新」。版本号、草案、补丁序号、a/b/c 不进名字：返工还是同一个号（记轮次），草案版本靠 git 历史，拆出来的子件拿新号并写父件号。不合规范的 issue 交决策岗改标题后才进队列。旧件保留原名不改。
-**多项目**：每个项目一个目录 `~/.tubu/projects/<代号>/`。一个常驻进程轮流接棒全部项目；并行上限（2 路）和「等你超过 5 件就暂停」按全部项目合计，因为是同一台机器、同一个老板。
+**多项目**：每个项目一个目录 `~/.evoloop/projects/<代号>/`（旧 `~/.tubu/projects` 自动沿用）。一个常驻进程轮流接棒全部项目；并行上限（2 路）和「等你超过 5 件就暂停」按全部项目合计，因为是同一台机器、同一个老板。
 - 开新项目：`evo new AB --name 名字 --path 目录 [--github 用户/仓库 --create]`，放好 AGENTS、错题本、规范，建标签，登记 Orca。
 - 导入旧项目：`evo import TB --name 土布 --path 旧仓库`，不动代码和历史；自动认 GitHub 仓库、猜测试命令、检查脏工作区、盘点已有错题本；老 issue 不自动开工，决策岗分拣后才进队列。
 **面板**：`evo panel`，一个项目一页，左上角切换项目，每个项目旁边红点是等你点头的数量；第一项「全部待办」把所有项目要你点头的放一起；在某个项目页时，顶部常驻「其他项目在等你」。默认只开在本机，手机看用 `--host <Tailscale 地址>`。
 - 施工说交付但没提交干净：自动返工，不送验收。
+
+## 第七轮：安装通用化 + 配置拆分 + 自动化测试
+- `install.sh` 不再碰项目，只装本机环境；项目一律 `evo new` / `evo import`。
+- 配置拆成全局 + 项目（见上表）。
+- `kit/tests/`：pytest + 假 `orca`（Python 脚本，状态存临时目录，派工时同步跑假工人）+ 临时 git 仓库和裸远端，覆盖：完整流水线到「已合并·可收菜」、验收不过返工与返工上限、看效果打回带原话、远端先前进（普通合并、重测、不强推）、推送失败重试 3 次才提醒、拉取失败重试、交付不干净返工、验收后改代码被指纹拦下、状态文件损坏留证并暂停、两个项目共用整机上限、标题规则、错题本 lint、安装脚本幂等。本地跑：`python3 -m pytest kit/tests -q`；GitHub Actions `kit-tests` 在 ubuntu / Python 3.11 上跑。
+- 测试抓到并修掉的 evo 问题：
+  - 状态文件损坏后只挪走不留标记，下一轮会当新项目从零派工 → 现在留 `state/PAUSED`，处理好后 `evo -p <代号> resume`。
+  - 施工交付不干净触发的返工，旧验收没跑过，合并任务永远等它 → 现在凡不是当前验收的旧依赖都标为已取代。
+  - 返工用完仍不干净时会把脏工作区送去验收 → 现在交决策岗。
+  - 拉取远端失败（断网/代理没开）被当成「远端冲突」交决策岗 → 现在算一次推送未成，下轮重试。
+  - 并入远端后测试红，下一轮重试时不再重测就推了 → 现在留标记，测绿才推。
 
 ## 只能在 Mac mini 上验的
 - DSH、Claude Code、Codex 真跑时会不会按说明回报（Orca 已认得 `dsh`）。
