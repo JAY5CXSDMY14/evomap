@@ -413,6 +413,8 @@ def cmd_run(a):
 # ---------- 老板视角 ----------
 def cmd_feedback(a):
     """老板以用户视角提的意见，原话进 GitHub issue，决策岗分拣成任务。"""
+    if not CFG.get("github_repo"):
+        print("配置里没有 github_repo，先在 config.json 填上"); return
     body = f"老板原话（用户视角）：\n> {a.words}\n\n决策岗：判断范围、是否要看效果，补标签后加 autopilot:ready。"
     r = subprocess.run(["gh", "issue", "create", "-R", CFG["github_repo"], "--title", a.words[:40],
                         "--body", body, "--label", "owner-feedback"], capture_output=True, text=True)
