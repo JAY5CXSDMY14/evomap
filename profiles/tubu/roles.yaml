@@ -53,6 +53,7 @@ slots:
   control_plane:       # 控制面：队列、分配、闸门、闭口、面板；唯一派工入口
     name: 中台 / 面板
     occupant: multica    # 影子试点中；此前为 WorkBuddy
+    candidates: [orca]   # 2026-10-20 评估见 docs/orca-fit.md
     relay: [native]
 human:
   name: 老板
