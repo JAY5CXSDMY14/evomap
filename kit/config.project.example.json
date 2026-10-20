@@ -6,6 +6,8 @@
   "main_branch": "main",
   "github_repo": "owner/repo",
   "trusted_authors": ["owner"],
+  "trusted_labelers": ["owner"],
+  "_trusted_labelers": "可选：谁打的 autopilot:ready 才算数（不可信作者的 issue 会查打标签的人）；不写就同 trusted_authors",
   "test_cmd": "pytest",
   "push_cmd": "git push origin main",
   "deploy_cmd": "",

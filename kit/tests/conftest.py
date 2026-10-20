@@ -32,7 +32,9 @@ class Loop:
         self.env = {**base, "PATH": FAKES + os.pathsep + base.get("PATH", ""), "HOME": home, "EVO_HOME": self.projects,
                     "FAKE_ORCA_DIR": self.orca_dir, "TMPDIR": self.tmp, "GIT_CONFIG_NOSYSTEM": "1",
                     "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t", "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@t",
-                    "EVO_TG_TOKEN": "tok", "EVO_TG_CHAT": "chat", "PYTHONDONTWRITEBYTECODE": "1"}
+                    "EVO_TG_TOKEN": "tok", "EVO_TG_CHAT": "chat", "PYTHONDONTWRITEBYTECODE": "1",
+                    # 不联网：HTTP / 邮件记到假目录；时间固定在周二中午（免打扰、时间窗、额度暂停都按它算）
+                    "EVO_FAKE_NET": self.orca_dir, "EVO_NOW": "2026-10-20T12:00:00+08:00"}
         self.write_global({})
 
     # ---------- 配置 ----------
@@ -138,9 +140,29 @@ class Loop:
         p = os.path.join(self.orca_dir, "workers.log")
         return [json.loads(l) for l in open(p, encoding="utf-8")] if os.path.exists(p) else []
 
-    def notifications(self):
-        p = os.path.join(self.orca_dir, "curl.log")
+    def _read(self, *parts):
+        p = os.path.join(*parts)
         return open(p, encoding="utf-8").read() if os.path.exists(p) else ""
+
+    def notifications(self):
+        """所有提醒事件（outbox 一事件一行，不管推没推）。真正推出去的看 telegram_sent() / mails()。"""
+        return self._read(self.orca_dir, "curl.log") + self._read(self.root, "outbox.jsonl")
+
+    def outbox(self):
+        return [json.loads(l) for l in self._read(self.root, "outbox.jsonl").splitlines() if l.strip()]
+
+    def http_log(self):
+        return [json.loads(l) for l in self._read(self.orca_dir, "http.log").splitlines() if l.strip()]
+
+    def telegram_sent(self):
+        """真正发到 Telegram 的消息（sendMessage 的 body）。"""
+        return [json.loads(r["body"]) for r in self.http_log() if r["url"].endswith("/sendMessage")]
+
+    def mails(self):
+        return [json.loads(l) for l in self._read(self.orca_dir, "mail.log").splitlines() if l.strip()]
+
+    def http_responses(self, mapping):
+        json.dump(mapping, open(os.path.join(self.orca_dir, "http_responses.json"), "w"), ensure_ascii=False)
 
 
 def state_is(st, key=None):

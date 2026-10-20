@@ -3,6 +3,8 @@
 按 $FAKE_ORCA_DIR/plan.json 里的剧本依次出招（每个角色一个队列，用完默认 ok/pass）：
   build:  ok（在 scope 目录写文件并提交） | dirty（提交后再改一个已跟踪文件不提交） | fail（回报失败）
   verify: pass | fail
+  任何角色：ratelimit（打印额度提示并回报失败）| ratelimit-hang（打印提示后不回报）| silent（不回报）
+  decide（决策岗）：默认 pass
 每次出招记一行到 workers.log：角色、任务号、招式、任务说明（JSON）。
 """
 import fcntl, json, os, re, subprocess, sys
@@ -22,7 +24,14 @@ with open(os.path.join(D, "workers.log"), "a", encoding="utf-8") as f:
     f.write(json.dumps({"role": role, "task": task, "move": move, "cwd": os.getcwd(), "spec": spec}, ensure_ascii=False) + "\n")
 
 outcome = "succeeded"
-if role == "build":
+RL = os.environ.get("FAKE_RL_TEXT", "Claude usage limit reached. Your limit will reset at 5pm (Asia/Shanghai).")
+if move == "ratelimit":                  # 额度用完：打印提示，回报失败
+    print("working...\n" + RL); outcome = "failed"
+elif move == "ratelimit-hang":           # 额度用完：打印提示后不回报（停在提示上）
+    print("working...\n" + RL); sys.exit(0)
+elif move == "silent":                   # 什么都不回报（模拟卡住）
+    sys.exit(0)
+elif role == "build":
     if move == "fail":
         outcome = "failed"
     else:

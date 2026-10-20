@@ -1,16 +1,26 @@
 {
-  "_说明": "全局配置：复制到 ~/.evoloop/config.json（install.sh --apply 会在没有时自动放一份）。管这台机器和这个老板：岗位/模型、并行上限、提醒、夜间时间、magpie 地址。模型名用 magpie 里的 provider/model。项目自己的东西不写这里，写在 ~/.evoloop/projects/<代号>/config.json。",
+  "_说明": "全局配置：复制到 ~/.evoloop/config.json（install.sh --apply 会在没有时自动放一份）。管这台机器和这个老板：岗位/模型、并行上限、提醒、时间窗、夜间时间、magpie 地址。模型名用 magpie 里的 provider/model。项目自己的东西不写这里，写在 ~/.evoloop/projects/<代号>/config.json。密钥（Telegram、SMTP、webhook）一律放环境变量，不写进这个文件。",
   "orca": "orca",
   "magpie_url": "http://127.0.0.1:3425",
+  "magpie": {
+    "_说明": "可选：token 用量。http(s) 地址或本地 JSON/JSONL 日志；认带 model 和 total_tokens / tokens / input_tokens+output_tokens 的记录，带 project 字段的按项目归。留空就只统计次数和分钟。",
+    "usage_url": ""
+  },
   "nightly_at": "23:30",
   "limits": {
-    "_说明": "builders_total 是整机所有项目合计的并行施工上限；owner_queue_pause 是全部项目「等你点头」超过多少件就暂停新施工",
+    "_说明": "builders_total 整机并行施工上限；owner_queue_pause 全部项目「等你点头」超过多少件就暂停新施工；usage_item_runs / usage_item_minutes 一件派工次数或工人分钟数超过就推「用量异常」（0 = 不查）；rate_limit_default_minutes 额度提示里没写重置时间时暂停多久；rate_limit_idle_minutes 工人安静多久后去看终端有没有额度提示；decide_every_minutes 决策岗至多多久叫醒一次。没有花钱上限。",
     "builders_total": 2,
     "owner_queue_pause": 5,
     "rework_rounds": 2,
-    "stall_minutes": 15
+    "stall_minutes": 15,
+    "usage_item_runs": 8,
+    "usage_item_minutes": 180,
+    "rate_limit_default_minutes": 60,
+    "rate_limit_idle_minutes": 3,
+    "decide_every_minutes": 30
   },
   "roles": {
+    "_说明": "account 可选：同一个订阅账号的岗位一起因额度暂停；不写就按命令第一个词（claude、codex、dsh）算同一个账号。decide 不写 cmd 就不自动叫醒决策岗。",
     "build": {
       "cmd": "dsh",
       "models": ["glm/glm-5.3-flash", "deepseek/deepseek-v4.1"],
@@ -21,13 +31,33 @@
       "models": ["deepseek/deepseek-v4.1", "glm/glm-5.3-flash"],
       "prompt": "roles/verifier.md"
     },
+    "decide": {
+      "cmd": "claude",
+      "models": [],
+      "prompt": "roles/decider.md",
+      "_models": "填 magpie 里的贵模型名；决策岗只做技术决定"
+    },
     "retro": {
       "prompt": "roles/retro.md"
     }
   },
   "notify": {
+    "_说明": "channels 可多选同时发：telegram、email、webhook；outbox（~/.evoloop/outbox.jsonl）永远写，不用列。只推五类事：闸门 gate_push_minutes 分钟没人处理、件卡住、推送连续失败 3 次、岗位额度暂停、用量异常。免打扰时段里要推的先攒着，digest_at 发早间汇总到 telegram + email。环境变量：EVO_TG_TOKEN、EVO_TG_CHAT、EVO_TG_OWNER（你的 Telegram 用户 id，群里用必填）；EVO_SMTP_HOST/PORT/USER/PASS/TLS、EVO_MAIL_FROM、EVO_MAIL_TO；webhook 的 secret_env 指向的变量。",
     "macos": true,
-    "telegram_bot_token_env": "EVO_TG_TOKEN",
-    "telegram_chat_id_env": "EVO_TG_CHAT"
+    "channels": ["telegram", "email"],
+    "gate_push_minutes": 5,
+    "quiet_hours": {"start": "00:00", "end": "08:00", "tz": "Asia/Shanghai"},
+    "digest_at": "08:30",
+    "telegram": {"token_env": "EVO_TG_TOKEN", "chat_env": "EVO_TG_CHAT", "owner_user_env": "EVO_TG_OWNER"},
+    "email": {"_说明": "mode：fallback（Telegram 没配或发失败才发，另收早间/晚间汇总）或 always", "mode": "fallback", "nightly": true},
+    "webhook": [
+      {"_说明": "要用就把 webhook 加进 channels。events：push（默认，只发要推的）或 all。签名头 X-Evo-Signature: sha256=HMAC(正文)", "url": "", "secret_env": "EVO_WEBHOOK_SECRET", "events": "push"}
+    ]
+  },
+  "windows": {
+    "_说明": "时间窗：evo add --window trading:cn 或 \"mon-fri 09:30-15:00\"。holidays 填交易所公布的休市日（YYYY-MM-DD），只对 trading:* 预设（和带 !holidays 的写法）生效；presets 可自定义名字。",
+    "tz": "Asia/Shanghai",
+    "holidays": [],
+    "presets": {}
   }
 }

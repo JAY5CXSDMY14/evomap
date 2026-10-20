@@ -52,7 +52,7 @@
     <button class="cur" id="cur" onclick="toggleMenu()"><span id="curName">…</span><span id="curBadge" class="badge zero">0</span> ▾</button>
     <div class="menu" id="menu"></div>
   </div>
-  <div class="others" id="others"></div>
+  <div class="others" id="others"></div><a class="others" href="logout" style="margin-left:auto">退出</a>
 </header>
 <main id="main"><p class="empty">加载中…</p></main>
 <div class="toast" id="toast"></div>
@@ -60,12 +60,14 @@
 let projects = [], cur = localStorage.getItem("evo.project") || "", data = null;
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+// 口令过期/没登录：接口回 401 → 刷新回到登录页
+async function api(url, opt){ const r = await fetch(url, opt); if (r.status === 401) { location.reload(); throw new Error("要口令"); } return r.json(); }
 function toast(t){ const el=$("toast"); el.textContent=t; el.style.display="block"; setTimeout(()=>el.style.display="none",2200); }
 function toggleMenu(){ $("menu").classList.toggle("open"); }
 document.addEventListener("click", e => { if (!e.target.closest(".switch")) $("menu").classList.remove("open"); });
 
 async function loadProjects(){
-  projects = await (await fetch("api/projects")).json();
+  projects = await api("api/projects");
   if (cur !== "*" && !projects.find(p => p.code === cur)) cur = projects.length === 1 ? projects[0].code : "*";
   const total = projects.reduce((a,p)=>a+p.gates,0);
   $("menu").innerHTML =
@@ -95,34 +97,39 @@ function gateCard(g, code, name){
 async function refresh(){
   await loadProjects();
   if (cur === "*") {
-    const all = await Promise.all(projects.map(async p => ({p, d: await (await fetch("api/p/"+p.code)).json()})));
+    const all = await Promise.all(projects.map(async p => ({p, d: await api("api/p/"+p.code)})));
     const gates = all.flatMap(x => (x.d.gates||[]).map(g => gateCard(g, x.p.code, x.p.name)));
     $("main").innerHTML = `<h2>等你点头 · 全部项目</h2>${gates.join("") || '<div class="card empty">没有要你点头的</div>'}
       <h2>各项目</h2><div class="sum">${all.map(x => `<div class="card" onclick="pick('${x.p.code}')"><b>${esc(x.p.name)}</b>
       <div class="n">施工中 ${x.d.count?.building||0} · 可收菜 ${x.d.count?.merged||0} · 卡住 ${x.d.stuck||0}</div></div>`).join("")}</div>`;
     return;
   }
-  data = await (await fetch("api/p/" + cur)).json();
+  data = await api("api/p/" + cur);
   const stuck = s => /交决策岗|有提问/.test(s.state) || s.stalled;
-  $("main").innerHTML = `
+  const rl = (data.rate_limits||[]).map(r => `${esc(r.role)} 岗额度暂停到 ${esc((r.until||"").slice(5,16).replace("T"," "))}`).join("；");
+  const roles = Object.entries((data.usage||{}).roles||{}).map(([r,u]) => `${esc(r)} ${u.runs} 次 / ${Math.round(u.minutes)} 分钟`).join(" · ");
+  const tok = (data.usage||{}).tokens;
+  $("main").innerHTML = (rl ? `<div class="card" style="border-color:var(--warn)">⏸ ${rl}，到点自动恢复（不算返工）</div>` : "") + `
     <h2>等你点头</h2>${(data.gates||[]).map(g => gateCard(g, cur)).join("") || '<div class="card empty">没有要你点头的</div>'}
     <h2>以用户视角说一句</h2><div class="card"><textarea id="fb" placeholder="比如：注册要点三次才能进，太绕了"></textarea>
       <div class="row" style="margin-top:8px"><button class="btn" onclick="feedback()">记下来</button><span class="others">原话进 issue，决策岗只补标签不改意思</span></div></div>
     <h2>每件进度</h2><div class="card"><table>${(data.items||[]).slice().reverse().map(it => `<tr>
-      <td class="key">${esc(it.key)}</td><td>${esc(it.title)}${it.round?` <span class="others">返工 ${it.round}</span>`:""}</td>
+      <td class="key">${esc(it.key)}</td><td>${esc(it.title)}${it.round?` <span class="others">返工 ${it.round}</span>`:""}${it.window?` <span class="others">窗口 ${esc(it.window)}</span>`:""}
+      <div class="others">派工 ${it.usage?.runs||0} 次 · ${Math.round(it.usage?.minutes||0)} 分钟</div></td>
       <td style="text-align:right"><span class="st ${stuck(it)?"stuck":(/可收菜|已上线/.test(it.state)?"done":"")}">${it.stalled?"疑似卡住":esc(it.state)}</span></td></tr>`).join("") || '<tr><td class="empty">还没有件</td></tr>'}</table></div>
+    <h2>用量</h2><div class="card others">${roles || "还没有派过工"}${tok ? `<br>token（magpie）：${Object.entries(tok.by_model||{}).map(([m,n]) => esc(m)+" "+n).join(" · ")}${tok.project?`；本项目 ${tok.project}`:""}` : ""}</div>
     <h2>最近动静</h2><div class="card log">${esc((data.log||[]).slice().reverse().join("\n")) || "（无）"}</div>`;
 }
 
 async function approve(code, gate, choice, whyId){
   const why = (document.getElementById(whyId) || {}).value || "";
   if (choice === "打回" && !why.trim()) { toast("打回请写一句原因"); return; }
-  const r = await (await fetch("api/approve", {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({code, gate, choice, why})})).json();
+  const r = await api("api/approve", {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({code, gate, choice, why})});
   toast(r.ok ? "已" + choice : "没成功：" + r.error); refresh();
 }
 async function feedback(){
   const t = $("fb").value.trim(); if (!t) return;
-  const r = await (await fetch("api/feedback", {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({code: cur, words: t})})).json();
+  const r = await api("api/feedback", {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({code: cur, words: t})});
   toast(r.ok ? "记下了" : "没成功：" + r.error); if (r.ok) $("fb").value = "";
 }
 refresh(); setInterval(refresh, 30000);

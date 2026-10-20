@@ -80,6 +80,9 @@ def main():
             if t["cmd"] is None:
                 t["cmd"] = o["text"]
             out({})
+        if cmd == ["terminal", "read"]:
+            t = s["terminals"].get(o["terminal"])
+            out({"text": (t or {}).get("output", "")}) if t else out(ok=False, error={"code": "not_found"})
         if cmd == ["terminal", "close"]:
             if o["terminal"] in s["terminals"]:
                 s["terminals"][o["terminal"]]["open"] = False
@@ -169,7 +172,11 @@ def main():
     # 锁外跑假工人（它自己会回调 orca send）
     c, cwd, extra = run_after
     if c:
-        subprocess.run(c, shell=True, cwd=cwd, env={**os.environ, **extra})
+        r = subprocess.run(c, shell=True, cwd=cwd, env={**os.environ, **extra}, capture_output=True, text=True)
+        with St() as s:                      # 工人打印的东西留在终端里，给 terminal read 看
+            t = s["terminals"].get(extra["ORCA_TERMINAL_HANDLE"])
+            if t is not None:
+                t["output"] = (t.get("output", "") + r.stdout + r.stderr)[-20000:]
     out(result)
 
 

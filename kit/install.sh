@@ -74,30 +74,46 @@ if [ $LINK = 1 ]; then
 fi
 if [ "$(uname)" = Darwin ]; then
   PY=$(command -v python3)
+  xml(){ printf '%s' "$1" | sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g'; }
   ENVX=""
-  for v in EVO_TG_TOKEN EVO_TG_CHAT; do   # 装的时候环境里有就带进常驻进程（plist 只有本人可读）
-    [ -n "${!v:-}" ] && ENVX="$ENVX<key>$v</key><string>${!v}</string>"
+  # 装的时候环境里有就带进常驻进程（plist 只有本人可读）：Telegram、邮件、webhook 密钥、代理（国内连 Telegram 要代理）
+  for v in EVO_TG_TOKEN EVO_TG_CHAT EVO_TG_OWNER EVO_SMTP_HOST EVO_SMTP_PORT EVO_SMTP_USER EVO_SMTP_PASS EVO_SMTP_TLS \
+           EVO_MAIL_FROM EVO_MAIL_TO EVO_WEBHOOK_SECRET HTTPS_PROXY HTTP_PROXY NO_PROXY; do
+    [ -n "${!v:-}" ] && ENVX="$ENVX<key>$v</key><string>$(xml "${!v}")</string>"
   done
   mkdir -p "$(dirname "$PLIST")"
-  TMP=$(mktemp)
-  cat > "$TMP" <<PL
+  # install_agent <label> <plist> <说明> <evo 参数...>：内容没变且已加载就跳过
+  install_agent(){
+    local label=$1 plist=$2 what=$3; shift 3
+    local args="" a TMP
+    for a in "$@"; do args="$args<string>$a</string>"; done
+    TMP=$(mktemp)
+    cat > "$TMP" <<PL
 <?xml version="1.0" encoding="UTF-8"?><!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0"><dict><key>Label</key><string>$LABEL</string>
-<key>ProgramArguments</key><array><string>$PY</string><string>$KIT/bin/evo</string><string>run</string><string>--every</string><string>30</string></array>
+<plist version="1.0"><dict><key>Label</key><string>$label</string>
+<key>ProgramArguments</key><array><string>$PY</string><string>$KIT/bin/evo</string>$args</array>
 <key>RunAtLoad</key><true/><key>KeepAlive</key><true/>
-<key>StandardOutPath</key><string>$LOGS/autopilot.log</string><key>StandardErrorPath</key><string>$LOGS/autopilot.log</string>
+<key>StandardOutPath</key><string>$LOGS/$what.log</string><key>StandardErrorPath</key><string>$LOGS/$what.log</string>
 <key>EnvironmentVariables</key><dict><key>PATH</key><string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:$HOME/.local/bin</string>$ENVX</dict>
 </dict></plist>
 PL
-  if [ -f "$PLIST" ] && cmp -s "$TMP" "$PLIST" && launchctl list 2>/dev/null | grep -q "$LABEL"; then
-    rm -f "$TMP"; ok "接棒器常驻没变，跳过"
+    if [ -f "$plist" ] && cmp -s "$TMP" "$plist" && launchctl list 2>/dev/null | grep -q "$label"; then
+      rm -f "$TMP"; ok "$what 常驻没变，跳过"
+    else
+      mv "$TMP" "$plist"; chmod 600 "$plist"
+      launchctl unload "$plist" 2>/dev/null || true
+      launchctl load "$plist" && ok "$what 已常驻（日志 $LOGS/$what.log）" || warn "launchctl load $label 失败"
+    fi
+  }
+  install_agent "$LABEL" "$PLIST" autopilot run --every 30
+  if [ -n "${EVO_TG_TOKEN:-${TUBU_TG_TOKEN:-}}" ] && [ -n "${EVO_TG_CHAT:-${TUBU_TG_CHAT:-}}" ]; then
+    install_agent com.evoloop.bot "$HOME/Library/LaunchAgents/com.evoloop.bot.plist" bot bot
   else
-    mv "$TMP" "$PLIST"; chmod 600 "$PLIST"
-    launchctl unload "$PLIST" 2>/dev/null || true
-    launchctl load "$PLIST" && ok "接棒器已常驻（每 30 秒一轮，日志 $LOGS/autopilot.log）" || warn "launchctl load 失败"
+    info "没设 EVO_TG_TOKEN / EVO_TG_CHAT：Telegram 按钮机器人（evo bot）不装"
   fi
 fi
 echo "完成。下一步登记项目（安装脚本不登记项目）："
 echo "  新项目：$KIT/bin/evo new AB --name 名字 --path 目录 [--github 用户/仓库 --create]"
 echo "  旧项目：$KIT/bin/evo import TB --name 土布 --path 旧仓库"
 echo "  看进度：$KIT/bin/evo status"
+echo "  试提醒：$KIT/bin/evo notify-test"

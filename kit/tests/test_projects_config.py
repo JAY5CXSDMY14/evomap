@@ -64,7 +64,7 @@ def test_legacy_project_config_with_global_keys_still_works(loop):
     loop.plan(verify=["fail"])
     loop.add("LG")
     loop.run_until("LG", state_is("escalated"))           # rework_rounds=0：第一次不过就交决策岗
-    assert "需要决策" in loop.notifications()             # 老变量名配置 + 只设了新变量：照样发
+    assert "需要决策" in loop.notifications()             # 老变量名配置 + 只设了新变量：照样记（交决策岗只进 outbox，不推）
 
 
 def test_overrides_section_beats_global(loop):
@@ -79,11 +79,12 @@ def test_old_telegram_env_names_fallback(loop):
         loop.env.pop(k)
     loop.env.update(TUBU_TG_TOKEN="oldtok", TUBU_TG_CHAT="oldchat")
     loop.project("AB")
-    loop.plan(verify=["fail", "fail", "fail"])
     loop.add("AB")
-    loop.run_until("AB", state_is("escalated"), n=12)
-    n = loop.notifications()
-    assert "botoldtok" in n and "chat_id=oldchat" in n
+    loop.env["FAKE_WORKER_STATUS"] = "dead"               # 工人进程不在了 → 卡住，是要推的事
+    loop.tick("AB")
+    sent = [r for r in loop.http_log() if r["url"].endswith("/sendMessage")]
+    assert sent and all("/botoldtok/" in r["url"] for r in sent)
+    assert loop.telegram_sent()[0]["chat_id"] == "oldchat" and "疑似卡住" in loop.telegram_sent()[0]["text"]
 
 
 def test_status_overview_lists_all_projects(loop):
