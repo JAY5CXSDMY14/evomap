@@ -35,7 +35,7 @@ if command -v plutil >/dev/null; then plutil -lint "$APP/Contents/Info.plist" >/
 if [ -n "$SIGN" ] && command -v codesign >/dev/null; then
   # ad-hoc 签名（-s -）：自己用够了，第一次打开要右键「打开」；发给别人再换开发者证书
   codesign --force --deep --sign "$SIGN" --timestamp=none "$APP"
-  codesign --verify --deep --strict "$APP" && echo "已签名（$SIGN）"
+  codesign --verify --deep --strict "$APP" && echo "已签名（${SIGN}）"
 fi
 du -sh "$APP" | awk '{print "Evo.app 大小 " $1}'
 echo "$APP"
