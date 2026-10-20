@@ -6,6 +6,7 @@
   tubu tick                       接棒一轮：派工、收回报、合并、查停滞
   tubu run   [--every 30]         一直接棒
   tubu status                     给老板看：等你的、进行中、卡住的、可收菜的
+  tubu suite -- <测试命令>   岗位跑全量测试时用，整机排队、日志留全
   tubu feedback "原话"   以用户视角随口提意见 → 记成 issue，决策岗分拣
   tubu approve <闸门ID> 通过|打回 [一句原话]   你点头；打回时那句话原样进返工说明
   tubu ship                       把已合并的攒成一批，建「上线」闸门
@@ -53,7 +54,14 @@ def load():
     if _LOCK is None:
         lock()
     if os.path.exists(STATE):
-        return json.load(open(STATE, encoding="utf-8"))
+        try:
+            return json.load(open(STATE, encoding="utf-8"))
+        except ValueError:
+            # 读不出 ≠ 空：先把坏文件挪开留证，停下等人，绝不当作「没有任务」重新开始
+            bad = STATE + time.strftime(".bad-%m%d%H%M%S")
+            os.replace(STATE, bad)
+            notify("接棒器状态文件损坏", f"已挪到 {bad}，接棒暂停，等人处理")
+            sys.exit(f"状态文件读不出，已挪到 {bad}；接棒暂停")
     return {"coord": None, "items": {}, "seq": 0, "log": []}
 
 
@@ -191,7 +199,7 @@ def start_worker(s, key, it, role):
 def do_merge(s, key, it):
     repo, br = CFG["repo"], git(it["worktree"], "rev-parse", "--abbrev-ref", "HEAD")
     head = git(it["worktree"], "rev-parse", "HEAD")
-    if it.get("verified_sha") and head != it["verified_sha"]:
+    if it.get("verified_patch") and patch_id(it["worktree"]) != it["verified_patch"]:
         return f"验收后代码又变了（验收 {it['verified_sha'][:8]}，现在 {head[:8]}），只合并验收过的版本"
     dirty = git(repo, "status", "--porcelain", "--untracked-files=no")
     if dirty:
@@ -204,9 +212,10 @@ def do_merge(s, key, it):
         return f"对齐主线冲突：{e}"
     t = CFG.get("test_cmd")
     if t:
-        r = subprocess.run(t, shell=True, cwd=it["worktree"], capture_output=True, text=True)
-        if r.returncode:
-            return "合并前重跑测试不绿：" + (r.stdout + r.stderr)[-300:]
+        rc, logf, reds = run_suite(t, it["worktree"], key)
+        if rc:
+            return f"合并前重跑测试不绿（日志 {logf}）：" + " | ".join(reds)
+        it["premerge"] = {"at": git(it["worktree"], "rev-parse", "HEAD"), "log": logf}
     diff = git(it["worktree"], "diff", f"{CFG['main_branch']}...HEAD")
     hit = scan_terms(diff)
     if hit:
@@ -215,6 +224,10 @@ def do_merge(s, key, it):
            if re.search(r"(^|/)\.env|\.local$|(^|/)\.gitignore$", f)]
     if bad:
         return "危险文件（契约 R6/R8）：" + ", ".join(bad)
+    # 先留记录再合并：验收的是哪一版、合并前在哪个提交上跑了什么（magpie：没有记录的合并事后查不了）
+    gh_comment(it, f"合并记录：验收于 {it.get('verified_sha', '?')[:8]}；对齐主线后在 "
+                   f"{it.get('premerge', {}).get('at', '?')[:8]} 跑 `{t or '（未配置测试）'}`：通过。"
+                   + ("" if t else "\n未跑：全量测试（未配置）"))
     git(repo, "merge", "--no-ff", br, "-m", f"merge {key}: {it['title']}")
     pc = CFG.get("push_cmd")   # 例：HTTPS_PROXY=socks5h://127.0.0.1:1082 git push origin main
     if pc:
@@ -226,6 +239,28 @@ def do_merge(s, key, it):
             return "已本地合并，推送失败：" + (r.stdout + r.stderr)[-200:]
         it["pushed"] = git(repo, "rev-parse", "HEAD")
     return None
+
+
+def patch_id(wt):
+    """本件改动的指纹：对齐主线后只要内容没变，指纹不变。"""
+    base = git(wt, "merge-base", CFG["main_branch"], "HEAD")
+    d = subprocess.run(["git", "-C", wt, "diff", base, "HEAD"], capture_output=True, text=True).stdout
+    return subprocess.run(["git", "patch-id", "--stable"], input=d, capture_output=True, text=True).stdout.split(" ")[0]
+
+
+SUITE_LOCK = os.path.join(os.environ.get("TMPDIR", "/tmp"), "tubu-suite.lock")
+
+
+def run_suite(cmd, cwd, tag):
+    """一台机器同一时间只跑一套全量测试（magpie LESSONS：并发跑全量全部超时）。日志整份留下。"""
+    os.makedirs(os.path.join(STATE_DIR, "logs"), exist_ok=True)
+    logf = os.path.join(STATE_DIR, "logs", f"{tag}-{time.strftime('%m%d-%H%M%S')}-{os.getpid()}.log")
+    with open(SUITE_LOCK, "w") as lk:
+        fcntl.flock(lk, fcntl.LOCK_EX)
+        r = subprocess.run(cmd, shell=True, cwd=cwd, capture_output=True, text=True)
+    open(logf, "w", encoding="utf-8").write(r.stdout + r.stderr)
+    reds = [l for l in (r.stdout + r.stderr).splitlines() if re.search(r"FAIL|Error|failed|✗", l)][:5]
+    return r.returncode, logf, reds
 
 
 def cleanup(it):
@@ -284,6 +319,7 @@ def cmd_tick(a=None):
         elif typ == "worker_done" and role == "verify":
             if outcome == "succeeded":
                 it["state"] = "verified"; it["verified_sha"] = git(it["worktree"], "rev-parse", "HEAD")
+                it["verified_patch"] = patch_id(it["worktree"])
                 log(s, f"{k} 验收通过（{it['verified_sha'][:8]}）")
                 if it["ui"]:
                     notify("等你看效果", it["title"])
@@ -411,6 +447,13 @@ def cmd_run(a):
 
 
 # ---------- 老板视角 ----------
+def cmd_suite(a):
+    """给施工/验收岗用：tubu suite -- <命令>，排队跑全量测试，日志整份留下。"""
+    rc, logf, reds = run_suite(" ".join(shlex.quote(x) for x in a.command if x != "--"), os.getcwd(), "worker")
+    print(f"退出码 {rc}，日志 {logf}" + ("\n" + "\n".join(reds) if rc else ""))
+    sys.exit(rc)
+
+
 def cmd_feedback(a):
     """老板以用户视角提的意见，原话进 GitHub issue，决策岗分拣成任务。"""
     if not CFG.get("github_repo"):
@@ -468,7 +511,7 @@ def cmd_ship(a):
     if not ready:
         print("没有可上线的。"); return
     t = CFG.get("test_cmd")
-    if t and subprocess.run(t, shell=True, cwd=CFG["repo"], capture_output=True).returncode:
+    if t and run_suite(t, CFG["repo"], "ship")[0]:
         log(s, "主线测试不绿，不建上线闸门"); notify("主线测试不绿", "先修再上线"); save(s); return
     t, _ = orca("orchestration", "task-create", "--from", c, "--task-title", "上线批次", "--spec", "上线：" + "、".join(ready))
     g, _ = orca("orchestration", "gate-create", "--from", c, "--task", t["task"]["id"],
@@ -489,7 +532,8 @@ if __name__ == "__main__":
     sp.add_parser("status"); x = sp.add_parser("approve"); x.add_argument("gate"); x.add_argument("choice"); x.add_argument("why", nargs="?")
     sp.add_parser("ship"); sp.add_parser("pull")
     x = sp.add_parser("feedback"); x.add_argument("words")
+    x = sp.add_parser("suite"); x.add_argument("command", nargs=argparse.REMAINDER)
     x = sp.add_parser("retry"); x.add_argument("key")
     x = sp.add_parser("digest"); x.add_argument("--post", action="store_true")
     a = p.parse_args()
-    {"add": cmd_add, "tick": cmd_tick, "run": cmd_run, "status": cmd_status, "approve": cmd_approve, "ship": cmd_ship, "pull": cmd_pull, "digest": cmd_digest, "retry": cmd_retry, "feedback": cmd_feedback}[a.cmd](a)
+    {"add": cmd_add, "tick": cmd_tick, "run": cmd_run, "status": cmd_status, "approve": cmd_approve, "ship": cmd_ship, "pull": cmd_pull, "digest": cmd_digest, "retry": cmd_retry, "feedback": cmd_feedback, "suite": cmd_suite}[a.cmd](a)
