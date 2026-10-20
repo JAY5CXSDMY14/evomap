@@ -1,0 +1,46 @@
+# 岗位是固定的，担任者可以换。换人只改这里 + 对应启动 prompt，不改契约条款。
+# 字段：occupant 当前担任者；prompt 启动文件；can_run_commands 能否跑命令；
+#       hooks 事件支持；relay 可用的传话方式；notes 已知限制
+slots:
+  orchestrator:        # 编排位：导航、派工话术、登记、预审
+    name: 循环助手（循助）
+    occupant: claude-code
+    prompt: 协作契约/prompts/claude-loop-assistant.md
+    can_run_commands: read-mostly
+    relay: [manual, file-inbox]
+  decider:             # 决策位：任务书、修订文书、技术裁定；不改代码
+    name: 决策
+    occupant: codex
+    prompt: 协作契约/prompts/codex-decider.md
+    can_run_commands: sandbox
+    hooks: [SessionStart, UserPromptSubmit, PreToolUse, PostToolUse, PermissionRequest, Stop]
+    relay: [manual, file-inbox, reason-network]
+  builder:             # 施工位：按任务书改代码、交证据包；只能"提请验收"
+    name: 施工
+    occupant: dsh
+    prompt: 协作契约/prompts/dsh-builder.md
+    can_run_commands: yes
+    hooks: [SessionStart, UserPromptSubmit, PreToolUse, PostToolUse, Stop]   # 经 dsh-hooks-codex 桥接
+    relay: [manual, file-inbox]
+    notes: Reason Network 不支持 DSH；Multica 走 dsh-multica-runtime 桥
+  verifier:            # 验收位：唯一可宣布"完成"、验收通过后推送
+    name: 验收官
+    occupant: claude-code   # cc；需要时开 cc2 做第二验收
+    prompt: 协作契约/prompts/claude-verifier.md
+    can_run_commands: allowlist   # 走 OPS-PERM-STALL 的 allow/deny，不开 bypass
+    relay: [manual, file-inbox, reason-network]
+    notes: Reason 的 serve claude 要跑命令须 --full-access（=bypass），禁止
+  auditor:             # 审计位：横向对账、死指针、登记处存活；只出清单与选项
+    name: 审计官
+    occupant: pi
+    prompt: 协作契约/prompts/pi-auditor.md
+    can_run_commands: read-only
+    relay: [manual, file-inbox, reason-network]
+  control_plane:       # 控制面：队列、分配、闸门、闭口、面板；唯一派工入口
+    name: 中台 / 面板
+    occupant: multica    # 影子试点中；此前为 WorkBuddy
+    relay: [native]
+human:
+  name: 老板
+  decides: [体验, 功能, UI/UX, 安装第三方工具, 每一棒放行（三行审批）]
+  does_not_decide: [术语, 算法, 技术细节]

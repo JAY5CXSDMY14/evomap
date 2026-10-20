@@ -129,6 +129,12 @@ cd /path/to/your-repo
 
 ---
 
+## 土布配置档（本仓库现以土布为基准）
+
+- `profiles/tubu/`：土布的岗位表与现场路径
+- `docs/role-slots.md`：岗位而非工具，担任者可替换
+- `docs/relay-layer.md`：传话层（L1 一键接力）规范：收件箱、扣留审批、忙闲状态
+
 ## 第二个参考案例
 
 Readest 在 magpie 基础上加了人工审批台、只处理自己的 PR、事件唤醒、人工发版和种子错题本，见 [docs/readest-case.md](docs/readest-case.md)。
