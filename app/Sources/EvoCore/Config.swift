@@ -84,6 +84,10 @@ public struct HeartbeatStatus: Equatable, Sendable {
     public var ageMinutes: Double?
     public var level: Level
 
+    public init(project: String, ageMinutes: Double?, level: Level) {
+        self.project = project; self.ageMinutes = ageMinutes; self.level = level
+    }
+
     public static func of(project: String, lastTick: String?, staleMinutes: Double, now: Date = Date()) -> HeartbeatStatus {
         guard let t = ISOTime.parse(lastTick) else { return HeartbeatStatus(project: project, ageMinutes: nil, level: .never) }
         let age = max(0, now.timeIntervalSince(t) / 60)

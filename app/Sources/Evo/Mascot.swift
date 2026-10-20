@@ -125,7 +125,7 @@ struct MascotDrawing: View {
                 // 眉毛
                 if abs(pose.browRaise) > 0.1 {
                     Capsule().fill(eyeColor).frame(width: s * 0.11, height: s * 0.028)
-                        .rotationEffect(.degrees(CGFloat(side) * (pose.browRaise > 0 ? -12 : 18)))
+                        .rotationEffect(.degrees(side * (pose.browRaise > 0 ? -12.0 : 18.0)))
                         .offset(x: CGFloat(side) * s * 0.14, y: -s * (0.15 + 0.03 * CGFloat(pose.browRaise)))
                 }
             }
