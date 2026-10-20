@@ -8,7 +8,7 @@ evoloop 是一套**可直接套进任何代码仓库的 AI 开发循环架构**�
 
 ## 土布循环 · 一图看懂
 
-- [`docs/loop-topology.html`](docs/loop-topology.html)：整体拓扑、一件事的状态机、睡一晚怎么推进、岗位与担任者、和 Mac mini 现有机制对照（下载后用浏览器打开；源稿 [`docs/loop-topology.md`](docs/loop-topology.md)，用 [answer-me-with-html](https://github.com/QingYunA/answer-me-with-html) 生成）
+- [`docs/loop-topology.html`](docs/loop-topology.html)：evo 整体拓扑、多项目、一件事的状态机（含推送与看效果打回）、睡一晚怎么推进、岗位与担任者、外部 Agent 接入、安全红线（下载后用浏览器打开；源稿 [`docs/loop-topology.md`](docs/loop-topology.md)，用 [answer-me-with-html](https://github.com/QingYunA/answer-me-with-html) 生成）
 - [`kit/`](kit/)：精装房套件，Mac mini 一键安装；解释页 [`docs/kit.html`](docs/kit.html)
 - [`docs/contract-review.html`](docs/contract-review.html)：对照 Mac mini 协作契约，冲突条款、契约自身问题、修订顺序
 - [`docs/autopilot-explainer.html`](docs/autopilot-explainer.html)：面板长什么样、你怎么交互
