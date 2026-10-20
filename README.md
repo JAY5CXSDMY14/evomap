@@ -133,6 +133,8 @@ cd /path/to/your-repo
 
 - `profiles/tubu/`：土布的岗位表与现场路径
 - `docs/role-slots.md`：岗位而非工具，担任者可替换
+- `docs/intake.md`：五类问题来源统一进 GitHub issue、网站反馈转发、分诊、老板三处点头
+- `docs/live-monitoring.md`：实时进度与卡死监测（等权限 / 待接棒 / 停了没交付 / 卡死 / 进程没了）
 - `docs/relay-layer.md`：传话层（L1 一键接力）规范：收件箱、扣留审批、忙闲状态
 
 ## 第二个参考案例
