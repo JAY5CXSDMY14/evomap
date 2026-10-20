@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>循环面板</title>
+<style>
+  :root { --bg:#f6f5f2; --card:#fff; --ink:#1d1d1f; --mute:#6e6e73; --line:#e5e3de; --accent:#2f6f4f; --warn:#b4541a; --red:#c0392b; }
+  * { box-sizing:border-box; }
+  body { margin:0; font:15px/1.5 -apple-system,"PingFang SC","Helvetica Neue",sans-serif; background:var(--bg); color:var(--ink); }
+  header { position:sticky; top:0; z-index:5; display:flex; align-items:center; gap:12px; padding:10px 16px; background:var(--card); border-bottom:1px solid var(--line); }
+  .switch { position:relative; }
+  .switch button.cur { font:inherit; font-weight:600; border:1px solid var(--line); background:var(--bg); border-radius:10px; padding:6px 12px; cursor:pointer; display:flex; gap:8px; align-items:center; }
+  .menu { display:none; position:absolute; top:44px; left:0; min-width:240px; background:var(--card); border:1px solid var(--line); border-radius:12px; box-shadow:0 8px 30px rgba(0,0,0,.08); padding:6px; }
+  .menu.open { display:block; }
+  .menu a { display:flex; justify-content:space-between; gap:10px; padding:8px 10px; border-radius:8px; color:inherit; text-decoration:none; cursor:pointer; }
+  .menu a:hover, .menu a.on { background:var(--bg); }
+  .menu .sep { height:1px; background:var(--line); margin:4px 0; }
+  .badge { min-width:20px; height:20px; padding:0 6px; border-radius:10px; background:var(--red); color:#fff; font-size:12px; display:inline-flex; align-items:center; justify-content:center; }
+  .badge.zero { background:var(--line); color:var(--mute); }
+  .others { font-size:13px; color:var(--mute); }
+  .others b { color:var(--red); }
+  main { max-width:880px; margin:0 auto; padding:16px; }
+  h2 { font-size:13px; letter-spacing:.06em; color:var(--mute); margin:22px 0 8px; font-weight:600; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:14px; margin-bottom:10px; }
+  .gate .q { font-weight:600; margin-bottom:10px; }
+  .gate .proj { font-size:12px; color:var(--mute); margin-bottom:4px; }
+  .row { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+  .btn { font:inherit; border:0; border-radius:10px; padding:7px 14px; cursor:pointer; background:var(--accent); color:#fff; }
+  .btn.ghost { background:var(--bg); color:var(--ink); border:1px solid var(--line); }
+  .btn.warn { background:var(--warn); }
+  input[type=text], textarea { font:inherit; flex:1; min-width:180px; border:1px solid var(--line); border-radius:10px; padding:7px 10px; background:#fff; }
+  textarea { width:100%; min-height:64px; resize:vertical; }
+  table { width:100%; border-collapse:collapse; }
+  td { padding:8px 6px; border-top:1px solid var(--line); vertical-align:top; }
+  tr:first-child td { border-top:0; }
+  td.key { font-family:ui-monospace,Menlo,monospace; font-size:13px; white-space:nowrap; }
+  .st { font-size:13px; padding:2px 8px; border-radius:8px; background:var(--bg); white-space:nowrap; }
+  .st.stuck { background:#fde8e4; color:var(--red); }
+  .st.done { background:#e5f2ea; color:var(--accent); }
+  .log { font-family:ui-monospace,Menlo,monospace; font-size:12.5px; color:var(--mute); white-space:pre-wrap; }
+  .empty { color:var(--mute); }
+  .sum { display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:10px; }
+  .sum .card { cursor:pointer; margin:0; }
+  .sum .n { font-size:13px; color:var(--mute); }
+  .toast { position:fixed; bottom:18px; left:50%; transform:translateX(-50%); background:var(--ink); color:#fff; padding:8px 14px; border-radius:10px; display:none; }
+</style>
+</head>
+<body>
+<header>
+  <div class="switch">
+    <button class="cur" id="cur" onclick="toggleMenu()"><span id="curName">…</span><span id="curBadge" class="badge zero">0</span> ▾</button>
+    <div class="menu" id="menu"></div>
+  </div>
+  <div class="others" id="others"></div>
+</header>
+<main id="main"><p class="empty">加载中…</p></main>
+<div class="toast" id="toast"></div>
+<script>
+let projects = [], cur = localStorage.getItem("tubu.project") || "", data = null;
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+function toast(t){ const el=$("toast"); el.textContent=t; el.style.display="block"; setTimeout(()=>el.style.display="none",2200); }
+function toggleMenu(){ $("menu").classList.toggle("open"); }
+document.addEventListener("click", e => { if (!e.target.closest(".switch")) $("menu").classList.remove("open"); });
+
+async function loadProjects(){
+  projects = await (await fetch("api/projects")).json();
+  if (cur !== "*" && !projects.find(p => p.code === cur)) cur = projects.length === 1 ? projects[0].code : "*";
+  const total = projects.reduce((a,p)=>a+p.gates,0);
+  $("menu").innerHTML =
+    `<a class="${cur==="*"?"on":""}" onclick="pick('*')"><span>全部待办</span><span class="badge ${total?"":"zero"}">${total}</span></a><div class="sep"></div>` +
+    projects.map(p => `<a class="${cur===p.code?"on":""}" onclick="pick('${p.code}')"><span>${esc(p.name)} <span class="others">${p.code}</span></span><span class="badge ${p.gates?"":"zero"}">${p.gates}</span></a>`).join("") +
+    `<div class="sep"></div><a onclick="alert('新开：tubu new <代号> --name 名字 --path 目录\\n导入：tubu import <代号> --name 名字 --path 旧仓库')"><span>＋ 新开 / 导入项目</span></a>`;
+  const me = projects.find(p => p.code === cur);
+  $("curName").textContent = cur === "*" ? "全部待办" : (me ? me.name : "—");
+  const n = cur === "*" ? total : (me ? me.gates : 0);
+  $("curBadge").textContent = n; $("curBadge").className = "badge" + (n ? "" : " zero");
+  // 别的项目在等你：头部常驻提示，不会漏
+  const other = projects.filter(p => p.code !== cur && p.gates > 0);
+  $("others").innerHTML = cur !== "*" && other.length ? "其他项目在等你：" + other.map(p => `<a onclick="pick('${p.code}')" style="cursor:pointer">${esc(p.name)} <b>${p.gates}</b></a>`).join("、") : "";
+}
+
+function pick(code){ cur = code; localStorage.setItem("tubu.project", code); $("menu").classList.remove("open"); refresh(); }
+
+function gateCard(g, code, name){
+  const opts = g.options || ["通过","打回"];
+  const id = "w_" + g.id;
+  const needWhy = opts.includes("打回");
+  return `<div class="card gate">${name?`<div class="proj">${esc(name)}</div>`:""}<div class="q">${esc(g.question)}</div>
+    <div class="row">${needWhy?`<input type="text" id="${id}" placeholder="打回的话写一句，原话进返工（像用户那样说）">`:""}
+    ${opts.map(o => `<button class="btn ${/打回|不做/.test(o)?"warn":""}" onclick="approve('${code}','${g.id}','${esc(o)}','${id}')">${esc(o)}</button>`).join("")}</div></div>`;
+}
+
+async function refresh(){
+  await loadProjects();
+  if (cur === "*") {
+    const all = await Promise.all(projects.map(async p => ({p, d: await (await fetch("api/p/"+p.code)).json()})));
+    const gates = all.flatMap(x => (x.d.gates||[]).map(g => gateCard(g, x.p.code, x.p.name)));
+    $("main").innerHTML = `<h2>等你点头 · 全部项目</h2>${gates.join("") || '<div class="card empty">没有要你点头的</div>'}
+      <h2>各项目</h2><div class="sum">${all.map(x => `<div class="card" onclick="pick('${x.p.code}')"><b>${esc(x.p.name)}</b>
+      <div class="n">施工中 ${x.d.count?.building||0} · 可收菜 ${x.d.count?.merged||0} · 卡住 ${x.d.stuck||0}</div></div>`).join("")}</div>`;
+    return;
+  }
+  data = await (await fetch("api/p/" + cur)).json();
+  const stuck = s => /交决策岗|有提问/.test(s.state) || s.stalled;
+  $("main").innerHTML = `
+    <h2>等你点头</h2>${(data.gates||[]).map(g => gateCard(g, cur)).join("") || '<div class="card empty">没有要你点头的</div>'}
+    <h2>以用户视角说一句</h2><div class="card"><textarea id="fb" placeholder="比如：注册要点三次才能进，太绕了"></textarea>
+      <div class="row" style="margin-top:8px"><button class="btn" onclick="feedback()">记下来</button><span class="others">原话进 issue，决策岗只补标签不改意思</span></div></div>
+    <h2>每件进度</h2><div class="card"><table>${(data.items||[]).slice().reverse().map(it => `<tr>
+      <td class="key">${esc(it.key)}</td><td>${esc(it.title)}${it.round?` <span class="others">返工 ${it.round}</span>`:""}</td>
+      <td style="text-align:right"><span class="st ${stuck(it)?"stuck":(/可收菜|已上线/.test(it.state)?"done":"")}">${it.stalled?"疑似卡住":esc(it.state)}</span></td></tr>`).join("") || '<tr><td class="empty">还没有件</td></tr>'}</table></div>
+    <h2>最近动静</h2><div class="card log">${esc((data.log||[]).slice().reverse().join("\n")) || "（无）"}</div>`;
+}
+
+async function approve(code, gate, choice, whyId){
+  const why = (document.getElementById(whyId) || {}).value || "";
+  if (choice === "打回" && !why.trim()) { toast("打回请写一句原因"); return; }
+  const r = await (await fetch("api/approve", {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({code, gate, choice, why})})).json();
+  toast(r.ok ? "已" + choice : "没成功：" + r.error); refresh();
+}
+async function feedback(){
+  const t = $("fb").value.trim(); if (!t) return;
+  const r = await (await fetch("api/feedback", {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({code: cur, words: t})})).json();
+  toast(r.ok ? "记下了" : "没成功：" + r.error); if (r.ok) $("fb").value = "";
+}
+refresh(); setInterval(refresh, 30000);
+</script>
+</body>
+</html>
