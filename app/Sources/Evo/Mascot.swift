@@ -186,6 +186,10 @@ struct SpeechBubble: View {
     var side: Side = .evo
     var tone: LoopState.Tone = .neutral
 
+    private var fill: Color {
+        side == .me ? Theme.accent : (tone == .danger ? Theme.danger.opacity(0.14) : Theme.surfaceSunk)
+    }
+
     var body: some View {
         Text(text)
             .font(Theme.body(12.5))
@@ -193,8 +197,11 @@ struct SpeechBubble: View {
             .fixedSize(horizontal: false, vertical: true)
             .padding(.horizontal, 11).padding(.vertical, 7)
             .background(
-                BubbleShape(tailLeft: side == .evo)
-                    .fill(side == .me ? Theme.accent : (tone == .danger ? Theme.danger.opacity(0.12) : Theme.surfaceSunk))
+                ZStack {
+                    RoundedRectangle(cornerRadius: 12, style: .continuous).fill(fill)
+                    BubbleShape(tailLeft: side == .evo).fill(fill)
+                }
+                .compositingGroup()
             )
             .accessibilityLabel(side == .evo ? "evo 说：\(text)" : "你说：\(text)")
     }
@@ -203,18 +210,19 @@ struct SpeechBubble: View {
 struct BubbleShape: Shape {
     var tailLeft: Bool
     func path(in r: CGRect) -> Path {
-        var p = Path(roundedRect: r, cornerRadius: 12, style: .continuous)
-        let y = r.maxY - 10
+        // 只画小尾巴（闭合小三角）；圆角矩形单独画，两个同色叠在一起，避免绕向相反挖出洞
+        var t = Path()
         if tailLeft {
-            p.move(to: CGPoint(x: r.minX + 1, y: y - 6))
-            p.addQuadCurve(to: CGPoint(x: r.minX - 5, y: r.maxY), control: CGPoint(x: r.minX - 1, y: r.maxY - 2))
-            p.addQuadCurve(to: CGPoint(x: r.minX + 10, y: r.maxY - 1), control: CGPoint(x: r.minX + 4, y: r.maxY))
+            t.move(to: CGPoint(x: r.minX + 4, y: r.maxY - 12))
+            t.addQuadCurve(to: CGPoint(x: r.minX - 4, y: r.maxY + 1), control: CGPoint(x: r.minX + 2, y: r.maxY - 3))
+            t.addQuadCurve(to: CGPoint(x: r.minX + 14, y: r.maxY), control: CGPoint(x: r.minX + 5, y: r.maxY + 1))
         } else {
-            p.move(to: CGPoint(x: r.maxX - 1, y: y - 6))
-            p.addQuadCurve(to: CGPoint(x: r.maxX + 5, y: r.maxY), control: CGPoint(x: r.maxX + 1, y: r.maxY - 2))
-            p.addQuadCurve(to: CGPoint(x: r.maxX - 10, y: r.maxY - 1), control: CGPoint(x: r.maxX - 4, y: r.maxY))
+            t.move(to: CGPoint(x: r.maxX - 4, y: r.maxY - 12))
+            t.addQuadCurve(to: CGPoint(x: r.maxX + 4, y: r.maxY + 1), control: CGPoint(x: r.maxX - 2, y: r.maxY - 3))
+            t.addQuadCurve(to: CGPoint(x: r.maxX - 14, y: r.maxY), control: CGPoint(x: r.maxX - 5, y: r.maxY + 1))
         }
-        return p
+        t.closeSubpath()
+        return t
     }
 }
 #endif

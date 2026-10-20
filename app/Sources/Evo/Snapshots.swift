@@ -102,7 +102,7 @@ enum Snapshots {
         ])
     }
 
-    /// 画一张：离屏窗口里放 NSHostingView，按 2 倍像素 cacheDisplay；同时用 ImageRenderer 画一张做对照（-ir 后缀）。
+    /// 画一张：ImageRenderer，2 倍像素。
     static func render<V: View>(_ view: V, width: CGFloat, dark: Bool, name: String, out: URL) {
         let ap = NSAppearance(named: dark ? .darkAqua : .aqua)!
         NSApp.appearance = ap
@@ -112,42 +112,16 @@ enum Snapshots {
             .frame(width: width)
             .fixedSize(horizontal: false, vertical: true)
             .background(Theme.bg)
-        let host = NSHostingView(rootView: root)
-        host.appearance = ap
-        var size = host.fittingSize
-        size.width = width
-        size.height = max(60, min(size.height, 2400))
-        host.frame = NSRect(origin: .zero, size: size)
-        let win = NSWindow(contentRect: host.frame, styleMask: [.borderless], backing: .buffered, defer: false)
-        win.appearance = ap
-        win.contentView = host
-        win.setFrameOrigin(NSPoint(x: -10000, y: -10000))
-        win.orderFrontRegardless()
-        host.layoutSubtreeIfNeeded()
-        RunLoop.main.run(until: Date().addingTimeInterval(0.4))
-
-        if let rep = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: Int(size.width * 2), pixelsHigh: Int(size.height * 2),
-                                      bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
-                                      colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0) {
-            rep.size = size
-            ap.performAsCurrentDrawingAppearance {
-                host.cacheDisplay(in: host.bounds, to: rep)
-            }
-            if let png = rep.representation(using: .png, properties: [:]) {
-                try? png.write(to: out.appendingPathComponent("\(name).png"))
-            }
-        }
-        win.orderOut(nil)
-
+        // 离屏 NSHostingView + cacheDisplay 试过：会糊、胶囊边被裁，Menu 画成黄块；ImageRenderer 是真矢量 2 倍，干净。
         let r = ImageRenderer(content: root)
         r.scale = 2
         if let cg = r.cgImage {
             let rep = NSBitmapImageRep(cgImage: cg)
             if let png = rep.representation(using: .png, properties: [:]) {
-                try? png.write(to: out.appendingPathComponent("\(name)-ir.png"))
+                try? png.write(to: out.appendingPathComponent("\(name).png"))
+                print("  \(name)  \(cg.width / 2)×\(cg.height / 2)")
             }
         }
-        print("  \(name)  \(Int(size.width))×\(Int(size.height))")
     }
 }
 
