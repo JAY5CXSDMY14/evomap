@@ -1,0 +1,9 @@
+{"schema_version": 1, "project": "EV", "name": "Evo 应用", "last_tick": "2026-10-20T12:00:00+08:00",
+ "count": {"building": 1, "built": 1, "verifying": 2, "merged": 1}, "stuck": 1, "no_live_path": ["EV-3", "EV-4", "EV-5"],
+ "stale": false, "roles": {"build": {"model": "glm"}},
+ "gates": [{"id": "g7", "question": "看效果（第 2 轮）：菜单栏换成弹窗", "options": ["通过", "打回"], "kind": "look", "item": "EV-2",
+            "waiting_since": "2026-10-20T11:30:00+08:00"},
+           {"id": "g8", "question": "上线这 1 件？首次向导", "options": ["上线", "再等等"], "kind": "ship"},
+           {"id": "g9", "question": "外部请求", "kind": "external"}],
+ "items": [{"key": "EV-1", "title": "首次向导", "state": "已合并·可收菜", "raw": "merged"},
+           {"key": "EV-3", "title": "命令面板", "state": "施工中", "raw": "building", "no_live_path": true, "stalled": "yes"}]}

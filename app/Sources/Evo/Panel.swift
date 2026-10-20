@@ -163,10 +163,13 @@ final class PanelController: NSObject, WKNavigationDelegate, NSWindowDelegate {
 
     private func message(_ text: String, error: Bool = false) {
         let esc = text.replacingOccurrences(of: "&", with: "&amp;").replacingOccurrences(of: "<", with: "&lt;")
-        let color = error ? "#c0392b" : "#555"
+        let color = error ? "#C0473A" : "#6B6862"
         web?.loadHTMLString("""
-        <html><body style="font:15px -apple-system,'PingFang SC',sans-serif;background:#f6f5f2;display:flex;\
-        height:100vh;align-items:center;justify-content:center;margin:0"><div style="max-width:520px;color:\(color)">\(esc)</div></body></html>
+        <html><head><meta name="color-scheme" content="light dark"><style>
+        body{font:15px -apple-system,'PingFang SC',sans-serif;background:#FAF9F5;display:flex;height:100vh;align-items:center;justify-content:center;margin:0}
+        div{max-width:520px;color:\(color);background:#fff;border:1px solid #E5E1D6;border-radius:14px;padding:18px 22px;box-shadow:0 2px 8px rgba(0,0,0,.05)}
+        @media (prefers-color-scheme: dark){body{background:#262624}div{background:#30302E;border-color:#3E3D39;color:\(error ? "#E8806F" : "#A8A49A")}}
+        </style></head><body><div>\(esc)</div></body></html>
         """, baseURL: nil)
     }
 

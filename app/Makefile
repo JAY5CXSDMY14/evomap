@@ -5,6 +5,7 @@
 #   make dmg     打 build/Evo.dmg
 #   make run     组装后打开
 #   make install 拷到 /Applications
+#   make snapshots  用假数据把主要界面画成 PNG（build/snapshots，浅色+深色）
 #   make clean
 # 可选：SIGN="Developer ID Application: …" 换正式证书；SIGN= 跳过签名；UNIVERSAL=1 出 arm64+x86_64 通用包
 VERSION := $(shell tr -d '[:space:]' < VERSION)
@@ -18,7 +19,7 @@ else
   BINDIR = $(shell swift build -c release --show-bin-path)
 endif
 
-.PHONY: build test app dmg run install clean version
+.PHONY: build test app dmg run install clean version snapshots
 
 build:
 	swift build -c release $(ARCHFLAGS)
@@ -42,6 +43,13 @@ install: app
 	rm -rf /Applications/Evo.app
 	cp -R $(OUT)/Evo.app /Applications/
 	open /Applications/Evo.app
+
+# 界面截图：debug 编译后用 --snapshots 跑一次（不碰 evo，画完就退出）
+snapshots:
+	swift build
+	rm -rf $(OUT)/snapshots
+	"$$(swift build --show-bin-path)/Evo" --snapshots $(OUT)/snapshots
+	@ls -1 $(OUT)/snapshots
 
 version:
 	@echo $(VERSION)

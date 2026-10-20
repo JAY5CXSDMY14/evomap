@@ -13,6 +13,10 @@ public struct StatusDoc: Decodable, Equatable, Sendable {
     public var gates: [Gate]
     public var items: [Item]
     public var log: [String]
+    /// 新字段（可能还没有）：没有可走通路径的件数。evo 可能给数字、数组或布尔，统一成件数；没给就是 nil。
+    public var noLivePath: Int?
+    /// 新字段（可能还没有）：evo 自己判断的「心跳过期」。
+    public var staleFlag: Bool?
 
     public struct Gate: Decodable, Equatable, Hashable, Sendable {
         public var id: String
@@ -60,8 +64,14 @@ public struct StatusDoc: Decodable, Equatable, Sendable {
         public var state: String
         public var raw: String?
         public var stalled: Bool
+        public var noLivePath: Bool
 
-        enum CodingKeys: String, CodingKey { case key, title, state, raw, stalled }
+        enum CodingKeys: String, CodingKey { case key, title, state, raw, stalled
+            case noLivePath = "no_live_path" }
+
+        public init(key: String, title: String, state: String, raw: String? = nil, stalled: Bool = false, noLivePath: Bool = false) {
+            self.key = key; self.title = title; self.state = state; self.raw = raw; self.stalled = stalled; self.noLivePath = noLivePath
+        }
 
         public init(from d: Decoder) throws {
             let c = try d.container(keyedBy: CodingKeys.self)
@@ -69,13 +79,16 @@ public struct StatusDoc: Decodable, Equatable, Sendable {
             title = (try c.decodeIfPresent(String.self, forKey: .title)) ?? ""
             state = (try c.decodeIfPresent(String.self, forKey: .state)) ?? ""
             raw = try c.decodeIfPresent(String.self, forKey: .raw)
-            stalled = (try c.decodeIfPresent(Bool.self, forKey: .stalled)) ?? false
+            stalled = (try? c.decodeIfPresent(Bool.self, forKey: .stalled)) ?? false
+            noLivePath = (Lenient.count(c, .noLivePath) ?? 0) > 0
         }
     }
 
     enum CodingKeys: String, CodingKey {
         case schemaVersion = "schema_version"
         case project, name, count, stuck, gates, items, log
+        case noLivePath = "no_live_path"
+        case staleFlag = "stale"
         case generatedAt = "generated_at"
         case lastTick = "last_tick"
     }
@@ -88,10 +101,12 @@ public struct StatusDoc: Decodable, Equatable, Sendable {
         generatedAt = try c.decodeIfPresent(String.self, forKey: .generatedAt)
         lastTick = try c.decodeIfPresent(String.self, forKey: .lastTick)
         count = (try? c.decodeIfPresent([String: Int].self, forKey: .count)) ?? [:]
-        stuck = (try c.decodeIfPresent(Int.self, forKey: .stuck)) ?? 0
-        gates = (try c.decodeIfPresent([Gate].self, forKey: .gates)) ?? []
-        items = (try c.decodeIfPresent([Item].self, forKey: .items)) ?? []
+        stuck = (try? c.decodeIfPresent(Int.self, forKey: .stuck)) ?? 0
+        gates = (try? c.decodeIfPresent([Gate].self, forKey: .gates)) ?? []
+        items = (try? c.decodeIfPresent([Item].self, forKey: .items)) ?? []
         log = (try? c.decodeIfPresent([String].self, forKey: .log)) ?? []
+        noLivePath = Lenient.count(c, .noLivePath)
+        staleFlag = try? c.decodeIfPresent(Bool.self, forKey: .staleFlag)
     }
 
     /// 这个版本的应用认得的最高 schema_version；更高的照样解析（只加字段），但界面上提示升级。
@@ -108,6 +123,43 @@ public struct StatusDoc: Decodable, Equatable, Sendable {
     /// 等老板的件数（= 这个项目的待批闸门数）。
     public var pendingCount: Int { gates.count }
     public var buildingCount: Int { count["building", default: 0] }
+    /// 验收这一段：待验收 + 验收中。
+    public var verifyingCount: Int { count["built", default: 0] + count["verifying", default: 0] }
+    /// 已合并可收菜。
+    public var mergedCount: Int { count["merged", default: 0] }
+    /// 卡住：有 no_live_path 时取 stuck 和它的较大值（同一件可能两边都算，取大不重复加）。
+    public var stuckCount: Int {
+        let perItem = items.filter(\.noLivePath).count
+        guard let n = noLivePath ?? (perItem > 0 ? perItem : nil) else { return stuck }
+        return max(stuck, n)
+    }
+}
+
+/// 宽松解码：数字 / 数组（取长度）/ 布尔（true=1）/ 字符串数字都认，其余当没有。
+enum Lenient {
+    static func count<K: CodingKey>(_ c: KeyedDecodingContainer<K>, _ k: K) -> Int? {
+        guard c.contains(k) else { return nil }
+        if let n = try? c.decode(Int.self, forKey: k) { return n }
+        if let b = try? c.decode(Bool.self, forKey: k) { return b ? 1 : 0 }
+        if let a = try? c.decode([AnyJSON].self, forKey: k) { return a.count }
+        if let s = try? c.decode(String.self, forKey: k), let n = Int(s) { return n }
+        if let d = try? c.decode([String: AnyJSON].self, forKey: k) { return d.count }
+        return nil
+    }
+}
+
+/// 只为数元素个数而解码的任意 JSON 值。
+struct AnyJSON: Decodable {
+    init(from decoder: Decoder) throws {
+        let c = try decoder.singleValueContainer()
+        if c.decodeNil() { return }
+        if (try? c.decode(Bool.self)) != nil { return }
+        if (try? c.decode(Double.self)) != nil { return }
+        if (try? c.decode(String.self)) != nil { return }
+        if (try? c.decode([AnyJSON].self)) != nil { return }
+        if (try? c.decode([String: AnyJSON].self)) != nil { return }
+        throw DecodingError.dataCorruptedError(in: c, debugDescription: "unknown")
+    }
 }
 
 /// `evo projects` 的纯文本输出：每行「代号 名字 仓库 GitHub」，取第一列 2–4 个大写字母。

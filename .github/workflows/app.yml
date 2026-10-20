@@ -48,6 +48,15 @@ jobs:
           # 跑完不能在签过名的包里留下 __pycache__
           if find build/Evo.app -name __pycache__ | grep -q .; then echo "包里出现 __pycache__"; exit 1; fi
           codesign --verify --deep --strict build/Evo.app
+      - name: 界面截图（make snapshots）
+        timeout-minutes: 8
+        run: make snapshots
+      - uses: actions/upload-artifact@v4
+        with:
+          name: snapshots
+          path: app/build/snapshots
+          if-no-files-found: error
+          retention-days: 30
       - uses: actions/upload-artifact@v4
         with:
           name: Evo.dmg

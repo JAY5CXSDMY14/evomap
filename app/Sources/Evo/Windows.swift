@@ -18,6 +18,8 @@ final class WindowManager {
                          styleMask: [.titled, .closable, .miniaturizable, .resizable], backing: .buffered, defer: false)
         w.title = title
         w.isReleasedWhenClosed = false
+        w.titlebarAppearsTransparent = true
+        w.backgroundColor = NSColor(Theme.bg)
         w.contentViewController = NSHostingController(rootView: content())
         w.setContentSize(size)
         w.center()
@@ -29,15 +31,51 @@ final class WindowManager {
     func close(_ id: String) { windows[id]?.close() }
 
     func showSettings() {
-        show("settings", title: "Evo 设置", size: NSSize(width: 520, height: 520)) { SettingsView(state: AppState.shared) }
+        show("settings", title: "Evo 设置", size: NSSize(width: 520, height: 640)) { SettingsView(state: AppState.shared) }
     }
 
     func showSetup() {
-        show("setup", title: "欢迎使用 Evo", size: NSSize(width: 640, height: 620)) { SetupView() }
+        show("setup", title: "欢迎使用 Evo", size: NSSize(width: 620, height: 720)) { SetupView() }
     }
 }
 
 // MARK: - 设置
+
+/// 一组设置：象牙底上的白卡片，标题用 serif。
+struct SettingsCard<Content: View>: View {
+    let title: String
+    let symbol: String
+    @ViewBuilder var content: () -> Content
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Label(title, systemImage: symbol).font(Theme.title(14)).foregroundStyle(Theme.textPrimary)
+                .accessibilityAddTraits(.isHeader)
+            content()
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .card()
+    }
+}
+
+struct Hint: View {
+    let text: String
+    var color: Color = Theme.textSecondary
+    var body: some View {
+        Text(text).font(Theme.caption()).foregroundStyle(color).fixedSize(horizontal: false, vertical: true).textSelection(.enabled)
+    }
+}
+
+struct FieldBox: View {
+    let placeholder: String
+    @Binding var text: String
+    var body: some View {
+        ThemedField(placeholder: placeholder, text: $text)
+            .padding(.horizontal, 10).padding(.vertical, 7)
+            .background(RoundedRectangle(cornerRadius: Theme.radiusSmall, style: .continuous).fill(Theme.surfaceSunk))
+            .overlay(RoundedRectangle(cornerRadius: Theme.radiusSmall, style: .continuous).strokeBorder(Theme.border))
+    }
+}
 
 struct SettingsView: View {
     @ObservedObject var state: AppState
@@ -47,49 +85,69 @@ struct SettingsView: View {
     @AppStorage("notificationsEnabled") private var notificationsEnabled = true
     @State private var loginItem = SMAppService.mainApp.status == .enabled
     @State private var loginError: String?
+    @Environment(\.evoStatic) private var isStatic
+
+    private var portText: Binding<String> {
+        Binding(get: { String(panelPort) }, set: { v in if let n = Int(v.filter(\.isNumber)), (1...65535).contains(n) { panelPort = n } })
+    }
 
     var body: some View {
-        Form {
-            Section("开机") {
-                Toggle("登录时自动打开 Evo", isOn: $loginItem)
-                    .onChange(of: loginItem) { on in setLoginItem(on) }
-                if SMAppService.mainApp.status == .requiresApproval {
-                    HStack {
-                        Text("需要在系统设置里批准").foregroundStyle(.orange)
-                        Button("打开登录项设置") { SMAppService.openSystemSettingsLoginItems() }
+        MaybeScroll(maxHeight: 2000) {
+            VStack(alignment: .leading, spacing: 14) {
+                HStack(spacing: 12) {
+                    EvoMascot(mood: .idle, size: 40)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("设置").font(Theme.title(22)).foregroundStyle(Theme.textPrimary)
+                        Text("Evo \(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "dev")")
+                            .font(Theme.caption()).foregroundStyle(Theme.textSecondary)
                     }
-                }
-                if let loginError { Text(loginError).foregroundStyle(.red).font(.caption) }
-            }
-            Section("通知") {
-                Toggle("新闸门、接棒器停了时发原生通知", isOn: $notificationsEnabled)
-                Text(quietText).font(.caption).foregroundStyle(.secondary)
-                Button("发一条测试通知") { Notifier.shared.test() }
-            }
-            Section("面板") {
-                TextField("端口", value: $panelPort, format: .number.grouping(.never))
-                Text("应用会先找这个端口上正在跑的 evo panel，没有就自己起一个（退出 Evo 时一起关）。")
-                    .font(.caption).foregroundStyle(.secondary)
-            }
-            Section("evo") {
-                TextField("python3 路径（留空自动找）", text: $pythonPath)
-                Text("现在用：\(EvoEnv.python ?? "没找到")").font(.caption).foregroundStyle(.secondary)
-                TextField("evo 路径（留空用应用自带的）", text: $evoPath)
-                Text("现在用：\(EvoEnv.evoScript ?? "没找到")").font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
-                Text("心跳超过 \(Int(state.config.heartbeatStaleMinutes)) 分钟算停（全局配置 limits.heartbeat_stale_minutes）")
-                    .font(.caption).foregroundStyle(.secondary)
-            }
-            Section {
-                HStack {
-                    Button("打开首次设置向导…") { WindowManager.shared.showSetup() }
                     Spacer()
-                    Text("Evo \(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "dev")")
-                        .foregroundStyle(.secondary)
                 }
+                .staggeredAppear(0)
+                SettingsCard(title: "开机", symbol: "power") {
+                    Toggle("登录时自动打开 Evo", isOn: $loginItem).toggleStyle(PillToggleStyle())
+                        .onChange(of: loginItem) { on in if !isStatic { setLoginItem(on) } }
+                    if SMAppService.mainApp.status == .requiresApproval {
+                        HStack {
+                            Hint(text: "需要在系统设置里批准", color: Theme.warning)
+                            Button("打开登录项设置") { SMAppService.openSystemSettingsLoginItems() }
+                                .buttonStyle(BouncyStyle(kind: .secondary, compact: true))
+                        }
+                    }
+                    if let loginError { Hint(text: loginError, color: Theme.danger) }
+                }
+                .staggeredAppear(1)
+                SettingsCard(title: "通知", symbol: "bell") {
+                    Toggle("新闸门、接棒器停了时发原生通知", isOn: $notificationsEnabled).toggleStyle(PillToggleStyle())
+                    Hint(text: quietText)
+                    Button("发一条测试通知") { Notifier.shared.test() }.buttonStyle(BouncyStyle(kind: .secondary, compact: true))
+                }
+                .staggeredAppear(2)
+                SettingsCard(title: "面板", symbol: "rectangle.on.rectangle") {
+                    HStack { Text("端口").foregroundStyle(Theme.textPrimary); FieldBox(placeholder: "8765", text: portText).frame(width: 110); Spacer() }
+                    Hint(text: "应用会先找这个端口上正在跑的 evo panel，没有就自己起一个（退出 Evo 时一起关）。")
+                }
+                .staggeredAppear(3)
+                SettingsCard(title: "evo", symbol: "terminal") {
+                    FieldBox(placeholder: "python3 路径（留空自动找）", text: $pythonPath)
+                    Hint(text: "现在用：\(isStatic ? "/opt/homebrew/bin/python3" : (EvoEnv.python ?? "没找到"))")
+                    FieldBox(placeholder: "evo 路径（留空用应用自带的）", text: $evoPath)
+                    Hint(text: "现在用：\(isStatic ? "Evo.app/Contents/Resources/evo/bin/evo" : (EvoEnv.evoScript ?? "没找到"))")
+                    Hint(text: "心跳超过 \(Int(state.config.heartbeatStaleMinutes)) 分钟算停（全局配置 limits.heartbeat_stale_minutes）")
+                }
+                .staggeredAppear(4)
+                HStack {
+                    Button { WindowManager.shared.showSetup() } label: { Label("打开首次设置向导", systemImage: "wand.and.stars") }
+                        .buttonStyle(BouncyStyle(kind: .primary))
+                    Spacer()
+                }
+                .staggeredAppear(5)
             }
+            .padding(20)
         }
-        .formStyle(.grouped)
-        .frame(minWidth: 480, minHeight: 460)
+        .frame(width: 520)
+        .frame(minHeight: isStatic ? nil : 520)
+        .background(Theme.bg)
     }
 
     private var quietText: String {
@@ -124,8 +182,18 @@ final class SetupModel: ObservableObject {
     @Published var output = ""
     @Published var running: String?
     @Published var link = false
+    @Published var step = 0            // 0 检查环境 → 1 安装常驻 → 2 完成
+    var preset = false                 // 截图用：不真的去检查
+
+    init() {}
+    init(preset checks: [Check], step: Int = 0, output: String = "") {
+        self.checks = checks; self.step = step; self.output = output; preset = true
+    }
+
+    var requiredOK: Bool { !checks.isEmpty && checks.allSatisfy { !$0.required || $0.ok == true } }
 
     func runChecks() async {
+        if preset { return }
         running = "检查中…"
         var c: [Check] = []
         if let py = EvoEnv.python {
@@ -177,59 +245,169 @@ final class SetupModel: ObservableObject {
 }
 
 struct SetupView: View {
-    @StateObject private var model = SetupModel()
+    @StateObject private var model: SetupModel
+    @Environment(\.evoStatic) private var isStatic
+
+    @MainActor init(model: SetupModel? = nil) { let model = model ?? SetupModel()
+        _model = StateObject(wrappedValue: model) }
+
+    var body: some View {
+        MaybeScroll(maxHeight: 2000) {
+            VStack(alignment: .leading, spacing: 14) {
+                HStack(alignment: .center, spacing: 14) {
+                    EvoMascot(mood: model.running != nil ? .working : (model.requiredOK ? .idle : .waiting), size: 58)
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("欢迎使用 Evo").font(Theme.title(24)).foregroundStyle(Theme.textPrimary).accessibilityAddTraits(.isHeader)
+                        SpeechBubble(text: bubble)
+                    }
+                    Spacer(minLength: 0)
+                }
+                .staggeredAppear(0)
+                StepCard(index: 1, title: "检查这台 Mac", current: model.step == 0, done: model.step > 0) {
+                    VStack(spacing: 0) {
+                        ForEach(Array(model.checks.enumerated()), id: \.element.id) { i, c in
+                            if i > 0 { Rectangle().fill(Theme.border).frame(height: 1).padding(.leading, 34) }
+                            CheckRow(check: c, spinning: model.running != nil && c.ok == nil)
+                        }
+                        if model.checks.isEmpty {
+                            HStack(spacing: 8) { Spinner(); Text("检查中…").foregroundStyle(Theme.textSecondary) }.padding(10)
+                        }
+                    }
+                    HStack {
+                        Button { Task { await model.runChecks() } } label: { Label("重新检查", systemImage: "arrow.clockwise") }
+                            .buttonStyle(BouncyStyle(kind: .secondary, compact: true))
+                        Spacer()
+                        Button("下一步") { withAnimation(Motion.or(Motion.pop)) { model.step = 1 } }
+                            .buttonStyle(BouncyStyle(kind: .primary))
+                    }
+                }
+                .staggeredAppear(1)
+                StepCard(index: 2, title: "装好常驻（launchd）", current: model.step == 1, done: model.step > 1) {
+                    Hint(text: "「安装」会把常驻指向本应用里的 evo：先把 Evo.app 拖进「应用程序」再装，之后别挪位置。", color: Theme.warning)
+                    Toggle("同时放 ~/.local/bin/evo 软链", isOn: $model.link).toggleStyle(PillToggleStyle())
+                    ScrollOrText(text: model.output.isEmpty ? "（install.sh 的输出显示在这里）" : model.output)
+                    HStack(spacing: 8) {
+                        Button("只检查") { Task { await model.install(apply: false) } }
+                            .buttonStyle(BouncyStyle(kind: .secondary, compact: true))
+                        if let r = model.running { Spinner(); Text(r).font(Theme.caption()).foregroundStyle(Theme.textSecondary) }
+                        Spacer()
+                        Button("安装（--apply）") {
+                            Task { await model.install(apply: true); withAnimation(Motion.or(Motion.pop)) { model.step = 2 } }
+                        }
+                        .buttonStyle(BouncyStyle(kind: .primary))
+                    }
+                    .disabled(model.running != nil)
+                }
+                .staggeredAppear(2)
+                StepCard(index: 3, title: "开始用", current: model.step == 2, done: false) {
+                    Hint(text: "点菜单栏上的小陶就能看到等你处理的事；⌘K 打开命令面板。")
+                    HStack {
+                        Spacer()
+                        Button("开始使用") {
+                            UserDefaults.standard.set(true, forKey: "setupDone")
+                            WindowManager.shared.close("setup")
+                        }
+                        .buttonStyle(BouncyStyle(kind: .primary))
+                        .keyboardShortcut(.defaultAction)
+                    }
+                }
+                .staggeredAppear(3)
+            }
+            .padding(22)
+        }
+        .frame(width: 620)
+        .frame(minHeight: isStatic ? nil : 600)
+        .background(Theme.bg)
+        .task { await model.runChecks() }
+    }
+
+    private var bubble: String {
+        if model.running != nil { return "稍等，我在看…" }
+        if model.checks.isEmpty { return "嗨，我是小陶。先看看这台 Mac 的环境" }
+        let miss = model.checks.filter { $0.required && $0.ok != true }.map(\.id)
+        if !miss.isEmpty { return "还差 \(miss.joined(separator: "、"))，装好再点重新检查" }
+        return "必需的都齐了！可选项缺了只是少点功能"
+    }
+}
+
+/// 一步：左边圆圈序号（做完变 ✓），当前这步展开、其余收起变淡。
+struct StepCard<Content: View>: View {
+    let index: Int
+    let title: String
+    let current: Bool
+    let done: Bool
+    @ViewBuilder var content: () -> Content
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Evo 是 evo 自动循环的菜单栏外壳").font(.title2).bold()
-            Text("先确认这台 Mac 的环境。必需项打勾才能跑；可选项缺了只是少功能。")
-                .foregroundStyle(.secondary)
-            List(model.checks) { c in
-                HStack(alignment: .top) {
-                    Image(systemName: c.ok == true ? "checkmark.circle.fill" : (c.required ? "xmark.circle.fill" : "exclamationmark.circle"))
-                        .foregroundStyle(c.ok == true ? .green : (c.required ? .red : .orange))
-                    VStack(alignment: .leading) {
-                        Text(c.id).bold()
-                        Text(c.detail).font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
-                        if c.ok != true { Text(c.hint).font(.caption) }
-                    }
+            HStack(spacing: 10) {
+                ZStack {
+                    Circle().fill(done ? Theme.success : (current ? Theme.accent : Theme.surfaceSunk)).frame(width: 24, height: 24)
+                    if done { Image(systemName: "checkmark").font(.system(size: 11, weight: .bold)).foregroundStyle(.white) }
+                    else { Text("\(index)").font(.system(size: 12, weight: .bold, design: .rounded)).foregroundStyle(current ? .white : Theme.textSecondary) }
                 }
-            }
-            .frame(minHeight: 200)
-            Text("「安装」会把 launchd 常驻指向本应用里的 evo：请先把 Evo.app 拖进「应用程序」再装，之后别再挪位置。")
-                .font(.caption).foregroundStyle(.orange)
-            HStack {
-                Button("重新检查") { Task { await model.runChecks() } }
-                Button("运行 install.sh（只检查）") { Task { await model.install(apply: false) } }
-                Button("安装（--apply）") { Task { await model.install(apply: true) } }
-                Toggle("同时放 ~/.local/bin/evo 软链", isOn: $model.link)
+                Text(title).font(Theme.title(15)).foregroundStyle(current ? Theme.textPrimary : Theme.textSecondary)
                 Spacer()
-                if let r = model.running {
-                    ProgressView().controlSize(.small)
-                    Text(r)
-                }
             }
-            .disabled(model.running != nil)
-            ScrollView {
-                Text(model.output.isEmpty ? "（install.sh 的输出显示在这里）" : model.output)
-                    .font(.system(.caption, design: .monospaced))
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .textSelection(.enabled)
-            }
-            .frame(minHeight: 160)
-            .background(Color(nsColor: .textBackgroundColor))
-            HStack {
-                Spacer()
-                Button("完成") {
-                    UserDefaults.standard.set(true, forKey: "setupDone")
-                    WindowManager.shared.close("setup")
-                }
-                .keyboardShortcut(.defaultAction)
-            }
+            if current { content().transition(.scale(scale: 0.96, anchor: .top).combined(with: .opacity)) }
         }
-        .padding(20)
-        .frame(minWidth: 600, minHeight: 580)
-        .task { await model.runChecks() }
+        .padding(14)
+        .card(highlighted: current)
+        .opacity(current || done ? 1 : 0.7)
+        .animation(Motion.or(Motion.softSpring), value: current)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("第 \(index) 步：\(title)\(done ? "，已完成" : (current ? "，进行中" : ""))")
+    }
+}
+
+struct CheckRow: View {
+    let check: SetupModel.Check
+    let spinning: Bool
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 10) {
+            Group {
+                if spinning { Spinner(size: 14) }
+                else if check.ok == true { badge("checkmark", Theme.success) }
+                else if check.required { badge("xmark", Theme.danger) }
+                else { badge("exclamationmark", Theme.warning) }
+            }
+            .frame(width: 22, height: 22)
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 6) {
+                    Text(check.id).font(.system(size: 13, weight: .semibold)).foregroundStyle(Theme.textPrimary)
+                    if !check.required { Text("可选").font(.system(size: 10)).foregroundStyle(Theme.textSecondary)
+                        .padding(.horizontal, 5).padding(.vertical, 1).background(Capsule().fill(Theme.surfaceSunk)) }
+                }
+                Text(check.detail).font(.system(size: 11, design: .monospaced)).foregroundStyle(Theme.textSecondary)
+                    .lineLimit(1).truncationMode(.middle).textSelection(.enabled)
+                if check.ok != true { Text(check.hint).font(Theme.caption()).foregroundStyle(Theme.textPrimary.opacity(0.8)) }
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.vertical, 8)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(check.id)：\(check.ok == true ? "通过" : (check.required ? "缺少，必需" : "缺少，可选"))。\(check.ok == true ? check.detail : check.hint)")
+    }
+
+    private func badge(_ symbol: String, _ c: Color) -> some View {
+        ZStack {
+            Circle().fill(c.opacity(0.15))
+            Image(systemName: symbol).font(.system(size: 10, weight: .bold)).foregroundStyle(c)
+        }
+    }
+}
+
+struct ScrollOrText: View {
+    let text: String
+    @Environment(\.evoStatic) private var isStatic
+    var body: some View {
+        let t = Text(text).font(.system(size: 11, design: .monospaced)).foregroundStyle(Theme.textSecondary)
+            .frame(maxWidth: .infinity, alignment: .leading).textSelection(.enabled).padding(10)
+        Group {
+            if isStatic { t } else { ScrollView { t }.frame(height: 130) }
+        }
+        .background(RoundedRectangle(cornerRadius: Theme.radiusSmall, style: .continuous).fill(Theme.surfaceSunk))
     }
 }
 #endif
