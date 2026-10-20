@@ -43,7 +43,9 @@ slots:
     relay: [manual, file-inbox, reason-network]
   reviewer:            # 定期项目审查位：只读代码，只建 code-review issue
     name: 审查官
-    occupant: codex          # 计划：中转站第二个 Codex 账号
+    occupant: hark           # 现由 Hark 每日 10:00 代跑
+    candidates: [codex 第二账号, grok, 其他自带云端电脑的 Agent]   # 老板 2026-10-20：不一定是 Codex
+    runs_on: cloud           # 只读 GitHub + 建 issue，不需要 Mac mini 权限
     method: https://github.com/JAY5CXSDMY14/-agent-code-review   # PLAYBOOK.md（依据 Anthropic Claude Code 团队 code review 做法）
     cadence: 每日一轮，模块轮转；状态写在 issue 末尾 review-state 块
     can_run_commands: read-only
