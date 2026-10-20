@@ -1,0 +1,384 @@
+#!/usr/bin/env python3
+"""tubu —— 土布自动循环的接棒器（跑在 Orca 之上）。
+
+一件事 = 施工 → 验收（换模型）→ [看效果，仅 UI] → 合并。上线另攒一批。
+  tubu add   --title T --scope web/ [--ui] [--product] [--issue N]   登记一件
+  tubu tick                       接棒一轮：派工、收回报、合并、查停滞
+  tubu run   [--every 30]         一直接棒
+  tubu status                     给老板看：等你的、进行中、卡住的、可收菜的
+  tubu approve <闸门ID> 通过|打回    你点头（面板/手机上点也一样）
+  tubu ship                       把已合并的攒成一批，建「上线」闸门
+  tubu pull                       从 GitHub issue（标签 autopilot:ready）登记新件
+"""
+import argparse, json, os, re, subprocess, sys, time, shlex
+
+KIT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+CFG = json.load(open(os.environ.get("TUBU_CONFIG", os.path.join(KIT, "config.json")), encoding="utf-8"))
+STATE_DIR = os.environ.get("TUBU_STATE", os.path.join(KIT, ".state"))
+STATE = os.path.join(STATE_DIR, "state.json")
+ORCA = shlex.split(CFG.get("orca", "orca"))
+LIM = CFG["limits"]
+
+
+# ---------- 基础 ----------
+def orca(*args, ok=True):
+    r = subprocess.run(ORCA + list(args) + ["--json"], capture_output=True, text=True, timeout=120)
+    try:
+        j = json.loads(r.stdout)
+    except Exception:
+        raise SystemExit(f"orca {' '.join(args[:2])} 输出无法解析: {r.stdout[:200]} {r.stderr[:200]}")
+    if ok and not j.get("ok"):
+        raise SystemExit(f"orca {' '.join(args[:2])} 失败: {j.get('error')}")
+    return j.get("result") or {}, j
+
+
+def load():
+    if os.path.exists(STATE):
+        return json.load(open(STATE, encoding="utf-8"))
+    return {"coord": None, "items": {}, "seq": 0, "log": []}
+
+
+def save(s):
+    os.makedirs(STATE_DIR, exist_ok=True)
+    tmp = STATE + ".tmp"
+    json.dump(s, open(tmp, "w", encoding="utf-8"), ensure_ascii=False, indent=1)
+    os.replace(tmp, STATE)
+
+
+def log(s, msg):
+    line = time.strftime("%m-%d %H:%M ") + msg
+    s["log"] = (s["log"] + [line])[-200:]
+    print(line)
+
+
+def notify(title, body):
+    n = CFG.get("notify", {})
+    if n.get("macos") and sys.platform == "darwin":
+        subprocess.run(["osascript", "-e", f'display notification {json.dumps(body)} with title {json.dumps(title)}'])
+    tok, chat = os.environ.get(n.get("telegram_bot_token_env", "")), os.environ.get(n.get("telegram_chat_id_env", ""))
+    if tok and chat:
+        subprocess.run(["curl", "-s", "-m", "10", f"https://api.telegram.org/bot{tok}/sendMessage",
+                        "-d", f"chat_id={chat}", "--data-urlencode", f"text={title}\n{body}"], capture_output=True)
+
+
+def git(cwd, *a, check=True):
+    r = subprocess.run(["git", "-C", cwd] + list(a), capture_output=True, text=True)
+    if check and r.returncode:
+        raise RuntimeError(r.stderr.strip())
+    return r.stdout.strip()
+
+
+def coord(s):
+    """统筹终端：接棒器自己在 Orca 里的身份。"""
+    if s["coord"]:
+        res, j = orca("terminal", "show", "--terminal", s["coord"], ok=False)
+        if j.get("ok"):
+            return s["coord"]
+    res, _ = orca("terminal", "create", "--worktree", f"path:{CFG['repo']}", "--title", "tubu-coordinator")
+    s["coord"] = res["terminal"]["handle"]
+    orca("orchestration", "run-create", "--from", s["coord"], "--objective", "tubu autopilot")
+    return s["coord"]
+
+
+def tasks(s):
+    res, _ = orca("orchestration", "task-list", "--from", coord(s))
+    return {t["id"]: t for t in res.get("tasks", [])}
+
+
+def overlap(a, b):
+    return any(x.startswith(y) or y.startswith(x) for x in a for y in b)
+
+
+def scan_terms(text):
+    """§6 脱敏：命中词表就不让进 issue / 任务书。"""
+    p = CFG.get("policy_terms")
+    if not p or not os.path.exists(p):
+        return []
+    terms = [t.strip() for t in open(p, encoding="utf-8") if t.strip() and not t.startswith("#")]
+    return [t for t in terms if t in text]
+
+
+# ---------- 登记 ----------
+def role_prompt(role):
+    p = CFG["roles"][role].get("prompt")
+    return open(os.path.join(KIT, p), encoding="utf-8").read() + "\n\n" if p and os.path.exists(os.path.join(KIT, p)) else ""
+
+
+def cmd_add(a):
+    s = load(); c = coord(s)
+    scope = [x.strip() for x in a.scope.split(",") if x.strip()]
+    hit = scan_terms(a.title + " " + (a.spec or ""))
+    if hit:
+        raise SystemExit(f"脱敏词表命中 {len(hit)} 处，未登记。请改用代称。")
+    s["seq"] += 1
+    key = f"I{s['seq']:03d}" + (f"-#{a.issue}" if a.issue else "")
+    # 冲突：范围重叠且还没合并的件，本件施工要等它合并
+    deps = [it["merge"] for it in s["items"].values() if it["state"] not in ("merged", "shipped", "dropped") and overlap(scope, it["scope"])]
+    spec = f"任务：{a.title}\nscope: {','.join(scope)}\nUI: {'是' if a.ui else '否'}\n{a.spec or ''}"
+    b, _ = orca("orchestration", "task-create", "--from", c, "--task-title", f"{key} 施工", "--spec", role_prompt("build") + spec,
+                *(["--deps", json.dumps(deps)] if deps else []))
+    v, _ = orca("orchestration", "task-create", "--from", c, "--task-title", f"{key} 验收", "--spec", role_prompt("verify") + spec,
+                "--deps", json.dumps([b["task"]["id"]]))
+    m, _ = orca("orchestration", "task-create", "--from", c, "--task-title", f"{key} 合并", "--spec", "由接棒器合并",
+                "--deps", json.dumps([v["task"]["id"]]))
+    it = {"title": a.title, "scope": scope, "ui": a.ui, "issue": a.issue, "build": b["task"]["id"],
+          "verify": v["task"]["id"], "merge": m["task"]["id"], "spec": spec, "after": deps, "state": "queued", "round": 0,
+          "model_i": 0, "worktree": None, "gates": {}, "dispatch": {}}
+    if a.product:
+        g, _ = orca("orchestration", "gate-create", "--from", c, "--task", it["build"],
+                    "--question", f"做不做：{a.title}", "--options", json.dumps(["做", "不做"]))
+        it["gates"]["do"] = g["gate"]["id"]; notify("等你点头：做不做", a.title)
+    if a.ui:
+        g, _ = orca("orchestration", "gate-create", "--from", c, "--task", it["merge"],
+                    "--question", f"看效果：{a.title}", "--options", json.dumps(["通过", "打回"]))
+        it["gates"]["look"] = g["gate"]["id"]
+    s["items"][key] = it
+    log(s, f"登记 {key} {a.title} 范围={scope}" + (f" 排在 {len(deps)} 件后面" if deps else ""))
+    save(s)
+
+
+# ---------- 派工 ----------
+def start_worker(s, key, it, role):
+    c = coord(s); rc = CFG["roles"][role]
+    models = rc.get("models") or [None]
+    # 施工和验收用不同模型：验收取施工没用的那个
+    mb = models[it["model_i"] % len(models)]
+    model = mb if role == "build" else next((m for m in models if m != it.get("build_model")), models[0])
+    if role == "build" and not it["worktree"]:
+        res, _ = orca("worktree", "create", "--repo", f"path:{CFG['repo']}", "--name", key.lower().replace("#", ""))
+        it["worktree"] = res["worktree"]["path"]
+    res, _ = orca("terminal", "create", "--worktree", f"path:{it['worktree']}", "--title", f"{key}-{role}")
+    h = res["terminal"]["handle"]
+    cmd = rc["cmd"].replace("{model}", model or "")
+    orca("terminal", "send", "--terminal", h, "--text", cmd, "--enter", ok=False)
+    time.sleep(rc.get("boot_seconds", 3))
+    tid = it["build" if role == "build" else "verify"]
+    d, j = orca("orchestration", "dispatch", "--from", c, "--task", tid, "--to", h, "--inject", ok=False)
+    if not j.get("ok"):
+        if (j.get("error") or {}).get("code") != "inject_rejected":
+            raise SystemExit(f"派工失败: {j.get('error')}")
+        # 不在 Orca 识别名单里的命令行（自定义包装）：普通派工，再把说明打进终端
+        d, _ = orca("orchestration", "dispatch", "--from", c, "--task", tid, "--to", h)
+        pre, _ = orca("orchestration", "dispatch-show", "--from", c, "--task", tid, "--preamble")
+        text = (pre.get("preamble") or "").replace("ctx_preview", d["dispatch"]["id"])
+        orca("terminal", "send", "--terminal", h, "--text", text, "--enter")
+    it["dispatch"][role] = {"id": d["dispatch"]["id"], "terminal": h, "since": time.time(), "model": model}
+    if role == "build":
+        it["build_model"] = model
+    it["state"] = "building" if role == "build" else "verifying"
+    log(s, f"{key} 开始{'施工' if role == 'build' else '验收'}（{model}）")
+
+
+def do_merge(s, key, it):
+    repo, br = CFG["repo"], git(it["worktree"], "rev-parse", "--abbrev-ref", "HEAD")
+    git(repo, "checkout", CFG["main_branch"])
+    try:
+        git(it["worktree"], "rebase", CFG["main_branch"])          # 对齐主线（只动本件分支，不强推）
+    except RuntimeError as e:
+        git(it["worktree"], "rebase", "--abort", check=False)
+        return f"对齐主线冲突：{e}"
+    t = CFG.get("test_cmd")
+    if t:
+        r = subprocess.run(t, shell=True, cwd=it["worktree"], capture_output=True, text=True)
+        if r.returncode:
+            return "合并前重跑测试不绿：" + (r.stdout + r.stderr)[-300:]
+    git(repo, "merge", "--no-ff", br, "-m", f"merge {key}: {it['title']}")
+    return None
+
+
+# ---------- 接棒一轮 ----------
+def cmd_tick(a=None):
+    s = load(); c = coord(s); T = tasks(s)
+    by_task = {}
+    for k, it in s["items"].items():
+        for r in ("build", "verify", "merge"):
+            by_task[it[r]] = (k, r)
+
+    # 1) 收回报
+    res, _ = orca("orchestration", "check", "--terminal", c, "--types", "worker_done,escalation,question,heartbeat", ok=False)
+    msgs = res.get("messages") or []
+    for m in msgs:
+        pl = m.get("payload") or {}
+        if isinstance(pl, str):
+            try:
+                pl = json.loads(pl)
+            except Exception:
+                pl = {}
+        m["payload"] = pl
+        tid = m.get("task_id") or pl.get("taskId")
+        if tid not in by_task:
+            continue
+        k, role = by_task[tid]; it = s["items"][k]
+        it["last_seen"] = time.time(); it.pop("stalled", None)
+        typ = m.get("type"); outcome = (m.get("payload") or {}).get("outcome") or m.get("outcome")
+        if typ == "worker_done" and role == "build":
+            it["state"] = "built"; log(s, f"{k} 施工交付 → 自动接验收")
+        elif typ == "worker_done" and role == "verify":
+            if outcome == "succeeded":
+                it["state"] = "verified"; log(s, f"{k} 验收通过")
+                if it["ui"]:
+                    notify("等你看效果", it["title"])
+            else:
+                it["round"] += 1
+                if it["round"] > LIM["rework_rounds"]:
+                    it["state"] = "escalated"; log(s, f"{k} 返工 {it['round']-1} 轮仍不过，交决策岗换方案")
+                    notify("需要决策", f"{it['title']} 返工超限")
+                else:
+                    # 返工：新开施工+验收任务，合并任务改由新验收放行（接棒器自管合并时机）
+                    spec = it["spec"]
+                    nb, _ = orca("orchestration", "task-create", "--from", c, "--task-title", f"{k} 返工{it['round']}",
+                                 "--spec", role_prompt("build") + spec + f"\n返工原因：{m.get('body','')}")
+                    nv, _ = orca("orchestration", "task-create", "--from", c, "--task-title", f"{k} 复验{it['round']}",
+                                 "--spec", role_prompt("verify") + spec, "--deps", json.dumps([nb["task"]["id"]]))
+                    it["build"], it["verify"] = nb["task"]["id"], nv["task"]["id"]
+                    it["state"] = "queued"; log(s, f"{k} 验收不过，第 {it['round']} 轮返工")
+        elif typ in ("escalation", "question"):
+            it["state"] = "asking"; it["ask"] = m.get("subject") or m.get("body")
+            log(s, f"{k} 提问/上报：{it['ask']} → 交决策岗")
+    did = res.get("deliveryId") or res.get("delivery_id") or (res.get("delivery") or {}).get("id")
+    if did:
+        orca("orchestration", "check", "--terminal", c, "--ack", did, ok=False)
+    if os.environ.get("TUBU_DEBUG"):
+        print("check keys:", list(res.keys()))
+    T = tasks(s)
+
+    # 2) 派工（并发上限、等你事项过多就暂停新施工）
+    waiting_owner = sum(1 for it in s["items"].values() if it["state"] == "verified" and it["ui"]) + \
+        sum(1 for it in s["items"].values() if it["gates"].get("do") and T.get(it["build"], {}).get("status") == "blocked")
+    building = sum(1 for it in s["items"].values() if it["state"] == "building")
+    for k, it in s["items"].items():
+        st = lambda r: T.get(it[r], {}).get("status")
+        if it["state"] == "queued" and st("build") == "ready":
+            # 自己再核一遍依赖：Orca 的闸门放行会无视依赖（沙箱实测）
+            if any(T.get(d, {}).get("status") != "completed" for d in it.get("after", [])):
+                continue
+            if building >= LIM["builders"] or waiting_owner > LIM["owner_queue_pause"]:
+                continue
+            start_worker(s, k, it, "build"); building += 1
+        elif it["state"] == "built" and st("verify") == "ready":
+            start_worker(s, k, it, "verify")
+        elif it["state"] == "verified" and st("merge") == "pending":
+            # 返工后，合并任务还挂在旧的（不通过的）验收上：把旧验收标为已被复验取代
+            for d in json.loads(T.get(it["merge"], {}).get("deps") or "[]"):
+                if T.get(d, {}).get("status") == "failed":
+                    orca("orchestration", "task-update", "--from", c, "--id", d, "--status", "completed",
+                         "--result", "superseded by re-verify", ok=False)
+        elif it["state"] == "verified" and st("merge") == "ready":
+            err = do_merge(s, k, it)
+            if err:
+                it["state"] = "escalated"; log(s, f"{k} 合并受阻：{err}"); notify("合并受阻", it["title"])
+            else:
+                orca("orchestration", "task-update", "--from", c, "--id", it["merge"], "--status", "completed")
+                it["state"] = "merged"; log(s, f"{k} 已合并，待上线")
+        elif it["gates"].get("do") and st("build") == "failed":
+            it["state"] = "dropped"
+
+    # 3) 停滞：超过阈值没有任何回报
+    now = time.time()
+    for k, it in s["items"].items():
+        if it["state"] in ("building", "verifying"):
+            d = it["dispatch"]["build" if it["state"] == "building" else "verify"]
+            r, j = orca("orchestration", "worker-show", "--dispatch", d["id"], ok=False)
+            obs = (r.get("observation") or {}).get("status")
+            gone = (r.get("terminal") or {}).get("orphaned") or (obs and obs != "live")
+            idle = (now - max(it.get("last_seen", 0), d["since"])) / 60
+            if (gone or idle > LIM["stall_minutes"]) and not it.get("stalled"):
+                it["stalled"] = True
+                why = "工人进程不在了" if gone else f"{int(idle)} 分钟没有任何回报"
+                log(s, f"{k} 疑似卡住：{why}"); notify("疑似卡住", f"{it['title']}：{why}")
+    save(s)
+
+
+def cmd_pull(a):
+    """统一入口：把带 autopilot:ready 标签的 GitHub issue 登记进来。
+    标签约定：scope:<目录>（可多个）、ui、product（要你点「做不做」）。"""
+    s = load()
+    seen = {str(it.get("issue")) for it in s["items"].values()}
+    r = subprocess.run(["gh", "issue", "list", "-R", CFG["github_repo"], "--label", "autopilot:ready", "--state", "open",
+                        "--json", "number,title,labels,body", "--limit", "50"], capture_output=True, text=True)
+    for iss in json.loads(r.stdout or "[]"):
+        if str(iss["number"]) in seen:
+            continue
+        labels = [l["name"] for l in iss["labels"]]
+        scope = [l.split(":", 1)[1] for l in labels if l.startswith("scope:")]
+        if not scope:
+            print(f"#{iss['number']} 没有 scope 标签，交决策岗补范围"); continue
+        ns = argparse.Namespace(title=iss["title"], scope=",".join(scope), ui="ui" in labels,
+                                product="product" in labels, issue=str(iss["number"]), spec=(iss.get("body") or "")[:4000])
+        cmd_add(ns)
+
+
+def cmd_run(a):
+    while True:
+        try:
+            if CFG.get("github_repo"):
+                cmd_pull(None)
+            cmd_tick()
+        except SystemExit as e:
+            print("本轮出错：", e)
+        time.sleep(a.every)
+
+
+# ---------- 老板视角 ----------
+def cmd_status(a):
+    s = load()
+    res, _ = orca("orchestration", "gate-list", "--from", coord(s), ok=False)
+    pend = [g for g in res.get("gates", []) if g.get("status") in (None, "pending")]
+    print("■ 等你点头")
+    for g in pend:
+        print(f"  {g['id']}  {g.get('question')}")
+    if not pend:
+        print("  （没有）")
+    names = {"queued": "排队", "building": "施工中", "built": "待验收", "verifying": "验收中", "verified": "验收通过",
+             "merged": "已合并·可收菜", "shipped": "已上线", "escalated": "交决策岗", "asking": "有提问", "dropped": "不做"}
+    print("■ 每件进度")
+    for k, it in s["items"].items():
+        flag = " ⚠疑似卡住" if it.get("stalled") else ""
+        print(f"  {k}  {names.get(it['state'], it['state'])}{flag}  {it['title']}")
+    print("■ 最近动静")
+    for l in s["log"][-8:]:
+        print("  " + l)
+
+
+def cmd_approve(a):
+    s = load()
+    orca("orchestration", "gate-resolve", "--from", coord(s), "--id", a.gate, "--resolution", a.choice)
+    for k, it in s["items"].items():
+        if a.gate == it["gates"].get("do") and a.choice == "不做":
+            orca("orchestration", "task-update", "--from", coord(s), "--id", it["build"], "--status", "failed", ok=False)
+            it["state"] = "dropped"
+        if a.gate == it["gates"].get("look") and a.choice == "打回":
+            it["state"] = "built"; it["round"] += 1  # 回到验收前，由决策岗出返工
+        if a.gate == it.get("ship_gate") and a.choice == "上线":
+            it["state"] = "shipped"
+    if a.choice == "上线" and CFG.get("deploy_cmd"):
+        r = subprocess.run(CFG["deploy_cmd"], shell=True, cwd=CFG["repo"], capture_output=True, text=True)
+        log(s, "上线命令" + ("成功" if r.returncode == 0 else "失败：" + (r.stdout + r.stderr)[-300:]))
+    log(s, f"老板 {a.choice}：{a.gate}"); save(s)
+
+
+def cmd_ship(a):
+    s = load(); c = coord(s)
+    ready = [k for k, it in s["items"].items() if it["state"] == "merged"]
+    if not ready:
+        print("没有可上线的。"); return
+    t, _ = orca("orchestration", "task-create", "--from", c, "--task-title", "上线批次", "--spec", "上线：" + "、".join(ready))
+    g, _ = orca("orchestration", "gate-create", "--from", c, "--task", t["task"]["id"],
+                "--question", f"上线这 {len(ready)} 件？" + "、".join(s["items"][k]["title"] for k in ready),
+                "--options", json.dumps(["上线", "再等等"]))
+    for k in ready:
+        s["items"][k]["ship_gate"] = g["gate"]["id"]
+    log(s, f"攒了 {len(ready)} 件待上线，闸门 {g['gate']['id']}"); notify("可以收菜了", f"{len(ready)} 件待上线"); save(s)
+
+
+if __name__ == "__main__":
+    p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    sp = p.add_subparsers(dest="cmd", required=True)
+    x = sp.add_parser("add"); x.add_argument("--title", required=True); x.add_argument("--scope", required=True)
+    x.add_argument("--ui", action="store_true"); x.add_argument("--product", action="store_true")
+    x.add_argument("--issue"); x.add_argument("--spec")
+    sp.add_parser("tick"); x = sp.add_parser("run"); x.add_argument("--every", type=int, default=30)
+    sp.add_parser("status"); x = sp.add_parser("approve"); x.add_argument("gate"); x.add_argument("choice")
+    sp.add_parser("ship"); sp.add_parser("pull")
+    a = p.parse_args()
+    {"add": cmd_add, "tick": cmd_tick, "run": cmd_run, "status": cmd_status, "approve": cmd_approve, "ship": cmd_ship, "pull": cmd_pull}[a.cmd](a)
