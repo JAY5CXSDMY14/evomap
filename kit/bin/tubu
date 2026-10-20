@@ -8,9 +8,11 @@
   tubu status                     给老板看：等你的、进行中、卡住的、可收菜的
   tubu approve <闸门ID> 通过|打回    你点头（面板/手机上点也一样）
   tubu ship                       把已合并的攒成一批，建「上线」闸门
+  tubu retry <件号>                 处理好之后从断点继续
+  tubu digest [--post]            每晚汇总（可贴到日报 issue）
   tubu pull                       从 GitHub issue（标签 autopilot:ready）登记新件
 """
-import argparse, json, os, re, subprocess, sys, time, shlex
+import argparse, fcntl, json, os, re, subprocess, sys, time, shlex
 
 KIT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CFG = json.load(open(os.environ.get("TUBU_CONFIG", os.path.join(KIT, "config.json")), encoding="utf-8"))
@@ -32,7 +34,23 @@ def orca(*args, ok=True):
     return j.get("result") or {}, j
 
 
+_LOCK = None
+
+
+def lock():
+    """同一时间只允许一个接棒器在动状态，防止常驻进程和手动命令重复派工。"""
+    global _LOCK
+    os.makedirs(STATE_DIR, exist_ok=True)
+    _LOCK = open(os.path.join(STATE_DIR, "lock"), "w")
+    try:
+        fcntl.flock(_LOCK, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        fcntl.flock(_LOCK, fcntl.LOCK_EX)  # 等对方这一轮做完
+
+
 def load():
+    if _LOCK is None:
+        lock()
     if os.path.exists(STATE):
         return json.load(open(STATE, encoding="utf-8"))
     return {"coord": None, "items": {}, "seq": 0, "log": []}
@@ -171,6 +189,9 @@ def start_worker(s, key, it, role):
 
 def do_merge(s, key, it):
     repo, br = CFG["repo"], git(it["worktree"], "rev-parse", "--abbrev-ref", "HEAD")
+    dirty = git(repo, "status", "--porcelain", "--untracked-files=no")
+    if dirty:
+        return "主工作区有未提交改动，不碰，等人处理：" + dirty[:200]
     git(repo, "checkout", CFG["main_branch"])
     try:
         git(it["worktree"], "rebase", CFG["main_branch"])          # 对齐主线（只动本件分支，不强推）
@@ -182,8 +203,38 @@ def do_merge(s, key, it):
         r = subprocess.run(t, shell=True, cwd=it["worktree"], capture_output=True, text=True)
         if r.returncode:
             return "合并前重跑测试不绿：" + (r.stdout + r.stderr)[-300:]
+    diff = git(it["worktree"], "diff", f"{CFG['main_branch']}...HEAD")
+    hit = scan_terms(diff)
+    if hit:
+        return f"脱敏词表命中 {len(hit)} 处（契约 §6），不合并"
+    bad = [f for f in git(it["worktree"], "diff", "--name-only", f"{CFG['main_branch']}...HEAD").splitlines()
+           if re.search(r"(^|/)\.env|\.local$|(^|/)\.gitignore$", f)]
+    if bad:
+        return "危险文件（契约 R6/R8）：" + ", ".join(bad)
     git(repo, "merge", "--no-ff", br, "-m", f"merge {key}: {it['title']}")
+    pc = CFG.get("push_cmd")   # 例：HTTPS_PROXY=socks5h://127.0.0.1:1082 git push origin main
+    if pc:
+        git(repo, "fetch", "origin", check=False)
+        if subprocess.run(["git", "-C", repo, "merge-base", "--is-ancestor", f"origin/{CFG['main_branch']}", "HEAD"]).returncode:
+            return "已本地合并，但远端有新提交，不能快进推送（不强推），交决策岗"
+        r = subprocess.run(pc, shell=True, cwd=repo, capture_output=True, text=True)
+        if r.returncode:
+            return "已本地合并，推送失败：" + (r.stdout + r.stderr)[-200:]
+        it["pushed"] = git(repo, "rev-parse", "HEAD")
     return None
+
+
+def cleanup(it):
+    """合并后收拾：关掉本件的终端，删掉本件工作区（分支已合入主线）。"""
+    for d in it["dispatch"].values():
+        orca("terminal", "close", "--terminal", d["terminal"], ok=False)
+    if it.get("worktree"):
+        orca("worktree", "rm", "--worktree", f"path:{it['worktree']}", ok=False)
+
+
+def gh_comment(it, text):
+    if it.get("issue") and CFG.get("github_repo"):
+        subprocess.run(["gh", "issue", "comment", str(it["issue"]), "-R", CFG["github_repo"], "-b", text], capture_output=True)
 
 
 # ---------- 接棒一轮 ----------
@@ -231,6 +282,7 @@ def cmd_tick(a=None):
                     nv, _ = orca("orchestration", "task-create", "--from", c, "--task-title", f"{k} 复验{it['round']}",
                                  "--spec", role_prompt("verify") + spec, "--deps", json.dumps([nb["task"]["id"]]))
                     it["build"], it["verify"] = nb["task"]["id"], nv["task"]["id"]
+                    it["model_i"] += 1   # 返工换一个施工模型，避免同一个模型反复犯同样的错
                     it["state"] = "queued"; log(s, f"{k} 验收不过，第 {it['round']} 轮返工")
         elif typ in ("escalation", "question"):
             it["state"] = "asking"; it["ask"] = m.get("subject") or m.get("body")
@@ -266,10 +318,12 @@ def cmd_tick(a=None):
         elif it["state"] == "verified" and st("merge") == "ready":
             err = do_merge(s, k, it)
             if err:
-                it["state"] = "escalated"; log(s, f"{k} 合并受阻：{err}"); notify("合并受阻", it["title"])
+                it["state"] = "escalated"; it["resume"] = "verified"; log(s, f"{k} 合并受阻：{err}"); notify("合并受阻", it["title"])
             else:
                 orca("orchestration", "task-update", "--from", c, "--id", it["merge"], "--status", "completed")
                 it["state"] = "merged"; log(s, f"{k} 已合并，待上线")
+                gh_comment(it, f"已验收并合并到主线（{it.get('pushed', '本地')[:8]}），等上线批次。")
+                cleanup(it)
         elif it["gates"].get("do") and st("build") == "failed":
             it["state"] = "dropped"
 
@@ -306,6 +360,30 @@ def cmd_pull(a):
         ns = argparse.Namespace(title=iss["title"], scope=",".join(scope), ui="ui" in labels,
                                 product="product" in labels, issue=str(iss["number"]), spec=(iss.get("body") or "")[:4000])
         cmd_add(ns)
+
+
+def cmd_retry(a):
+    """问题处理好之后，让卡住的那件从断点继续（合并受阻 → 重试合并；疑似卡住 → 清标记）。"""
+    s = load(); it = s["items"][a.key]
+    it.pop("stalled", None)
+    if it["state"] == "escalated" and it.get("resume"):
+        it["state"] = it.pop("resume")
+    log(s, f"{a.key} 继续（{it['state']}）"); save(s)
+
+
+def cmd_digest(a):
+    """每晚汇总：今天合并了什么、什么在等老板、什么卡住了。可贴到 daily-report issue。"""
+    s = load(); today = time.strftime("%m-%d")
+    done = [l for l in s["log"] if l.startswith(today) and ("已合并" in l or "老板" in l)]
+    stuck = [f"{k} {it['title']}" for k, it in s["items"].items() if it.get("stalled") or it["state"] in ("escalated", "asking")]
+    ready = [f"{k} {it['title']}" for k, it in s["items"].items() if it["state"] == "merged"]
+    text = "\n".join(["## 今日动静"] + (done or ["（无）"]) + ["## 可收菜（已合并待上线）"] + (ready or ["（无）"]) +
+                     ["## 卡住或交决策岗"] + (stuck or ["（无）"]))
+    print(text)
+    if a and a.post and CFG.get("github_repo") and CFG.get("digest_issue"):
+        subprocess.run(["gh", "issue", "comment", str(CFG["digest_issue"]), "-R", CFG["github_repo"], "-b", text])
+    if stuck or ready:
+        notify("今晚汇总", f"可收菜 {len(ready)} 件，卡住 {len(stuck)} 件")
 
 
 def cmd_run(a):
@@ -350,7 +428,7 @@ def cmd_approve(a):
         if a.gate == it["gates"].get("look") and a.choice == "打回":
             it["state"] = "built"; it["round"] += 1  # 回到验收前，由决策岗出返工
         if a.gate == it.get("ship_gate") and a.choice == "上线":
-            it["state"] = "shipped"
+            it["state"] = "shipped"; gh_comment(it, "已上线。")
     if a.choice == "上线" and CFG.get("deploy_cmd"):
         r = subprocess.run(CFG["deploy_cmd"], shell=True, cwd=CFG["repo"], capture_output=True, text=True)
         log(s, "上线命令" + ("成功" if r.returncode == 0 else "失败：" + (r.stdout + r.stderr)[-300:]))
@@ -380,5 +458,7 @@ if __name__ == "__main__":
     sp.add_parser("tick"); x = sp.add_parser("run"); x.add_argument("--every", type=int, default=30)
     sp.add_parser("status"); x = sp.add_parser("approve"); x.add_argument("gate"); x.add_argument("choice")
     sp.add_parser("ship"); sp.add_parser("pull")
+    x = sp.add_parser("retry"); x.add_argument("key")
+    x = sp.add_parser("digest"); x.add_argument("--post", action="store_true")
     a = p.parse_args()
-    {"add": cmd_add, "tick": cmd_tick, "run": cmd_run, "status": cmd_status, "approve": cmd_approve, "ship": cmd_ship, "pull": cmd_pull}[a.cmd](a)
+    {"add": cmd_add, "tick": cmd_tick, "run": cmd_run, "status": cmd_status, "approve": cmd_approve, "ship": cmd_ship, "pull": cmd_pull, "digest": cmd_digest, "retry": cmd_retry}[a.cmd](a)
