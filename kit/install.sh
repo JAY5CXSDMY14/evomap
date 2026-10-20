@@ -101,6 +101,7 @@ if [ "$(uname)" = Darwin ]; then
   done
   mkdir -p "$(dirname "$PLIST")"
   # install_agent <label> <plist> <说明> <evo 参数...>：内容没变且已加载就跳过
+  # PYTHONDONTWRITEBYTECODE=1：常驻进程不在套件目录里写 __pycache__（装在应用包里时包内文件不能变，否则签名失效）
   install_agent(){
     local label=$1 plist=$2 what=$3; shift 3
     local args="" a TMP
@@ -112,7 +113,7 @@ if [ "$(uname)" = Darwin ]; then
 <key>ProgramArguments</key><array><string>$PY</string><string>$KIT/bin/evo</string>$args</array>
 <key>RunAtLoad</key><true/><key>KeepAlive</key><true/>
 <key>StandardOutPath</key><string>$LOGS/$what.log</string><key>StandardErrorPath</key><string>$LOGS/$what.log</string>
-<key>EnvironmentVariables</key><dict><key>PATH</key><string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:$HOME/.local/bin</string>$ENVX</dict>
+<key>EnvironmentVariables</key><dict><key>PATH</key><string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:$HOME/.local/bin</string><key>PYTHONDONTWRITEBYTECODE</key><string>1</string>$ENVX</dict>
 </dict></plist>
 PL
     if [ -f "$plist" ] && cmp -s "$TMP" "$plist" && launchctl list 2>/dev/null | grep -q "$label"; then

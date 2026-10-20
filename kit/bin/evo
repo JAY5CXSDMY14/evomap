@@ -120,10 +120,27 @@ def merge(base, over):
     return out
 
 
+IN_APP_BUNDLE = ".app/Contents/Resources" in KIT        # 装在 Evo 菜单栏应用里跑：本机通知由应用自己发
+
+
+def bundle_defaults(cfg, *raws):
+    """在应用包里跑时，notify.macos 默认关（免得和应用各弹一次）；任何一层配置显式写了 macos 就听配置的。"""
+    if IN_APP_BUNDLE and not any("macos" in ((r or {}).get("notify") or {}) for r in raws):
+        cfg.setdefault("notify", {})["macos"] = False
+    return cfg
+
+
+def global_config():
+    raw = _read_json(_global_path())
+    return bundle_defaults(merge(DEFAULTS, raw), raw)
+
+
 def effective_config(project_cfg):
-    g = merge(DEFAULTS, _read_json(_global_path()))
+    graw = _read_json(_global_path())
+    g = merge(DEFAULTS, graw)
     pc = {k: v for k, v in (project_cfg or {}).items() if k != "overrides"}
-    c = merge(merge(g, pc), (project_cfg or {}).get("overrides") or {})
+    ov = (project_cfg or {}).get("overrides") or {}
+    c = bundle_defaults(merge(merge(g, pc), ov), graw, pc, ov)
     # 整机并行上限只认全局（项目改不了别人的份额）；项目里的 limits.builders 是本项目自己的上限
     c["limits"]["builders_total"] = g["limits"].get("builders_total", g["limits"].get("builders", 2))
     return c
@@ -156,10 +173,10 @@ HAS_PROJECT = bool(_cfgp)
 CFG = effective_config(_read_json(_cfgp)) if _cfgp else {}
 STATE = os.path.join(STATE_DIR, "state.json") if STATE_DIR else None
 PAUSED = os.path.join(STATE_DIR, "PAUSED") if STATE_DIR else None
-ORCA = shlex.split((CFG or merge(DEFAULTS, _read_json(_global_path()))).get("orca", "orca"))  # 没选项目时也认全局的 orca
+ORCA = shlex.split((CFG or global_config()).get("orca", "orca"))  # 没选项目时也认全局的 orca
 LIM = CFG.get("limits", {})
 CODE = (CFG.get("code") or PROJECT or "TB").upper()
-GCFG = CFG or merge(DEFAULTS, _read_json(_global_path()))      # 没选项目时用全局配置
+GCFG = CFG or global_config()      # 没选项目时用全局配置
 NOTE = NT.Notifier(GCFG, EVO_ROOT, CODE if HAS_PROJECT else None)
 
 

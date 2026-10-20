@@ -49,7 +49,7 @@ lang: zh
 项目可用 `overrides` 覆盖全局；整机并行上限只认全局。老配置照旧能用。
 
 ## E3 自动化测试
-`kit/tests/` 用假 Orca、假工人、假通知（不联网）、临时仓库和裸远端跑整条流水线。各种岔路都有测试，时间用 `EVO_NOW` 固定。GitHub Actions 每次改 kit 自动跑。现在共 137 个测试。
+`kit/tests/` 用假 Orca、假工人、假通知（不联网）、临时仓库和裸远端跑整条流水线。各种岔路都有测试，时间用 `EVO_NOW` 固定。GitHub Actions 每次改 kit 自动跑。现在共 139 个测试。
 
 ## E4 提醒：只在该叫你的时候叫你
 | 通道 | 干什么 |
@@ -106,6 +106,7 @@ lang: zh
 | Ponytail 写法 | 施工按 full 档最小完整改法（任务书验收标准优先），收尾的「跳过 / 没查 / 风险」写进交卷；验收按 review 清单，必须修打回、应该修只建议另开 issue，每条要有触发情形。提示词固定副本在 `kit/vendor/ponytail/`（MIT，固定提交） |
 | 每周体检 | 每周日（`audit_weekday`，0=周一 … 6=周日）夜审时给决策岗放一条「跑 ponytail-audit」待办，只提醒不自动跑 |
 | 默认模型 | 全局 `roles.build.models` / `roles.verify.models` 可写 magpie 组名；`evo models`（install.sh 也跑）核对 magpie `/v1/models` 里有没有、施工验收是否重叠，只警告 |
+| 装进 Evo 应用 | 常驻进程不写字节码缓存；在应用包里跑时本机通知默认交给应用发，配置写明了就听配置 |
 | 单项目换模型 | 面板项目页「施工模型 / 验收模型」下拉框，选项来自 magpie，读不到就手填，另有「跟随全局」；写进项目 `overrides`。要口令，外部 Agent 改不了，模型名只许安全字符 |
 
 ## F 只能在 Mac mini 上验

@@ -304,3 +304,36 @@ def test_install_runs_models_check(loop):
     r = subprocess.run(["bash", os.path.join(KIT, "install.sh")], env=loop.env, capture_output=True, text=True)
     assert r.returncode == 0, r.stdout + r.stderr
     assert "magpie 没响应" in r.stdout and "重叠（model-a, model-b）" in r.stdout      # 只警告，不拦安装
+
+
+# ---------- 装进 Evo 应用 ----------
+def test_install_plist_sets_pythondontwritebytecode(loop):
+    fake = os.path.join(loop.tmp, "fakebin"); os.makedirs(fake)
+    for name, text in (("uname", "echo Darwin"), ("pmset", "printf ' sleep 0\\n disksleep 0\\n'"), ("launchctl", "exit 0")):
+        p = os.path.join(fake, name); open(p, "w").write("#!/bin/bash\n" + text + "\n"); os.chmod(p, 0o755)
+    env = {**loop.env, "PATH": fake + os.pathsep + loop.env["PATH"]}
+    r = subprocess.run(["bash", os.path.join(KIT, "install.sh"), "--apply"], env=env, capture_output=True, text=True)
+    assert r.returncode == 0, r.stdout + r.stderr
+    plist = open(os.path.join(env["HOME"], "Library", "LaunchAgents", "com.evoloop.autopilot.plist")).read()
+    assert "<key>PYTHONDONTWRITEBYTECODE</key><string>1</string>" in plist
+    env_block = plist.split("<key>EnvironmentVariables</key>")[1]
+    assert "PYTHONDONTWRITEBYTECODE" in env_block
+
+
+def bundle_macos(loop, kit):
+    code = ("import importlib.machinery as m, sys; sys.argv = ['evo']; "
+            f"e = m.SourceFileLoader('evo', {os.path.join(kit, 'bin', 'evo')!r}).load_module(); "
+            "print(e.IN_APP_BUNDLE, e.GCFG['notify']['macos'])")
+    return subprocess.run([sys.executable, "-c", code], env=loop.env, capture_output=True, text=True, check=True).stdout.split()
+
+
+def test_notify_macos_off_by_default_inside_app_bundle(loop):
+    import shutil
+    p = os.path.join(loop.root, "config.json")
+    g = json.load(open(p)); g["notify"].pop("macos"); json.dump(g, open(p, "w"))
+    app_kit = os.path.join(loop.tmp, "Evo.app", "Contents", "Resources", "kit")
+    shutil.copytree(KIT, app_kit, ignore=shutil.ignore_patterns("tests", "__pycache__"))
+    assert bundle_macos(loop, app_kit) == ["True", "False"]           # 包里：默认关（应用自己发通知）
+    assert bundle_macos(loop, KIT) == ["False", "True"]               # 包外：照旧默认开
+    g["notify"]["macos"] = True; json.dump(g, open(p, "w"))
+    assert bundle_macos(loop, app_kit) == ["True", "True"]            # 显式写了就听配置的
