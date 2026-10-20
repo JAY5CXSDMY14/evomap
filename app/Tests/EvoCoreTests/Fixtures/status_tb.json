@@ -1,0 +1,30 @@
+{
+  "schema_version": 1,
+  "project": "TB",
+  "name": "土布",
+  "generated_at": "2026-10-20T12:00:00+08:00",
+  "last_tick": "2026-10-20T11:59:30+08:00",
+  "count": {"queued": 1, "building": 1, "merged": 2},
+  "stuck": 1,
+  "gates": [
+    {"id": "gate_12", "question": "看效果：改版注册页按钮", "options": ["通过", "打回"],
+     "kind": "look", "item": "TB-UX-003", "waiting_since": "2026-10-20T11:40:00+08:00"},
+    {"id": "gate_13", "question": "做不做：导出 PDF", "options": ["做", "不做"],
+     "kind": "do", "item": "TB-FEAT-004", "waiting_since": null}
+  ],
+  "items": [
+    {"key": "TB-FIX-012", "title": "修复注册页验证码不刷新", "kind": "fix",
+     "state": "施工中", "raw": "building", "waiting": null, "window": null,
+     "stalled": false, "look": false, "round": 0, "issue": "41", "parent": null, "manual_checks": [],
+     "usage": {"runs": 1, "minutes": 12.5}},
+    {"key": "TB-UX-003", "title": "改版注册页按钮", "kind": "ux", "state": "验收通过", "raw": "verified",
+     "stalled": true, "usage": {"runs": 3, "minutes": 40.0}}
+  ],
+  "rate_limits": [
+    {"role": "build", "until": "2026-10-20T17:00:00+08:00", "since": "2026-10-20T15:10:00+08:00",
+     "why": "Claude usage limit reached...", "account": "claude", "guessed": false}
+  ],
+  "usage": {"roles": {"build": {"runs": 5, "minutes": 80.2}}, "tokens": null},
+  "decider": {"last_woken": null, "running": false, "items": []},
+  "log": ["10-20 11:58 TB-FIX-012 开始施工（glm/glm-5.3-flash）"]
+}

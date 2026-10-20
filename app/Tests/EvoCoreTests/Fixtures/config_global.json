@@ -1,0 +1,2 @@
+{"magpie_url": "http://127.0.0.1:4000", "limits": {"heartbeat_stale_minutes": 20, "builders_total": 2},
+ "notify": {"macos": true, "quiet_hours": {"start": "23:00", "end": "07:30", "tz": "Asia/Tokyo"}}}

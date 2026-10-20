@@ -1,0 +1,51 @@
+# Evo 菜单栏应用：全部命令行，没有 Xcode 工程。见 README.md。
+#   make build   编译（release）
+#   make test    跑 EvoCore 单元测试
+#   make app     组装 build/Evo.app（含整套 kit，ad-hoc 签名）
+#   make dmg     打 build/Evo.dmg
+#   make run     组装后打开
+#   make install 拷到 /Applications
+#   make clean
+# 可选：SIGN="Developer ID Application: …" 换正式证书；SIGN= 跳过签名；UNIVERSAL=1 出 arm64+x86_64 通用包
+VERSION := $(shell tr -d '[:space:]' < VERSION)
+SIGN ?= -
+OUT := build
+ifeq ($(UNIVERSAL),1)
+  ARCHFLAGS := --arch arm64 --arch x86_64
+  BINDIR = $(shell swift build -c release $(ARCHFLAGS) --show-bin-path)
+else
+  ARCHFLAGS :=
+  BINDIR = $(shell swift build -c release --show-bin-path)
+endif
+
+.PHONY: build test app dmg run install clean version
+
+build:
+	swift build -c release $(ARCHFLAGS)
+
+test:
+	swift test
+
+app: build
+	scripts/assemble-app.sh "$(BINDIR)/Evo" $(OUT) "$(SIGN)"
+
+dmg: app
+	scripts/make-dmg.sh $(OUT)
+
+run: app
+	-pkill -x Evo
+	open $(OUT)/Evo.app
+
+install: app
+	-pkill -x Evo
+	-chmod -R u+w /Applications/Evo.app 2>/dev/null
+	rm -rf /Applications/Evo.app
+	cp -R $(OUT)/Evo.app /Applications/
+	open /Applications/Evo.app
+
+version:
+	@echo $(VERSION)
+
+clean:
+	-chmod -R u+w $(OUT) 2>/dev/null
+	rm -rf .build $(OUT)

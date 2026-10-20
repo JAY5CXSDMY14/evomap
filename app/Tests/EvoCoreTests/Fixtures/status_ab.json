@@ -1,0 +1,3 @@
+{"schema_version": 1, "project": "AB", "name": "副业", "generated_at": "2026-10-20T12:00:00+08:00",
+ "last_tick": null, "count": {}, "stuck": 0, "gates": [], "items": [], "rate_limits": [],
+ "usage": {"roles": {}, "tokens": null}, "decider": {"last_woken": null, "running": false, "items": []}, "log": []}

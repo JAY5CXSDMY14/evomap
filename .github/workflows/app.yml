@@ -1,0 +1,56 @@
+name: app
+
+on:
+  push:
+    paths:
+      - "app/**"
+      - ".github/workflows/app.yml"
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-14
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: 工具链
+        run: |
+          sw_vers
+          swift --version
+          xcodebuild -version
+      - name: 单元测试（EvoCore）
+        run: swift test
+      - name: 打包 Evo.app + Evo.dmg（ad-hoc 签名）
+        run: make dmg
+      - name: 检查包内容
+        run: |
+          plutil -p build/Evo.app/Contents/Info.plist | grep -E 'LSUIElement|CFBundleShortVersionString|CFBundleIdentifier'
+          codesign -dv build/Evo.app 2>&1 | grep -E 'Signature|Identifier'
+          test -x build/Evo.app/Contents/MacOS/Evo
+          test -f build/Evo.app/Contents/Resources/evo/bin/evo
+          test -f build/Evo.app/Contents/Resources/evo/panel/index.html
+          test -f build/Evo.app/Contents/Resources/evo/install.sh
+          du -sh build/Evo.app build/Evo.dmg
+      - name: 自带 evo 能跑（空的 EVO_HOME）
+        env:
+          EVO_HOME: ${{ runner.temp }}/evo-smoke/projects
+          EVO_PANEL_KEYCHAIN: "0"
+        run: |
+          mkdir -p "$EVO_HOME"
+          python3 build/Evo.app/Contents/Resources/evo/bin/evo projects
+          python3 build/Evo.app/Contents/Resources/evo/bin/evo --help | head -5
+          bash build/Evo.app/Contents/Resources/evo/install.sh | tail -5 || true
+          # 跑完不能在签过名的包里留下 __pycache__
+          if find build/Evo.app -name __pycache__ | grep -q .; then echo "包里出现 __pycache__"; exit 1; fi
+          codesign --verify --deep --strict build/Evo.app
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Evo.dmg
+          path: app/build/Evo.dmg
+          if-no-files-found: error
+          retention-days: 30

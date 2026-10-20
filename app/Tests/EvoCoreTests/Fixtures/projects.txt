@@ -1,0 +1,4 @@
+TB    土布         /Users/jay/tubu  JAY5CXSDMY14/tubu-platform
+AB    副业         /Users/jay/ab
+有多个项目，请加 -p <代号>
+EV    Evo 应用     /Users/jay/evo  JAY5CXSDMY14/evomap
