@@ -2,6 +2,8 @@
 
 装好精装房之前，这 5 条必须先批，否则自动接棒与契约冲突。每条都给出原文位置、改成什么、为什么。
 
+**改好的全文**在 `kit/contract-v2/`（01、03 两份，可整份替换）；切换步骤与回退见 `kit/contract-v2/切换清单.md`。
+
 ## 修订一 · 岗位不写死工具（01 全文）
 - 现：标题「三智能体」，条文点名 Codex / DSH / Claude Code / WorkBuddy。
 - 改：条文只写岗位（决策、施工、验收、审计、审查、中台）；谁担任写在 `kit/config.json` 与 `profiles/tubu/roles.yaml`。
