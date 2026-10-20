@@ -1,0 +1,110 @@
+{
+  "_说明": "股票（ST）的项目配置实例。evo import 生成 ~/.evoloop/projects/ST/config.json 后，用本文件补齐（合并方法见同目录 README.md）。ST 是 evo 的第二个项目：以 ios-stock-app 为唯一主仓库，吸收 REASTOCK 的长处。下划线开头的键是给人和决策岗看的说明，evo 不解析；scope_labels / look_rules / window_rules / red_lines 目前也只是写给决策岗的分拣规矩，evo 本身不读。",
+  "code": "ST",
+  "name": "股票",
+  "goal": "把股票项目做成 vea：先稳定出盘后复盘榜给次日方向，再做盘中协助；吸收 REASTOCK 的 1.9.1 评分、选股提速和日常页面。只观察和模拟，不做真实交易。",
+  "repo": "~/Desktop/项目/ios-stock-app",
+  "main_branch": "main",
+  "github_repo": "",
+  "_github_repo": "目前没有远端（.git 残缺，见 backlog ST-OPS-001）。老板定了私有仓库名再填，建议 JAY5CXSDMY14/ios-stock-app（私有）。",
+  "trusted_authors": ["JAY5CXSDMY14"],
+  "trusted_labelers": ["JAY5CXSDMY14"],
+  "test_cmd": "bash scripts/test-all.sh",
+  "_test_cmd": "scripts/test-all.sh 由 ST-OPS-002 新建。建好之前临时用 _test_cmd_interim。Backend 测试原先依赖 replica/MacApp/.local/mac012a/test-env 里的 venv，OPS-002 要把它改成脚本自建、可重复的环境。",
+  "_test_cmd_interim": "cd replica/MarketData && python3 -B -m unittest discover -s tests && cd ../Simulation && python3 -B -m unittest discover -s tests && cd ../.. && node --test replica/WebChart/tests/strategy-core.test.js replica/WebChart/tests/ui-runtime.test.js replica/WebChart/tests/mac011-workspace.test.js replica/WebChart/tests/mac011a-comfort.test.js && python3 -B -m unittest discover -s replica/MacApp/scripts/tests && (cd replica/MacApp && swift test --disable-sandbox)",
+  "push_cmd": "",
+  "_push_cmd": "有远端后填 HTTPS_PROXY=socks5h://127.0.0.1:1082 git push origin main（和土布一样走本机代理）。",
+  "deploy_cmd": "",
+  "_deploy_cmd": "故意留空。正式安装（install_app.py --apply、覆盖 /Applications 里的正式包、装完第一次真实启动）是红线，必须老板在场亲自做。evo 的「上线」只标记已上线，不替老板装。",
+  "policy_terms": "~/.evoloop/projects/ST/policy-terms.txt",
+  "_policy_terms": "放在仓库外，不入库。由 ST-OPS-003 建：券商/资金账号、持仓明细、API 密钥前缀、手机号、真实姓名等。",
+  "lessons_file": "docs/LESSONS.md",
+  "standards_file": "docs/code-standards.md",
+  "digest_issue": null,
+  "scope_allow": ["artifacts/"],
+  "report_required": true,
+  "git_guard": true,
+  "overrides": {
+    "_说明": "workspace-ui.js、chart-runtime.js、cli.py 都是大文件，几件常同时碰同一文件；先只开一路施工，跑稳后再放到 2。",
+    "limits": {"builders": 1}
+  },
+
+  "scope_labels": {
+    "_说明": "issue 的 scope:<目录> 只能从这里选（可以多选）。frozen 里的目录没有老板任务书不许动。",
+    "allowed": {
+      "replica/MarketData/": "盘后数据流水线、官方对账、执行分引擎 score_engine.py、榜单发布（Python）",
+      "replica/Backend/": "本地 FastAPI：/desktop/v1、榜单接口、个人记录 SQLite（Python）",
+      "replica/WebChart/": "唯一手工维护的界面源（JS/CSS）；Mac 壳里的同名资源是生成物",
+      "replica/MacApp/": "Mac 原生壳、打包/校验/安装脚本（Swift + Python）。Resources/WebChart 只能用 sync_web_resources.py 生成，不能手改",
+      "replica/Simulation/": "AI 模拟账户服务（只出意图，确定性撮合，事件哈希链）",
+      "reference/reastock/": "REASTOCK 参考快照（只读；只有 ST-CHORE-001 能写）",
+      "scripts/": "仓库级脚本（统一测试入口等）",
+      "docs/": "文档（docs/reference/stockstation 按其 AGENT-INDEX.md 只读）"
+    },
+    "frozen": {
+      "ios/": "旧 iOS 基础，没有任务书不改",
+      "backend/": "根目录旧 Mock 后端（含 .env），没有任务书不改",
+      "协作/": "老板的人工循环与契约（状态、任务书、交付、验收、证据），evo 一律不写；有意见只写一句给老板",
+      "docs/reference/stockstation/": "原始取证资料，只读",
+      "replica/MacApp/Resources/WebChart/": "生成物，只能由 sync_web_resources.py 从 replica/WebChart 生成"
+    }
+  },
+
+  "look_rules": {
+    "_说明": "决策岗按这里决定打不打 look（看效果闸门）。拿不准就打。",
+    "look": [
+      "改了 replica/WebChart/ 下的任何界面、文案（ui-text.js）、样式",
+      "改了 replica/MacApp/Sources 里能看到的东西：窗口、菜单、Dock、通知、启动/退出行为",
+      "改了用户看到的数字：执行分、榜单排序、选股结果、止损位、提示文案（附前后对比）",
+      "速度变化用户能感到：选股、榜单加载、启动时间",
+      "数据来源 / 新鲜度标注的显示方式"
+    ],
+    "no_look": [
+      "只加测试、夹具、回归脚本，界面和数字都不变",
+      "纯后台重构，榜单 scoreboardHash 前后一致",
+      "仓库运维：测试入口、.gitignore、脱敏词表、CI",
+      "只改 docs/ 或 reference/"
+    ],
+    "manual_checks_hint": "要看效果的件，交卷 manual_checks 里写清：打开哪个页面、看哪只股票（例如 sh600519、sh600515）、和改动前比哪里不一样。"
+  },
+
+  "window_rules": {
+    "_说明": "evo add 时按这里加时间窗。trading:* 会跳过全局 windows.holidays 里的休市日，所以先在 ~/.evoloop/config.json 填好当年 A 股休市日。",
+    "trading:cn": "验收必须看真实盘中数据的件：盘中实时报价、盘中执行分校准、实时选股。写法：evo add ... --window trading:cn，或 issue 打标签 window:trading:cn",
+    "postclose:cn": "收盘后才有当天数据的件（盘后榜自动生成、收盘后真值采集）。建议在全局 windows.presets 加 \"postclose:cn\": \"mon-fri 15:35-23:30\"，并把它写进 holiday_presets；在那之前用 --window \"mon-fri 15:35-23:30\"（这种写法不会跳过休市日）",
+    "none": "其余件（离线夹具、移植、界面、文档）不加窗口"
+  },
+
+  "red_lines": {
+    "_说明": "决策岗的升级规则。碰到 ask_owner 的，用 decisions JSON 的 ask_owner 交老板（三行大白话：要定什么、推荐和理由、不批的影响）；标 forbid 的直接 drop 或 rework，不问老板也不做。",
+    "rules": [
+      {"id": "no-real-trading", "action": "forbid", "rule": "不接券商、不下真单、不登录交易账户、不碰真实资金。有人提，交老板看一眼，默认不做"},
+      {"id": "apply-needs-owner", "action": "ask_owner", "rule": "install_app.py --apply、覆盖 /Applications 正式包、装后第一次真实启动：一律等老板在场；自动链最远跑到 dry-run"},
+      {"id": "private-data", "action": "ask_owner", "rule": "删除或改写 .local 私有数据、封存的原文与证据、旧榜单、旧快照、~/Library/Application Support/StockStationReplica 里的个人记录"},
+      {"id": "contract-files", "action": "forbid", "rule": "evo 的工人不写 协作/ 下任何文件（项目循环、状态、任务书、交付、验收、证据）"},
+      {"id": "frozen-dirs", "action": "ask_owner", "rule": "要改 ios/、根目录 backend/ 或 docs/reference/stockstation/"},
+      {"id": "honest-sources", "action": "forbid", "rule": "把 Mock 或没核验过的来源标成真实、混用多个来源补行、用零价或旧收盘价填当前价、伪造时间点；验收碰到直接打回"},
+      {"id": "network-scope", "action": "ask_owner", "rule": "新增联网数据源、加大联网预算、对官方源加并发（netpolicy 的单线程和间隔 ≥2 秒照旧）、出口换 IP"},
+      {"id": "spend-money", "action": "ask_owner", "rule": "任何付费数据源、付费 API、试用转付费"},
+      {"id": "broken-git", "action": "forbid", "rule": "不在残缺的 .git 上 reset、checkout 或清理（修复走 ST-OPS-001，老板在场）"},
+      {"id": "port-8765", "action": "forbid", "rule": "不碰 8765 端口上与本项目无关的既有服务；本项目桌面服务只用 8790–8799，静态页只用 8080–8089"},
+      {"id": "publish", "action": "ask_owner", "rule": "仓库改公开、对外发帖或发邮件、对外开 issue"},
+      {"id": "owner-decisions", "action": "ask_owner", "rule": "推翻已拍板的决定：vea 名称和价格阶梯图标、MAC-012A 维持 2026-09-30 / N=600 的取舍、免费源优先原则"},
+      {"id": "no-advice-claims", "action": "forbid", "rule": "把执行分、回测、模拟账户结果写成投资建议或策略有效证明；提示类文案必须标「仅供参考、不构成投资建议」"}
+    ]
+  },
+
+  "manual_loop": {
+    "_说明": "原来的人工循环（Codex 写任务书 → DSH 施工 → Claude Code 验收官）照旧管 MAC-0xx。evo 只接 ST-<类别>-NNN 新件，旧件保留原名不迁移，除非老板另说。",
+    "state_file": "协作/状态.md",
+    "loop_file": "协作/项目循环.md",
+    "open_items": ["MAC-012A（部分实施、受阻，维持 9-30/N=600 挂账）", "MAC-012B（vea 品牌与日常界面，排队等 A）"]
+  },
+
+  "reference": {
+    "_说明": "REASTOCK 原仓库保留在原处，做只读档案，不再在那里开发；ST-CHORE-001 按这个提交收一份精选快照进 reference/reastock/。",
+    "path": "~/Desktop/项目/jailbreaks/reastock",
+    "pinned_commit": "378d7eee1140a3cd497865d03859cfebed20ccda",
+    "never_import": ["ghidra-proj/", "ghidra-home/", "ghidra-scripts/", "analysis/", "rea/", "tools/ghidra*", "tools/winutil/", "backup/", "verify/engine-extracted.js", "verify/sb-klines/", "verify/gt-klines/", "verify/live-scores*/", "ui-shots/（只挑 ST-CHORE-001 列出的几张）", ".build/", "build/"]
+  }
+}
