@@ -3,6 +3,7 @@
   "repo": "~/Desktop/项目/土布/tubu-platform",
   "main_branch": "main",
   "github_repo": "JAY5CXSDMY14/tubu-platform",
+  "trusted_authors": ["JAY5CXSDMY14"],
   "deploy_cmd": "",
   "push_cmd": "HTTPS_PROXY=socks5h://127.0.0.1:1082 git push origin main",
   "digest_issue": null,
