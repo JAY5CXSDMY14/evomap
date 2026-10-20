@@ -20,6 +20,7 @@
   evo approve <闸门ID> 通过|打回 [一句原话]   你点头；打回时那句话原样进返工说明
   evo ship                       把已合并的攒成一批，建「上线」闸门
   evo retry <件号>                 处理好之后从断点继续
+  evo resume                     状态文件损坏暂停后，处理好再解除暂停
   evo digest [--post]            每晚汇总（可贴到日报 issue）
   evo pull                       从 GitHub issue（标签 autopilot:ready）登记新件
 """
@@ -131,6 +132,7 @@ PROJECT, _cfgp, STATE_DIR = _pick()
 HAS_PROJECT = bool(_cfgp)
 CFG = effective_config(_read_json(_cfgp)) if _cfgp else {}
 STATE = os.path.join(STATE_DIR, "state.json") if STATE_DIR else None
+PAUSED = os.path.join(STATE_DIR, "PAUSED") if STATE_DIR else None
 ORCA = shlex.split((CFG or merge(DEFAULTS, _read_json(_global_path()))).get("orca", "orca"))  # 没选项目时也认全局的 orca
 LIM = CFG.get("limits", {})
 CODE = (CFG.get("code") or PROJECT or "TB").upper()
@@ -165,6 +167,8 @@ def lock():
 def load():
     if _LOCK is None:
         lock()
+    if os.path.exists(PAUSED):
+        sys.exit(f"接棒暂停中：{open(PAUSED, encoding='utf-8').read().strip()}。处理好后 evo -p {CODE} resume")
     if os.path.exists(STATE):
         try:
             return json.load(open(STATE, encoding="utf-8"))
@@ -172,6 +176,8 @@ def load():
             # 读不出 ≠ 空：先把坏文件挪开留证，停下等人，绝不当作「没有任务」重新开始
             bad = STATE + time.strftime(".bad-%m%d%H%M%S")
             os.replace(STATE, bad)
+            # 留一个暂停标记：否则下一轮看不到状态文件，会当成新项目从零派工
+            open(PAUSED, "w", encoding="utf-8").write(f"状态文件损坏，已挪到 {bad}")
             notify("接棒器状态文件损坏", f"已挪到 {bad}，接棒暂停，等人处理")
             sys.exit(f"状态文件读不出，已挪到 {bad}；接棒暂停")
     return {"coord": None, "items": {}, "seq": 0, "log": []}
@@ -396,8 +402,13 @@ def do_push(s):
     if git(repo, "status", "--porcelain", "--untracked-files=no"):
         return fail("主工作区有未提交改动，不碰")
     git(repo, "checkout", mb)
-    git(repo, "fetch", "origin", check=False)
-    if subprocess.run(["git", "-C", repo, "merge-base", "--is-ancestor", f"origin/{mb}", "HEAD"]).returncode:
+    fr = subprocess.run(["git", "-C", repo, "fetch", "origin"], capture_output=True, text=True)
+    if fr.returncode:   # 拉不到远端（断网/代理没开）≠ 冲突：下轮重试，不要当冲突交决策岗
+        return fail("拉取远端失败：" + fr.stderr.strip()[-150:])
+    anc = subprocess.run(["git", "-C", repo, "merge-base", "--is-ancestor", f"origin/{mb}", "HEAD"], capture_output=True).returncode
+    if anc not in (0, 1):   # 远端还没有这个分支（新仓库第一次推）：直接推
+        anc = 0
+    if anc:
         try:
             git(repo, "merge", "--no-ff", f"origin/{mb}", "-m", "merge origin/" + mb)
         except RuntimeError as e:
@@ -405,11 +416,14 @@ def do_push(s):
             for k in pend:
                 s["items"][k]["state"] = "escalated"; s["items"][k]["resume"] = "pushing"
             notify("远端冲突", "本地合并与远端冲突，交决策岗"); return log(s, f"远端冲突，交决策岗：{e}")
-        t = CFG.get("test_cmd")
-        if t:
-            rc, logf, reds = run_suite(t, repo, "push")
-            if rc:
-                return fail(f"并入远端后测试不绿（{logf}）：" + " | ".join(reds))
+        s["push_retest"] = True
+    t = CFG.get("test_cmd")
+    # 并入远端后必须测绿才推。记一个标记：上一轮测红了，这一轮远端已是祖先也要重测（以前会把红的直接推上去）
+    if t and s.get("push_retest"):
+        rc, logf, reds = run_suite(t, repo, "push")
+        if rc:
+            return fail(f"并入远端后测试不绿（{logf}）：" + " | ".join(reds))
+        s.pop("push_retest", None)
     r = subprocess.run(pc, shell=True, cwd=repo, capture_output=True, text=True)
     if r.returncode:
         return fail((r.stdout + r.stderr)[-200:])
@@ -498,6 +512,9 @@ def cmd_tick(a=None):
             dirty = git(it["worktree"], "status", "--porcelain", "--untracked-files=no", check=False) if it.get("worktree") else ""
             if dirty and it["round"] < LIM.get("rework_rounds", 2):
                 it["round"] += 1; rework(s, k, it, "施工说交付了，但工作区还有没提交的改动：" + dirty[:120])
+            elif dirty:   # 返工用完了还是不干净：不送验收（以前会把脏工作区送去验收）
+                it["state"] = "escalated"; log(s, f"{k} 返工 {it['round']} 轮工作区仍不干净，交决策岗")
+                notify("需要决策", f"{it['title']} 工作区一直不干净")
             else:
                 it["state"] = "built"; log(s, f"{k} 施工交付 → 自动接验收")
         elif typ == "worker_done" and role == "verify":
@@ -544,9 +561,10 @@ def cmd_tick(a=None):
         elif it["state"] == "built" and st("verify") == "ready":
             start_worker(s, k, it, "verify")
         elif it["state"] == "verified" and st("merge") == "pending":
-            # 返工后，合并任务还挂在旧的（不通过的）验收上：把旧验收标为已被复验取代
+            # 返工后，合并任务还挂在旧的验收上：把旧验收标为已被复验取代。
+            # 不只是「不通过」的：施工交付不干净触发的返工，旧验收根本没跑过（ready/pending），以前会让合并永远等下去
             for d in json.loads(T.get(it["merge"], {}).get("deps") or "[]"):
-                if T.get(d, {}).get("status") == "failed":
+                if d != it["verify"] and T.get(d, {}).get("status") not in ("completed", None):
                     orca("orchestration", "task-update", "--from", c, "--id", d, "--status", "completed",
                          "--result", "superseded by re-verify", ok=False)
         elif it["state"] == "verified" and st("merge") == "ready":
@@ -612,6 +630,14 @@ def cmd_retry(a):
     if it["state"] == "escalated" and it.get("resume"):
         it["state"] = it.pop("resume")
     log(s, f"{a.key} 继续（{it['state']}）"); save(s)
+
+
+def cmd_resume(a):
+    """状态文件损坏后：人处理好（恢复或确认放弃旧状态）再解除暂停。"""
+    if PAUSED and os.path.exists(PAUSED):
+        os.remove(PAUSED); print(f"{CODE} 已解除暂停")
+    else:
+        print(f"{CODE} 没有暂停")
 
 
 def cmd_digest(a):
@@ -974,9 +1000,9 @@ if __name__ == "__main__":
     x = sp.add_parser("feedback"); x.add_argument("words")
     x = sp.add_parser("suite"); x.add_argument("command", nargs=argparse.REMAINDER)
     sp.add_parser("retro")
-    x = sp.add_parser("retry"); x.add_argument("key")
+    x = sp.add_parser("retry"); x.add_argument("key"); sp.add_parser("resume")
     x = sp.add_parser("digest"); x.add_argument("--post", action="store_true")
     a = p.parse_args()
     if not HAS_PROJECT and a.cmd not in ("new", "import", "projects", "status", "run", "suite", "panel"):
         sys.exit(f"有多个项目，请加 -p <代号>：{', '.join(list_projects()) or '（还没有项目）'}")
-    {"panel": cmd_panel, "new": cmd_new, "import": cmd_import, "projects": cmd_projects, "once": cmd_once, "add": cmd_add, "tick": cmd_tick, "run": cmd_run, "status": cmd_status, "approve": cmd_approve, "ship": cmd_ship, "pull": cmd_pull, "digest": cmd_digest, "retry": cmd_retry, "feedback": cmd_feedback, "suite": cmd_suite, "retro": cmd_retro}[a.cmd](a)
+    {"panel": cmd_panel, "new": cmd_new, "import": cmd_import, "projects": cmd_projects, "once": cmd_once, "add": cmd_add, "tick": cmd_tick, "run": cmd_run, "status": cmd_status, "approve": cmd_approve, "ship": cmd_ship, "pull": cmd_pull, "digest": cmd_digest, "retry": cmd_retry, "resume": cmd_resume, "feedback": cmd_feedback, "suite": cmd_suite, "retro": cmd_retro}[a.cmd](a)

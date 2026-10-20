@@ -47,6 +47,8 @@ def parse(path):
         m = ENTRY.match(line)
         if m:
             cur = Lesson(m.group(1), m.group(2).strip(), i); lessons.append(cur); continue
+        if line.startswith("### "):     # 分类小标题（### 2. 修一类不修一例）：后面的字段不再算进上一条
+            cur = None; continue
         f = FIELD.match(line)
         if f and cur:
             cur.fields[f.group(1)] = f.group(2).strip()
