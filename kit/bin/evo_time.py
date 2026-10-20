@@ -51,6 +51,11 @@ def iso(ts=None, zone=None):
     return t.strftime("%Y-%m-%dT%H:%M:%S") + f"{sign}{abs(mins) // 60:02d}:{abs(mins) % 60:02d}"
 
 
+def parse_iso(s):
+    """iso() 写出的时间读回 epoch 秒（心跳文件用）。"""
+    return dt.datetime.fromisoformat(s).timestamp()
+
+
 def hm(s):
     h, m = s.strip().split(":")
     return int(h) * 60 + int(m)

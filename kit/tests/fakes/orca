@@ -159,6 +159,8 @@ def main():
                 box = s["inbox"].setdefault(o["terminal"], [])
                 if "ack" in o:
                     did = o["ack"]
+                    if os.environ.get("FAKE_ORCA_NO_ACK"):      # 模拟确认丢了：消息下次照样重投
+                        out({})
                     s["inbox"][o["terminal"]] = [m for m in box if m.get("delivery") != did]
                     out({})
                 did = nid(s, "deliv")

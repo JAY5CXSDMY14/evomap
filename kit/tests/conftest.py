@@ -46,7 +46,8 @@ class Loop:
                        "verify": {"cmd": f"{py} {WORKER} verify", "models": ["model-a", "model-b"], "prompt": "roles/verifier.md",
                                   "boot_seconds": 0},
                        "retro": {"prompt": "roles/retro.md"}},
-             "notify": {"macos": False}}
+             "notify": {"macos": False},
+             "auto_ship_gate": False}          # 自动收菜默认关：只在专门的测试里打开，免得影响别的测试
         for k, v in extra.items():
             g[k] = {**g[k], **v} if isinstance(v, dict) and isinstance(g.get(k), dict) else v
         json.dump(g, open(os.path.join(self.root, "config.json"), "w"), ensure_ascii=False)

@@ -118,7 +118,7 @@ async function refresh(){
       <div class="others">派工 ${it.usage?.runs||0} 次 · ${Math.round(it.usage?.minutes||0)} 分钟</div></td>
       <td style="text-align:right"><span class="st ${stuck(it)?"stuck":(/可收菜|已上线/.test(it.state)?"done":"")}">${it.stalled?"疑似卡住":esc(it.state)}</span></td></tr>`).join("") || '<tr><td class="empty">还没有件</td></tr>'}</table></div>
     <h2>用量</h2><div class="card others">${roles || "还没有派过工"}${tok ? `<br>token（magpie）：${Object.entries(tok.by_model||{}).map(([m,n]) => esc(m)+" "+n).join(" · ")}${tok.project?`；本项目 ${tok.project}`:""}` : ""}</div>
-    <h2>最近动静</h2><div class="card log">${esc((data.log||[]).slice().reverse().join("\n")) || "（无）"}</div>`;
+    <h2>最近动静</h2><div class="others" style="margin:-4px 0 6px">上次转动：${data.last_tick ? esc(data.last_tick.slice(5,16).replace("T"," ")) : "还没转过"}</div><div class="card log">${esc((data.log||[]).slice().reverse().join("\n")) || "（无）"}</div>`;
 }
 
 async function approve(code, gate, choice, whyId){

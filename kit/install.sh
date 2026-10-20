@@ -45,6 +45,16 @@ echo "■ 现状"
 [ -f "$EVO_DIR/config.json" ] && ok "全局配置 $EVO_DIR/config.json" || info "还没有全局配置，--apply 时从 config.global.example.json 放一份"
 if [ "$(uname)" = Darwin ]; then
   [ -f "$PLIST" ] && ok "launchd 常驻已写入 $PLIST" || info "launchd 常驻还没装"
+  # 防睡眠：Mac mini 睡着整条流水线都停。只检查、只给建议，绝不替你跑 sudo
+  if command -v pmset >/dev/null; then
+    SLP=$(pmset -g 2>/dev/null | awk '$1=="sleep"{print $2; exit}')
+    DSK=$(pmset -g 2>/dev/null | awk '$1=="disksleep"{print $2; exit}')
+    if [ "${SLP:-0}" != 0 ] || [ "${DSK:-0}" != 0 ]; then
+      warn "这台 Mac 会睡眠（sleep=${SLP:-?} disksleep=${DSK:-?}）：睡着时接棒、夜审全停。建议自己执行：sudo pmset -a sleep 0 disksleep 0"
+    else
+      ok "防睡眠已设置（sleep 0、disksleep 0）"
+    fi
+  fi
 else
   info "不是 macOS：跳过 launchd（Linux 上可自己用 systemd/cron 跑：$KIT/bin/evo run --every 30）"
 fi

@@ -5,7 +5,8 @@
           noreport（不交 JSON） | oos（另外改了范围外的文件） | blocked / unfinished / redtest（交卷内容不合格）
   verify: pass | fail
   任何角色：ratelimit（打印额度提示并回报失败）| ratelimit-hang（打印提示后不回报）| silent（不回报）
-  decide（决策岗）：默认 pass
+  decide（决策岗）：默认 pass（不交决定 JSON）；剧本项写成对象 {"decisions": [...]} 就原样放进 ```json 块交卷
+  FAKE_ORCA_NO_ACK=1 时假 Orca 不认确认，消息每轮重投（测去重）
 每次出招记一行到 workers.log：角色、任务号、招式、任务说明（JSON）。
 """
 import fcntl, json, os, re, subprocess, sys
@@ -26,6 +27,12 @@ with open(os.path.join(D, "workers.log"), "a", encoding="utf-8") as f:
 
 outcome = "succeeded"
 RL = os.environ.get("FAKE_RL_TEXT", "Claude usage limit reached. Your limit will reset at 5pm (Asia/Shanghai).")
+if isinstance(move, dict):               # 决策岗交决定：剧本里直接写 {"decisions": [...]}
+    body = "假决策岗\n```json\n" + json.dumps(move, ensure_ascii=False) + "\n```"
+    subprocess.run(["orca", "orchestration", "send", "--from", os.environ["ORCA_TERMINAL_HANDLE"], "--type", "worker_done",
+                    "--subject", f"{role} succeeded", "--body", body, "--task-id", task, "--dispatch-id", disp,
+                    "--outcome", "succeeded", "--json"], check=True, capture_output=True)
+    sys.exit(0)
 if move == "ratelimit":                  # 额度用完：打印提示，回报失败
     print("working...\n" + RL); outcome = "failed"
 elif move == "ratelimit-hang":           # 额度用完：打印提示后不回报（停在提示上）

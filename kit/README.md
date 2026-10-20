@@ -126,7 +126,24 @@ Telegram 环境变量改名 `EVO_TG_TOKEN` / `EVO_TG_CHAT`，旧名 `TUBU_TG_TOK
 - **改动不许越界**：施工交付时和合并前各查一次，改动文件必须落在本件 scope 内（`scope_allow` 默认放行 `artifacts/` 证据目录），越界直接返工，不送验收、不合并。
 - **git 共享配置守卫**：每轮先查主仓库 `.git/config`，发现 `core.worktree` 被写入或 `core.bare=true` 就复原并记一笔；复原后主目录 git 仍指向别处 → 项目暂停推送，等 `evo resume`。`git_guard: false` 可关。
 
+## 第十轮：闸路补齐 + 少找你 + 停了能知道（均有自动测试，共 120 个）
+- **决策岗的决定自动执行**：决策岗在 worker_done 正文交 ```json `{"decisions":[…]}`（格式见 `roles/decider.md` 第 12 条）。`retry` 从断点继续（没断点就带说明返工）；`rework` 带说明返工、轮次清零；`drop` 不做并清理；`split` 原件不做、登记子件（`parent` 记父件）；`ask_owner` 建「同意 / 不同意」老板闸门并立刻推送，老板答了作为【新】件回到下一批；`answer` 回答施工提问。没交 JSON 或格式不对只记日志，件留到下一批。
+- **施工提问有人答**：Orca 目前没有回复工人的命令，`deliver_answer()` 先用兜底——带着「决策岗答复：…」开一轮返工（不扣轮次，原工作区接着做）。以后 Orca 支持回复，只换这一个函数。
+- **pull 不再每轮刷屏**：`autopilot:ready` 但缺 `scope:` / `type:` 标签或标题不合规的 issue，按「issue 号 + 原因」只交决策岗一次（`pull_flagged`），补好后下轮自动登记。
+- **先上线再标记**：点「上线」先跑 `deploy_cmd`，成功才标已上线、留言并 `gh issue close`；失败件留在可收菜、清掉上线闸门、推送 `deploy_failed`（上线失败）。点「再等等」也清闸门，下次重新攒批。
+- **崩溃安全**：派工、返工、合并、改状态后立刻存盘；处理过的 Orca 消息号记在 `msg_seen`（最多 500 个），重投的跳过。
+- **对齐主线冲突、合并前测试红 → 自动返工**（算一轮，原因里带冲突/红行，要求施工 rebase 到 main 修好），超上限才交决策岗；脏主目录、脱敏、危险文件、越界、验收后改动照旧直接交决策岗。
+- **自动收菜**：每天 `ship_gate_at`（默认 08:20）之后第一次有已合并的件，且没有等着的上线闸门，就自动建上线闸门（主线测试绿才建），一天一次；`auto_ship_gate: false` 关掉。
+- **心跳与看门狗**：每轮写 `~/.evoloop/heartbeat.json`；`evo watchdog`（可挂 launchd）和 `evo bot` 每轮检查，超过 10 分钟（`limits.heartbeat_stale_minutes`）没转动推一次「卡住」，恢复后再停才再推；`status --json` 新增顶层 `last_tick`。
+- **不做即清理**：任何途径变成「不做」都关终端、删工作区，合并任务标完成，排在它后面的件不再干等。
+- **夜审补跑**：过了 23:30 当天没跑的下一轮照跑；第二天中午前开机先补昨天的（只补一天，新项目不补）。日志时间统一走 `evo_time` 的钟。
+- **install.sh 防睡眠检查**：macOS 上 `pmset -g` 显示 sleep / disksleep 不是 0 就警告，并给出 `sudo pmset -a sleep 0 disksleep 0`（只提示，不替你跑 sudo）。
+
 ## 只能在 Mac mini 上验的
+- 真 Orca 的消息有没有 `id` 字段（evo 依次认 `id` / `message_id` / `messageId`；都没有就不去重）、没确认的消息会不会重投。
+- 真决策岗模型能否稳定按 decisions JSON 交决定；Orca 将来若有「回复工人」的命令，换掉 `deliver_answer()`。
+- 真 `deploy_cmd` 的退出码是否可靠（失败必须非 0）；`gh issue close` 用的账号有没有权限。
+- launchd 定时跑 `evo watchdog`（StartInterval 300）和 `pmset -g` 的真实输出格式。
 - DSH、Claude Code、Codex 真跑时会不会按说明回报（Orca 已认得 `dsh`）。
 - magpie 下施工和验收同用一个工具时，各自指定模型是否生效。
 - Hook 日志照常记录；手机提醒。

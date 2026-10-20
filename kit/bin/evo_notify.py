@@ -7,7 +7,7 @@
   email    SMTP；Telegram 没配或发失败时兜底，另外收早间汇总
   macos    本机通知（只发要推的事）
 
-要推的只有：闸门 5 分钟没人处理、件卡住（含状态文件损坏暂停）、推送连续失败 3 次、岗位因额度暂停、用量异常。
+要推的只有：闸门 5 分钟没人处理、件卡住（含状态文件损坏暂停、接棒器心跳停了）、推送连续失败 3 次、岗位因额度暂停、用量异常、上线失败。
 其余事件只进 outbox（webhook 设 events=all 时也发）。
 免打扰时段（默认 0:00–8:00 上海时间）里要推的事先攒着，到早上 8:30 一次发汇总到 telegram + email。
 测试替身：设 EVO_FAKE_NET=<目录> 时不联网，HTTP 请求记到 http.log、邮件记到 mail.log，HTTP 回应取自 http_responses.json。
@@ -19,9 +19,9 @@ from email.message import EmailMessage
 import evo_time as T
 
 SCHEMA_VERSION = 1
-PUSH_KINDS = {"gate_waiting", "stalled", "state_corrupt", "push_failed", "rate_limited", "usage_abnormal"}
+PUSH_KINDS = {"gate_waiting", "stalled", "state_corrupt", "push_failed", "rate_limited", "usage_abnormal", "deploy_failed"}
 KIND_NAMES = {"gate_waiting": "等你点头", "stalled": "卡住", "state_corrupt": "卡住", "push_failed": "推送失败",
-              "rate_limited": "额度暂停", "usage_abnormal": "用量异常"}
+              "rate_limited": "额度暂停", "usage_abnormal": "用量异常", "deploy_failed": "上线失败"}
 ENV_ALIASES = {"EVO_TG_TOKEN": "TUBU_TG_TOKEN", "EVO_TG_CHAT": "TUBU_TG_CHAT", "TUBU_TG_TOKEN": "EVO_TG_TOKEN",
                "TUBU_TG_CHAT": "EVO_TG_CHAT"}
 
