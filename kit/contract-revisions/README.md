@@ -21,7 +21,7 @@
 
 ## 修订四 · 事实源（01 §7、§9 末行）
 - 现：唯一面板 wb-issues，只有 WorkBuddy 能改。
-- 改：问题统一进 GitHub issue；每件进度以 Orca 任务状态为准，`tubu status` 与 Orca 手机端是老板看板。
+- 改：问题统一进 GitHub issue；每件进度以 Orca 任务状态为准，`evo status` 与 Orca 手机端是老板看板。
 - 为什么：WorkBuddy 已转任，面板职责交中台。
 
 ## 修订五 · 合并与推送（01 §11、§11.6）

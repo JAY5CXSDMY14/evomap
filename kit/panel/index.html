@@ -57,7 +57,7 @@
 <main id="main"><p class="empty">加载中…</p></main>
 <div class="toast" id="toast"></div>
 <script>
-let projects = [], cur = localStorage.getItem("tubu.project") || "", data = null;
+let projects = [], cur = localStorage.getItem("evo.project") || "", data = null;
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 function toast(t){ const el=$("toast"); el.textContent=t; el.style.display="block"; setTimeout(()=>el.style.display="none",2200); }
@@ -71,7 +71,7 @@ async function loadProjects(){
   $("menu").innerHTML =
     `<a class="${cur==="*"?"on":""}" onclick="pick('*')"><span>全部待办</span><span class="badge ${total?"":"zero"}">${total}</span></a><div class="sep"></div>` +
     projects.map(p => `<a class="${cur===p.code?"on":""}" onclick="pick('${p.code}')"><span>${esc(p.name)} <span class="others">${p.code}</span></span><span class="badge ${p.gates?"":"zero"}">${p.gates}</span></a>`).join("") +
-    `<div class="sep"></div><a onclick="alert('新开：tubu new <代号> --name 名字 --path 目录\\n导入：tubu import <代号> --name 名字 --path 旧仓库')"><span>＋ 新开 / 导入项目</span></a>`;
+    `<div class="sep"></div><a onclick="alert('新开：evo new <代号> --name 名字 --path 目录\\n导入：evo import <代号> --name 名字 --path 旧仓库')"><span>＋ 新开 / 导入项目</span></a>`;
   const me = projects.find(p => p.code === cur);
   $("curName").textContent = cur === "*" ? "全部待办" : (me ? me.name : "—");
   const n = cur === "*" ? total : (me ? me.gates : 0);
@@ -81,7 +81,7 @@ async function loadProjects(){
   $("others").innerHTML = cur !== "*" && other.length ? "其他项目在等你：" + other.map(p => `<a onclick="pick('${p.code}')" style="cursor:pointer">${esc(p.name)} <b>${p.gates}</b></a>`).join("、") : "";
 }
 
-function pick(code){ cur = code; localStorage.setItem("tubu.project", code); $("menu").classList.remove("open"); refresh(); }
+function pick(code){ cur = code; localStorage.setItem("evo.project", code); $("menu").classList.remove("open"); refresh(); }
 
 function gateCard(g, code, name){
   const opts = g.options || ["通过","打回"];

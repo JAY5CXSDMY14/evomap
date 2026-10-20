@@ -16,15 +16,15 @@ echo "■ 需要在 Orca 里手动点一次：设置 → Experimental → 打开
 [ -f "$KIT/config.json" ] || cp "$KIT/config.example.json" "$KIT/config.json"
 orca skills install --skill orca-cli --skill orchestration >/dev/null && ok "Orca 技能已装"
 orca repo add --path "$(python3 -c "import json;print(json.load(open('$KIT/config.json'))['repo'])")" --json >/dev/null && ok "仓库已登记到 Orca"
-P=~/Library/LaunchAgents/com.tubu.autopilot.plist
+P=~/Library/LaunchAgents/com.evoloop.autopilot.plist
 cat > "$P" <<PL
 <?xml version="1.0" encoding="UTF-8"?><!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0"><dict><key>Label</key><string>com.tubu.autopilot</string>
-<key>ProgramArguments</key><array><string>/usr/bin/python3</string><string>$KIT/bin/tubu</string><string>run</string><string>--every</string><string>30</string></array>
+<plist version="1.0"><dict><key>Label</key><string>com.evoloop.autopilot</string>
+<key>ProgramArguments</key><array><string>/usr/bin/python3</string><string>$KIT/bin/evo</string><string>run</string><string>--every</string><string>30</string></array>
 <key>RunAtLoad</key><true/><key>KeepAlive</key><true/>
 <key>StandardOutPath</key><string>$KIT/.state/autopilot.log</string><key>StandardErrorPath</key><string>$KIT/.state/autopilot.log</string>
 <key>EnvironmentVariables</key><dict><key>PATH</key><string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:$HOME/.local/bin</string></dict>
 </dict></plist>
 PL
 mkdir -p "$KIT/.state"; launchctl unload "$P" 2>/dev/null || true; launchctl load "$P" && ok "接棒器已常驻（每 30 秒一轮）"
-echo "完成。看进度：$KIT/bin/tubu status"
+echo "完成。看进度：$KIT/bin/evo status"
