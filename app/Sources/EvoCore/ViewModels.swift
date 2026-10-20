@@ -158,6 +158,8 @@ public struct ProjectRow: Identifiable, Equatable, Sendable {
     public var waiting: Int
     public var stuck: Int
     public var merged: Int
+    public var tooLong: Int            // 卡太久（status JSON 顶层 stale 的件数）
+    public var roleLine: String?       // 「施工 忙 · 验收 闲」
     public var error: String?
     public var heartbeat: HeartbeatStatus.Level?
 
@@ -168,6 +170,9 @@ public struct ProjectRow: Identifiable, Equatable, Sendable {
         waiting = s.doc?.pendingCount ?? 0
         stuck = s.doc?.stuckCount ?? 0
         merged = s.doc?.mergedCount ?? 0
+        tooLong = s.doc?.staleItems ?? 0
+        let roles = s.doc?.roles ?? []
+        roleLine = roles.isEmpty ? nil : roles.map { "\($0.name) \($0.label)" }.joined(separator: " · ")
         heartbeat = beat?.level
     }
 

@@ -24,13 +24,14 @@ enum Snapshots {
     static var sampleSnaps: [ProjectSnapshot] {
         let tb = doc("""
         {"project":"TB","name":"土布","last_tick":"\(iso(1))","count":{"building":2,"built":1,"merged":2},"stuck":0,
+         "roles":[{"role":"build","name":"施工","status":"busy","label":"忙"},{"role":"verify","name":"验收","status":"idle","label":"闲"}],
          "gates":[{"id":"gate_12","question":"看效果：注册页按钮改成陶土色","options":["通过","打回"],"kind":"look","item":"TB-UX-003","waiting_since":"\(iso(50))"},
                   {"id":"gate_13","question":"做不做：订单导出 PDF","options":["做","不做"],"kind":"do","item":"TB-FEAT-004","waiting_since":"\(iso(190))"}],
          "items":[{"key":"TB-FIX-010","title":"修复验证码不刷新","state":"已合并·可收菜","raw":"merged"},
                   {"key":"TB-UX-002","title":"首页卡片加阴影","state":"已合并·可收菜","raw":"merged"}]}
         """)
         let ev = doc("""
-        {"project":"EV","name":"Evo 应用","last_tick":"\(iso(3))","count":{"building":1,"verifying":1},"stuck":0,"no_live_path":1,
+        {"project":"EV","name":"Evo 应用","last_tick":"\(iso(3))","count":{"building":1,"verifying":1},"stuck":0,"no_live_path":[{"key":"EV-3","reason":"dep_dead"}],"stale":[{"key":"EV-5","hours":7}],
          "gates":[{"id":"g8","question":"上线这 2 件？菜单栏弹窗、命令面板","options":["上线","再等等"],"kind":"ship","waiting_since":"\(iso(8))"}],"items":[]}
         """)
         let ab = doc("""

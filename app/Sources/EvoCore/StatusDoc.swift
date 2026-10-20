@@ -15,8 +15,25 @@ public struct StatusDoc: Decodable, Equatable, Sendable {
     public var log: [String]
     /// 新字段（可能还没有）：没有可走通路径的件数。evo 可能给数字、数组或布尔，统一成件数；没给就是 nil。
     public var noLivePath: Int?
-    /// 新字段（可能还没有）：evo 自己判断的「心跳过期」。
-    public var staleFlag: Bool?
+    /// 第十二轮新字段：卡太久（同一状态超过 limits.stale_hours）的件数；顶层 stale 是件列表，这里只数个数。
+    public var staleItems: Int?
+    /// 第十二轮新字段：岗位状态（施工/验收/决策 忙、闲、暂停、额度满）。
+    public var roles: [Role]
+
+    public struct Role: Decodable, Equatable, Sendable {
+        public var role: String
+        public var name: String
+        public var status: String
+        public var label: String
+        enum CodingKeys: String, CodingKey { case role, name, status, label }
+        public init(from d: Decoder) throws {
+            let c = try d.container(keyedBy: CodingKeys.self)
+            role = (try? c.decode(String.self, forKey: .role)) ?? ""
+            name = (try? c.decode(String.self, forKey: .name)) ?? role
+            status = (try? c.decode(String.self, forKey: .status)) ?? ""
+            label = (try? c.decode(String.self, forKey: .label)) ?? status
+        }
+    }
 
     public struct Gate: Decodable, Equatable, Hashable, Sendable {
         public var id: String
@@ -88,7 +105,8 @@ public struct StatusDoc: Decodable, Equatable, Sendable {
         case schemaVersion = "schema_version"
         case project, name, count, stuck, gates, items, log
         case noLivePath = "no_live_path"
-        case staleFlag = "stale"
+        case staleItems = "stale"
+        case roles
         case generatedAt = "generated_at"
         case lastTick = "last_tick"
     }
@@ -106,7 +124,9 @@ public struct StatusDoc: Decodable, Equatable, Sendable {
         items = (try? c.decodeIfPresent([Item].self, forKey: .items)) ?? []
         log = (try? c.decodeIfPresent([String].self, forKey: .log)) ?? []
         noLivePath = Lenient.count(c, .noLivePath)
-        staleFlag = try? c.decodeIfPresent(Bool.self, forKey: .staleFlag)
+        staleItems = Lenient.count(c, .staleItems)
+        // roles 可能是列表（第十二轮）也可能是别的形状：只认列表里像样的条目
+        roles = ((try? c.decodeIfPresent([Lenient.Maybe<Role>].self, forKey: .roles)) ?? nil)?.compactMap(\.value).filter { !$0.role.isEmpty } ?? []
     }
 
     /// 这个版本的应用认得的最高 schema_version；更高的照样解析（只加字段），但界面上提示升级。
@@ -127,16 +147,22 @@ public struct StatusDoc: Decodable, Equatable, Sendable {
     public var verifyingCount: Int { count["built", default: 0] + count["verifying", default: 0] }
     /// 已合并可收菜。
     public var mergedCount: Int { count["merged", default: 0] }
-    /// 卡住：有 no_live_path 时取 stuck 和它的较大值（同一件可能两边都算，取大不重复加）。
+    /// 卡住：有顶层 no_live_path（没活路超过阈值的件）时取 stuck 和它的较大值（同一件可能两边都算，取大不重复加）。
+    /// items[].no_live_path 只是「正在计时」，不算卡住。
     public var stuckCount: Int {
-        let perItem = items.filter(\.noLivePath).count
-        guard let n = noLivePath ?? (perItem > 0 ? perItem : nil) else { return stuck }
+        guard let n = noLivePath else { return stuck }
         return max(stuck, n)
     }
 }
 
 /// 宽松解码：数字 / 数组（取长度）/ 布尔（true=1）/ 字符串数字都认，其余当没有。
 enum Lenient {
+    /// 列表里某一条解不出就当 nil，不连累整张列表。
+    struct Maybe<T: Decodable>: Decodable {
+        var value: T?
+        init(from decoder: Decoder) throws { value = try? T(from: decoder) }
+    }
+
     static func count<K: CodingKey>(_ c: KeyedDecodingContainer<K>, _ k: K) -> Int? {
         guard c.contains(k) else { return nil }
         if let n = try? c.decode(Int.self, forKey: k) { return n }

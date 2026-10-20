@@ -213,8 +213,13 @@ final class AdditiveFieldTests: XCTestCase {
     func testNoLivePathAndStaleDecodeLeniently() throws {
         let d = try StatusDoc.decode(fixture("status_v11.json"))
         XCTAssertEqual(d.noLivePath, 3)
-        XCTAssertEqual(d.staleFlag, false)
-        XCTAssertEqual(d.stuckCount, 3)                 // max(stuck 1, no_live_path 3)
+        XCTAssertEqual(d.staleItems, 2)
+        XCTAssertEqual(d.roles.map(\.role), ["build", "verify", "decide"])   // 坏条目跳过
+        XCTAssertEqual(ProjectRow(ProjectSnapshot(code: "EV", doc: d)).roleLine, "施工 忙 · 验收 闲 · 决策 额度满")
+        XCTAssertEqual(ProjectRow(ProjectSnapshot(code: "EV", doc: d)).tooLong, 2)
+        XCTAssertEqual(try StatusDoc.decode(#"{"project":"X","roles":{"build":1}}"#).roles, [])
+        XCTAssertNil(ProjectRow(try snap("status_tb.json")).roleLine)
+        XCTAssertEqual(d.stuckCount, 3)
         XCTAssertEqual(d.verifyingCount, 3)
         XCTAssertEqual(d.mergedCount, 1)
         XCTAssertTrue(d.items[1].noLivePath)

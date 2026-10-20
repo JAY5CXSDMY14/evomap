@@ -351,6 +351,8 @@ struct ProjectRowView: View {
                     }
                     if let e = row.error {
                         Text("读不出状态：\(e)").font(Theme.caption(10.5)).foregroundStyle(Theme.danger).lineLimit(1)
+                    } else if let sub = subtitle {
+                        Text(sub).font(Theme.caption(10.5)).foregroundStyle(row.tooLong > 0 ? Theme.warning : Theme.textSecondary).lineLimit(1)
                     }
                 }
                 Spacer(minLength: 4)
@@ -374,6 +376,11 @@ struct ProjectRowView: View {
         .buttonStyle(PressScale())
         .accessibilityLabel(row.accessibilityText)
         .accessibilityHint("只看这个项目的闸门，快捷键 Command \(index + 1)")
+    }
+
+    private var subtitle: String? {
+        let parts = [row.tooLong > 0 ? "卡太久 \(row.tooLong)" : nil, row.roleLine].compactMap { $0 }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }
 
     private var dot: Color {
@@ -502,6 +509,7 @@ struct ComposerView: View {
     @State private var look = false
     @State private var error: String?
     @State private var sentPulse = false
+    @Environment(\.evoStatic) private var isStatic
 
     private var mode: ComposerMode { ComposerMode(rawValue: modeRaw) ?? .feedback }
     private var project: String {
@@ -516,12 +524,18 @@ struct ComposerView: View {
                 ThemedField(placeholder: mode.placeholder, text: $text) { send() }
                     .accessibilityLabel("告诉 evo")
                 HStack(spacing: 6) {
-                    Menu {
-                        ForEach(state.codes, id: \.self) { c in Button(c) { savedProject = c; state.focusedProject = nil } }
-                    } label: {
-                        Label(project.isEmpty ? "选项目" : project, systemImage: "folder")
+                    Group {
+                        if isStatic {      // 离屏渲染画不出 Menu（会是黄块），截图时画成同样的胶囊
+                            Label(project.isEmpty ? "选项目" : project, systemImage: "folder").labelStyle(.titleAndIcon)
+                        } else {
+                            Menu {
+                                ForEach(state.codes, id: \.self) { c in Button(c) { savedProject = c; state.focusedProject = nil } }
+                            } label: {
+                                Label(project.isEmpty ? "选项目" : project, systemImage: "folder")
+                            }
+                            .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
+                        }
                     }
-                    .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
                     .modifier(ChipLook())
                     .accessibilityLabel("发给哪个项目：\(project)")
                     Button { modeRaw = (mode == .feedback ? ComposerMode.add : .feedback).rawValue } label: {
