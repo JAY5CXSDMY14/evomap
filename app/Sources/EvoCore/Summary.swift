@@ -44,6 +44,10 @@ public struct PlannedNotification: Equatable, Sendable {
     public var body: String
     public var project: String
     public var gate: String?
+
+    public init(id: String, title: String, body: String, project: String, gate: String?) {
+        self.id = id; self.title = title; self.body = body; self.project = project; self.gate = gate
+    }
 }
 
 /// 闸门差异：哪些是新冒出来的、要提醒老板的。
