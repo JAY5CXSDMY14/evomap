@@ -43,6 +43,24 @@
   .sum { display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:10px; }
   .sum .card { cursor:pointer; margin:0; }
   .sum .n { font-size:13px; color:var(--mute); }
+  /* 第十二轮：结构性样式，只用已有变量；整体换皮之后再统一调 */
+  .roles { display:flex; gap:8px; flex-wrap:wrap; }
+  .role { font-size:13px; padding:4px 10px; border-radius:8px; background:var(--bg); border:1px solid var(--line); }
+  .role.role-busy { border-color:var(--accent); }
+  .role.role-paused, .role.role-rate_limited { border-color:var(--warn); }
+  .alert { border-color:var(--red); }
+  .alert .ttl, .nolive-mark { color:var(--red); }
+  tr.item-row { cursor:pointer; }
+  .artifacts { margin:10px 0; display:grid; gap:8px; }
+  .artifact img { max-width:100%; border:1px solid var(--line); border-radius:8px; }
+  .artifact iframe { width:100%; height:360px; border:1px solid var(--line); border-radius:8px; background:#fff; }
+  .artifact .name, .checks { font-size:13px; color:var(--mute); }
+  .timeline { list-style:none; margin:0; padding:0; }
+  .timeline li { padding:6px 0; border-top:1px solid var(--line); }
+  .timeline li:first-child { border-top:0; }
+  .timeline .ev { font-weight:600; }
+  .timeline .at { font-family:ui-monospace,Menlo,monospace; font-size:12px; color:var(--mute); margin-right:8px; }
+  .timeline .words { white-space:pre-wrap; }
   .toast { position:fixed; bottom:18px; left:50%; transform:translateX(-50%); background:var(--ink); color:#fff; padding:8px 14px; border-radius:10px; display:none; }
 </style>
 </head>
@@ -83,7 +101,7 @@ async function loadProjects(){
   $("others").innerHTML = cur !== "*" && other.length ? "其他项目在等你：" + other.map(p => `<a onclick="pick('${p.code}')" style="cursor:pointer">${esc(p.name)} <b>${p.gates}</b></a>`).join("、") : "";
 }
 
-function pick(code){ cur = code; localStorage.setItem("evo.project", code); $("menu").classList.remove("open"); refresh(); }
+function pick(code){ if (location.hash) history.replaceState(null, "", location.pathname); cur = code; localStorage.setItem("evo.project", code); $("menu").classList.remove("open"); refresh(); }
 
 function gateCard(g, code, name){
   const opts = g.options || ["通过","打回"];
@@ -91,8 +109,30 @@ function gateCard(g, code, name){
   const needWhy = opts.includes("打回");
   return `<div class="card gate">${name?`<div class="proj">${esc(name)}</div>`:""}<div class="q">${esc(g.question)}</div>
     <div class="row">${needWhy?`<input type="text" id="${id}" placeholder="打回的话写一句，原话进返工（像用户那样说）">`:""}
-    ${opts.map(o => `<button class="btn ${/打回|不做/.test(o)?"warn":""}" onclick="approve('${code}','${g.id}','${esc(o)}','${id}')">${esc(o)}</button>`).join("")}</div></div>`;
+    ${opts.map(o => `<button class="btn ${/打回|不做/.test(o)?"warn":""}" onclick="approve('${code}','${g.id}','${esc(o)}','${id}')">${esc(o)}</button>`).join("")}</div>
+    ${g.kind==="look" && g.item ? `<div class="artifacts" data-code="${esc(code)}" data-item="${esc(g.item)}"><span class="others">产出物读取中…</span></div>` : ""}</div>`;
 }
+
+// 看效果闸门里直接看产出物：图片原样显示；HTML 放进沙盒 iframe（只许脚本，绝不给同源权限），并加 CSP 断网；其余给下载链接
+const ART_CSP = `<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data:; style-src 'unsafe-inline'; script-src 'unsafe-inline'; font-src data:; connect-src 'none'; form-action 'none'">`;
+const artUrl = (code, item, path) => `api/artifact/${code}/${item}/` + path.split("/").map(encodeURIComponent).join("/");
+async function loadArtifacts(el){
+  const code = el.dataset.code, item = el.dataset.item;
+  let a; try { a = await api(`api/artifacts/${code}/${item}`); } catch (e) { return; }
+  const checks = (a.manual_checks||[]).length ? `<div class="checks">请看：${a.manual_checks.map(esc).join("；")}</div>` : "";
+  const parts = await Promise.all((a.files||[]).map(async f => {
+    const url = artUrl(code, item, f.path), name = `<div class="name">${esc(f.path)}</div>`;
+    if (f.too_big) return `<div class="artifact">${name}<span class="others">超过 ${Math.round(a.max_bytes/1048576)}MB，不在面板里打开</span></div>`;
+    if (f.kind === "image") return `<div class="artifact">${name}<img src="${esc(url)}" alt="${esc(f.path)}" loading="lazy"></div>`;
+    if (f.kind === "html") {
+      const r = await fetch(url); const html = r.ok ? await r.text() : "读不出";
+      return `<div class="artifact">${name}<iframe sandbox="allow-scripts" referrerpolicy="no-referrer" srcdoc="${esc(ART_CSP + html)}"></iframe></div>`;
+    }
+    return `<div class="artifact"><a href="${esc(url)}" download>${esc(f.path)}</a> <span class="others">${f.bytes} 字节</span></div>`;
+  }));
+  el.innerHTML = checks + (parts.join("") || '<span class="others">artifacts/ 下没有文件</span>');
+}
+function loadAllArtifacts(){ document.querySelectorAll(".artifacts[data-item]").forEach(loadArtifacts); }
 
 async function refresh(){
   await loadProjects();
@@ -101,27 +141,72 @@ async function refresh(){
     const gates = all.flatMap(x => (x.d.gates||[]).map(g => gateCard(g, x.p.code, x.p.name)));
     $("main").innerHTML = `<h2>等你点头 · 全部项目</h2>${gates.join("") || '<div class="card empty">没有要你点头的</div>'}
       <h2>各项目</h2><div class="sum">${all.map(x => `<div class="card" onclick="pick('${x.p.code}')"><b>${esc(x.p.name)}</b>
-      <div class="n">施工中 ${x.d.count?.building||0} · 可收菜 ${x.d.count?.merged||0} · 卡住 ${x.d.stuck||0}</div></div>`).join("")}</div>`;
+      <div class="n">施工中 ${x.d.count?.building||0} · 可收菜 ${x.d.count?.merged||0} · 卡住 ${x.d.stuck||0}${(x.d.no_live_path||[]).length?` · <span class="nolive-mark">没活路 ${x.d.no_live_path.length}</span>`:""}</div></div>`).join("")}</div>`;
+    loadAllArtifacts();
     return;
   }
+  if (location.hash.startsWith("#item=")) return showItem(cur, decodeURIComponent(location.hash.slice(6)));
   data = await api("api/p/" + cur);
   const stuck = s => /交决策岗|有提问/.test(s.state) || s.stalled;
   const rl = (data.rate_limits||[]).map(r => `${esc(r.role)} 岗额度暂停到 ${esc((r.until||"").slice(5,16).replace("T"," "))}`).join("；");
   const roles = Object.entries((data.usage||{}).roles||{}).map(([r,u]) => `${esc(r)} ${u.runs} 次 / ${Math.round(u.minutes)} 分钟`).join(" · ");
   const tok = (data.usage||{}).tokens;
-  $("main").innerHTML = (rl ? `<div class="card" style="border-color:var(--warn)">⏸ ${rl}，到点自动恢复（不算返工）</div>` : "") + `
+  const nolive = data.no_live_path||[], stale = data.stale||[];
+  const rolesRow = (data.roles||[]).map(r => `<span class="role role-${esc(r.status)}" title="${esc(r.why||"")}">${esc(r.name)} · ${esc(r.label)}${(r.items||[]).length?" "+r.items.length:""}</span>`).join("");
+  $("main").innerHTML = (rl ? `<div class="card" style="border-color:var(--warn)">⏸ ${rl}，到点自动恢复（不算返工）</div>` : "") +
+    `<h2>岗位状态</h2><div class="roles">${rolesRow}</div>` +
+    (nolive.length ? `<h2>没有活路</h2><div class="card alert nolive">${nolive.map(n => `<div><a class="ttl" href="#item=${esc(n.key)}">${esc(n.key)}</a> ${esc(n.title)} · ${esc(n.state)} · ${n.minutes} 分钟<div class="others">${esc(n.why)}（已交决策岗）</div></div>`).join("")}</div>` : "") +
+    (stale.length ? `<h2>卡太久</h2><div class="card stale">${stale.map(x => `<div><a href="#item=${esc(x.key)}">${esc(x.key)}</a> ${esc(x.title)} · ${esc(x.state)} 已 ${x.hours} 小时</div>`).join("")}</div>` : "") + `
     <h2>等你点头</h2>${(data.gates||[]).map(g => gateCard(g, cur)).join("") || '<div class="card empty">没有要你点头的</div>'}
     <h2>以用户视角说一句</h2><div class="card"><textarea id="fb" placeholder="比如：注册要点三次才能进，太绕了"></textarea>
       <div class="row" style="margin-top:8px"><button class="btn" onclick="feedback()">记下来</button><span class="others">原话进 issue，决策岗只补标签不改意思</span></div></div>
-    <h2>每件进度</h2><div class="card"><table>${(data.items||[]).slice().reverse().map(it => `<tr>
+    <h2>每件进度</h2><div class="card"><table>${(data.items||[]).slice().reverse().map(it => `<tr class="item-row${it.no_live_path?" nolive":""}" onclick="location.hash='item='+encodeURIComponent('${esc(it.key)}')">
       <td class="key">${esc(it.key)}</td><td>${esc(it.title)}${it.round?` <span class="others">返工 ${it.round}</span>`:""}${it.window?` <span class="others">窗口 ${esc(it.window)}</span>`:""}
       <div class="others">派工 ${it.usage?.runs||0} 次 · ${Math.round(it.usage?.minutes||0)} 分钟</div></td>
-      <td style="text-align:right"><span class="st ${stuck(it)?"stuck":(/可收菜|已上线/.test(it.state)?"done":"")}">${it.stalled?"疑似卡住":esc(it.state)}</span></td></tr>`).join("") || '<tr><td class="empty">还没有件</td></tr>'}</table></div>
+      <td style="text-align:right"><span class="st ${stuck(it)||it.no_live_path?"stuck":(/可收菜|已上线/.test(it.state)?"done":"")}">${it.no_live_path?"没有活路":it.stalled?"疑似卡住":esc(it.state)}</span></td></tr>`).join("") || '<tr><td class="empty">还没有件</td></tr>'}</table></div>
+    <h2>项目目标</h2><div class="card settings"><textarea id="goal" maxlength="200" placeholder="一两句：这个项目为什么做、给谁用（写进每份任务书开头）">${esc(data.goal||"")}</textarea>
+      <div class="row" style="margin-top:8px"><button class="btn ghost" onclick="saveGoal()">保存</button><span class="others">留空 = 清掉；下一份任务书起生效</span></div></div>
     <h2>模型（本项目）</h2><div class="card" id="models"><span class="others">读取中…</span></div>
     <h2>用量</h2><div class="card others">${roles || "还没有派过工"}${tok ? `<br>token（magpie）：${Object.entries(tok.by_model||{}).map(([m,n]) => esc(m)+" "+n).join(" · ")}${tok.project?`；本项目 ${tok.project}`:""}` : ""}</div>
     <h2>最近动静</h2><div class="others" style="margin:-4px 0 6px">上次转动：${data.last_tick ? esc(data.last_tick.slice(5,16).replace("T"," ")) : "还没转过"}</div><div class="card log">${esc((data.log||[]).slice().reverse().join("\n")) || "（无）"}</div>`;
   loadModels(cur);
+  loadAllArtifacts();
 }
+
+// 每件一页：时间线、交卷、diff、产出物、补充反馈
+const EV_NAMES = {add:"登记", dispatch:"派工", report:"交卷", gate_open:"开闸门", gate_approve:"老板通过", gate_reject:"老板打回/不同意",
+  gate_superseded:"旧闸门作废", feedback:"老板补充反馈", rework:"返工", merge:"合并", push:"推送", ship:"上线", deploy_failed:"上线失败",
+  restart:"工人重启", decision:"决策岗决定", drop:"不做", state:"状态", no_live_path:"没有活路", live_again:"恢复活路"};
+async function showItem(code, key){
+  const d = await api(`api/item/${code}/${encodeURIComponent(key)}`);
+  if (d.error) { $("main").innerHTML = `<p><a href="#">← 返回</a></p><div class="card empty">${esc(d.error)}</div>`; return; }
+  const ev = e => { const x = Object.assign({}, e); ["at","item","event"].forEach(k => delete x[k]);
+    const words = x.words || x.why || x.note || x.body || ""; ["words","why","note","body"].forEach(k => delete x[k]);
+    return `<li><span class="at">${esc((e.at||"").slice(5,16).replace("T"," "))}</span><span class="ev">${esc(EV_NAMES[e.event]||e.event)}</span>
+      <span class="others">${esc(Object.entries(x).map(([k,v]) => k+"="+(typeof v==="object"?JSON.stringify(v):v)).join(" "))}</span>
+      ${x.sha?` <a href="api/diff/${code}/${encodeURIComponent(key)}" target="_blank" rel="noopener">diff</a>`:""}
+      ${words?`<div class="words">${esc(words)}</div>`:""}</li>`; };
+  const rep = d.report ? `<div class="card report"><b>交卷</b> <span class="others">${esc(d.report.status)}</span><div>${esc(d.report.summary)}</div>
+    ${["unfinished","risks","manual_checks"].map(f => (d.report[f]||[]).length?`<div class="others">${f}：${d.report[f].map(x=>esc(typeof x==="object"?JSON.stringify(x):x)).join("；")}</div>`:"").join("")}</div>` : "";
+  $("main").innerHTML = `<p><a href="#" onclick="location.hash='';return false">← 返回</a></p>
+    <h2>${esc(key)} · ${esc(d.title||"")}</h2><div class="others" style="margin:-4px 0 8px">现在：${esc(d.state||"")}${d.has_diff?` · <a href="api/diff/${code}/${encodeURIComponent(key)}" target="_blank" rel="noopener">看 diff</a>`:""}</div>
+    ${rep}<h2>产出物</h2><div class="card"><div class="artifacts" data-code="${esc(code)}" data-item="${esc(key)}"><span class="others">读取中…</span></div></div>
+    <h2>补充反馈</h2><div class="card"><textarea id="note" placeholder="对这件补一句；它等你的看效果/做不做闸门会作废，改完重开"></textarea>
+      <div class="row" style="margin-top:8px"><button class="btn" onclick="sendNote('${esc(code)}','${esc(key)}')">记下来</button></div></div>
+    <h2>时间线</h2><div class="card"><ul class="timeline">${(d.events||[]).slice().reverse().map(ev).join("") || '<li class="empty">还没有记录</li>'}</ul></div>`;
+  loadAllArtifacts();
+}
+async function sendNote(code, item){
+  const t = $("note").value.trim(); if (!t) return;
+  const r = await api("api/note", {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({code, item, words: t})});
+  toast(r.ok ? "记下了" : "没成功：" + r.error); if (r.ok) showItem(code, item);
+}
+async function saveGoal(){
+  const goal = ($("goal")||{}).value || "";
+  const r = await api("api/goal", {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({code: cur, goal})});
+  toast(r.ok ? "项目目标已保存" : "没成功：" + r.error);
+}
+window.addEventListener("hashchange", () => refresh());
 
 // 施工模型 / 验收模型：选项来自 magpie /v1/models；读不到 magpie 就改成手填。「跟随全局」= 删掉本项目覆盖
 const ROLE_NAMES = {build: "施工模型", verify: "验收模型"};
@@ -160,7 +245,9 @@ async function feedback(){
   const r = await api("api/feedback", {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({code: cur, words: t})});
   toast(r.ok ? "记下了" : "没成功：" + r.error); if (r.ok) $("fb").value = "";
 }
-refresh(); setInterval(refresh, 30000);
+refresh();
+// 30 秒刷新一次；正在写补充反馈或项目目标时不刷（免得冲掉没保存的字）
+setInterval(() => { const n = $("note"), g = $("goal"); if ((n && n.value.trim()) || (g && document.activeElement === g)) return; refresh(); }, 30000);
 </script>
 </body>
 </html>

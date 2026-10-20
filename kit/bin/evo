@@ -30,6 +30,9 @@
   evo panel --show-token         看面板口令
   evo models [--json]            核对施工/验收模型：在不在 magpie /v1/models 里、两边有没有重叠
   evo -p AB models set build <模型> | clear build   单项目覆盖模型（面板「施工模型 / 验收模型」下拉框同此）
+  evo -p AB log <件号> [--json|--diff]   这件的时间线（派工、交卷、闸门、返工、合并、推送、上线……）
+  evo -p AB feedback --item <件号> "原话"  对某件补反馈：它等你的看效果/做不做闸门作废，改完重开
+  evo -p AB goal [set "一两句" | clear]   项目目标：写进每份任务书开头「项目目标：…」
 """
 import argparse, datetime, fcntl, hashlib, hmac, json, os, re, secrets, subprocess, sys, time, shlex
 
@@ -61,7 +64,7 @@ DEFAULTS = {
     "audit_weekday": 6,                # 每周哪天夜审时提醒决策岗跑 ponytail-audit：0=周一 … 6=周日
     "limits": {"builders_total": 2, "owner_queue_pause": 5, "rework_rounds": 2, "stall_minutes": 15,
                "usage_item_runs": 8, "usage_item_minutes": 180, "rate_limit_default_minutes": 60, "decide_every_minutes": 30,
-               "heartbeat_stale_minutes": 10},
+               "heartbeat_stale_minutes": 10, "no_live_path_minutes": 30, "stale_hours": 6},
     "roles": {"build": {"cmd": "dsh", "models": [], "prompt": "roles/builder.md"},
               "verify": {"cmd": "claude", "models": [], "prompt": "roles/verifier.md"},
               "decide": {"prompt": "roles/decider.md"},
@@ -76,7 +79,7 @@ DEFAULTS = {
     "standards_file": "docs/code-standards.md",
 }
 PROJECT_KEYS = ("code", "name", "repo", "main_branch", "github_repo", "trusted_authors", "trusted_labelers", "test_cmd", "push_cmd", "deploy_cmd",
-                "policy_terms", "lessons_file", "standards_file", "digest_issue")
+                "policy_terms", "lessons_file", "standards_file", "digest_issue", "goal")
 # 旧环境变量名照认（先认新名，没有再认旧名）
 ENV_ALIASES = {"EVO_TG_TOKEN": "TUBU_TG_TOKEN", "EVO_TG_CHAT": "TUBU_TG_CHAT", "TUBU_TG_TOKEN": "EVO_TG_TOKEN",
                "TUBU_TG_CHAT": "EVO_TG_CHAT", "EVO_PROJECT": "TUBU_PROJECT", "EVO_CONFIG": "TUBU_CONFIG",
@@ -227,6 +230,7 @@ def load():
 
 def save(s):
     os.makedirs(STATE_DIR, exist_ok=True)
+    track_states(s)
     tmp = STATE + ".tmp"
     json.dump(s, open(tmp, "w", encoding="utf-8"), ensure_ascii=False, indent=1)
     os.replace(tmp, STATE)
@@ -236,6 +240,62 @@ def log(s, msg):
     line = TM.local().strftime("%m-%d %H:%M ") + msg      # 用 evo_time 的钟：测试里 EVO_NOW 固定时日志日期也跟着固定
     s["log"] = (s["log"] + [line])[-200:]
     print(line)
+
+
+# ---------- 每件时间线：只追加的 jsonl（每个项目一份 state/timeline.jsonl），出事好查 ----------
+def tl_path(code=None):
+    if code:
+        return os.path.join(HOME_DIR, code, "state", "timeline.jsonl")
+    return os.path.join(STATE_DIR, "timeline.jsonl") if STATE_DIR else None
+
+
+def tl(k, event, **data):
+    """记一条：{at, item, event, …}。event：add / dispatch / report / gate_open / gate_approve / gate_reject / gate_superseded /
+    feedback / rework / merge / push / ship / deploy_failed / restart / decision / drop / state / no_live_path。写不进去只打印，不拖垮接棒。"""
+    p = tl_path()
+    if not p or not k:
+        return
+    rec = {"at": TM.iso(), "item": k, "event": event}
+    rec.update({x: v for x, v in data.items() if v not in (None, "", [], {})})
+    try:
+        os.makedirs(os.path.dirname(p), exist_ok=True)
+        with open(p, "a", encoding="utf-8") as f:
+            f.write(json.dumps(rec, ensure_ascii=False) + "\n")
+    except OSError as e:
+        print(f"时间线没写进去：{e}", file=sys.stderr)
+
+
+def read_timeline(k, code=None):
+    p = tl_path(code)
+    out = []
+    if not p or not os.path.exists(p):
+        return out
+    for line in open(p, encoding="utf-8", errors="replace"):
+        try:
+            e = json.loads(line)
+        except ValueError:
+            continue                      # 半行（写到一半崩了）跳过
+        if e.get("item") == k:
+            out.append(e)
+    return out
+
+
+def track_states(s):
+    """存盘时顺带：哪件换了状态就记 state_since（「卡太久」用）并往时间线写一条 state 事件。"""
+    for k, it in (s.get("items") or {}).items():
+        st = it.get("state")
+        if it.get("_st") == st:
+            continue
+        old = it.get("_st")
+        it["_st"] = st; it["state_since"] = TM.now()
+        if old:
+            tl(k, "state", **{"from": old, "to": st})
+
+
+def goal_head(cfg=None):
+    """项目目标（项目配置 goal，一两句）：写在每份任务书最前面，让工人知道「为什么做」。"""
+    g = str((cfg or CFG).get("goal") or "").strip()
+    return f"项目目标：{g}\n\n" if g else ""
 
 
 def notify(kind, title, body="", item=None, gate=None, **data):
@@ -348,7 +408,7 @@ def add_item(s, a):
     deps = [it["merge"] for it in s["items"].values() if it["state"] not in ("merged", "shipped", "dropped") and overlap(scope, it["scope"])]
     spec = f"任务：{a.title}\nscope: {','.join(scope)}\n看效果: {'是（用户能感知）' if a.ui else '否'}\n" + \
         (f"时间窗: {win}（只在窗内开工）\n" if win else "") + (a.spec or "")
-    bspec, vspec = role_prompt("build") + spec, role_prompt("verify") + spec
+    bspec, vspec = goal_head() + role_prompt("build") + spec, goal_head() + role_prompt("verify") + spec
     b, _ = orca("orchestration", "task-create", "--from", c, "--task-title", f"{key} 施工", "--spec", bspec,
                 *(["--deps", json.dumps(deps)] if deps else []))
     v, _ = orca("orchestration", "task-create", "--from", c, "--task-title", f"{key} 验收", "--spec", vspec,
@@ -363,11 +423,15 @@ def add_item(s, a):
         g, _ = orca("orchestration", "gate-create", "--from", c, "--task", it["build"],
                     "--question", f"做不做：{a.title}", "--options", json.dumps(["做", "不做"]))
         it["gates"]["do"] = g["gate"]["id"]; notify("gate_created", "等你点头：做不做", a.title, item=key, gate=g["gate"]["id"])
+        it["gate_open_at"] = TM.now()
     if a.ui:
         g, _ = orca("orchestration", "gate-create", "--from", c, "--task", it["merge"],
                     "--question", f"看效果：{a.title}", "--options", json.dumps(["通过", "打回"]))
         it["gates"]["look"] = g["gate"]["id"]
     s["items"][key] = it
+    tl(key, "add", title=a.title, scope=scope, look=bool(a.ui), product=bool(a.product), parent=it["parent"], issue=a.issue)
+    if it["gates"].get("do"):
+        tl(key, "gate_open", kind="do", gate=it["gates"]["do"], question=f"做不做：{a.title}")
     log(s, f"登记 {key} {a.title} 范围={scope}" + (f" 排在 {len(deps)} 件后面" if deps else "") + (f" 时间窗={win}" if win else ""))
     return key
 
@@ -389,6 +453,7 @@ def start_worker(s, key, it, role):
         it["build_model"] = model
     it["state"] = "building" if role == "build" else "verifying"
     usage_add(s, it, role, runs=1)
+    tl(key, "dispatch", role=role, model=model, dispatch=did, round=it.get("round", 0), worktree=it["worktree"])
     log(s, f"{key} 开始{'施工' if role == 'build' else '验收'}（{model}）")
 
 
@@ -499,6 +564,7 @@ def do_push(s):
     head = git(repo, "rev-parse", "HEAD"); s["push_fail"] = 0
     for k in pend:
         it = s["items"][k]; it["state"] = "merged"; it["pushed"] = head
+        tl(k, "push", sha=head)
         log(s, f"{k} 已推送到 GitHub（{head[:8]}）")
         gh_comment(it, f"已验收、合并并推送到主线（{head[:8]}），等上线批次。")
 
@@ -534,22 +600,28 @@ def cleanup(it):
         orca("worktree", "rm", "--worktree", f"path:{it['worktree']}", ok=False)
 
 
+EVO_MARK = "<!-- evo -->"       # 接棒器自己留的评论带这个标记：读 issue 评论当老板反馈时跳过（gh 用的是老板的账号）
+
+
 def gh_comment(it, text):
     if it.get("issue") and CFG.get("github_repo"):
-        subprocess.run(["gh", "issue", "comment", str(it["issue"]), "-R", CFG["github_repo"], "-b", text], capture_output=True)
+        subprocess.run(["gh", "issue", "comment", str(it["issue"]), "-R", CFG["github_repo"], "-b", text + "\n\n" + EVO_MARK],
+                       capture_output=True)
 
 
 def rework(s, k, it, why):
     """开一轮返工：新施工 + 新验收，把原因（含老板原话）写进任务说明。"""
     c = coord(s)
-    it["build_spec"] = role_prompt("build") + it["spec"] + f"\n返工原因：{why}\n提交信息里原样带上这句原因。"
-    it["verify_spec"] = role_prompt("verify") + it["spec"] + f"\n本轮返工原因：{why}"
+    it["build_spec"] = goal_head() + role_prompt("build") + it["spec"] + f"\n返工原因：{why}\n提交信息里原样带上这句原因。"
+    it["verify_spec"] = goal_head() + role_prompt("verify") + it["spec"] + f"\n本轮返工原因：{why}"
     nb, _ = orca("orchestration", "task-create", "--from", c, "--task-title", f"{k} 返工{it['round']}", "--spec", it["build_spec"])
     nv, _ = orca("orchestration", "task-create", "--from", c, "--task-title", f"{k} 复验{it['round']}",
                  "--spec", it["verify_spec"], "--deps", json.dumps([nb["task"]["id"]]))
     it["build"], it["verify"] = nb["task"]["id"], nv["task"]["id"]
     it["model_i"] += 1   # 返工换一个施工模型，避免同一个模型反复犯同样的错
-    it["state"] = "queued"; it.pop("verified_sha", None)
+    it["state"] = "queued"; it.pop("verified_sha", None); it.pop("look_bound", None)
+    it["rev"] = it.get("rev", 0) + 1
+    tl(k, "rework", round=it["round"], why=why[:1500])
     log(s, f"{k} 第 {it['round']} 轮返工：{why[:60]}")
 
 
@@ -779,13 +851,13 @@ def requeue_rate_limited(s, k, it, role, line):
     note = "\n（上一次因订阅额度用完中断；工作区里已有的改动接着做，不要从头来）"
     if role == "build":
         nb, _ = orca("orchestration", "task-create", "--from", c, "--task-title", f"{k} 施工（额度恢复后续做）",
-                     "--spec", it.get("build_spec", role_prompt("build") + it["spec"]) + note)
+                     "--spec", it.get("build_spec", goal_head() + role_prompt("build") + it["spec"]) + note)
         nv, _ = orca("orchestration", "task-create", "--from", c, "--task-title", f"{k} 验收",
-                     "--spec", it.get("verify_spec", role_prompt("verify") + it["spec"]), "--deps", json.dumps([nb["task"]["id"]]))
+                     "--spec", it.get("verify_spec", goal_head() + role_prompt("verify") + it["spec"]), "--deps", json.dumps([nb["task"]["id"]]))
         it["build"], it["verify"] = nb["task"]["id"], nv["task"]["id"]; it["state"] = "queued"
     else:
         nv, _ = orca("orchestration", "task-create", "--from", c, "--task-title", f"{k} 验收（额度恢复后重验）",
-                     "--spec", it.get("verify_spec", role_prompt("verify") + it["spec"]), "--deps", json.dumps([it["build"]]))
+                     "--spec", it.get("verify_spec", goal_head() + role_prompt("verify") + it["spec"]), "--deps", json.dumps([it["build"]]))
         it["verify"] = nv["task"]["id"]; it["state"] = "built"
     it.pop("stalled", None); it.pop("rl_probe", None)
     it["rate_waits"] = it.get("rate_waits", 0) + 1
@@ -1081,7 +1153,12 @@ def decider_wake(s, T):
         why = it.get("ask") or next((l for l in reversed(s["log"]) if l[12:].startswith(k)), "")
         lines.append(f"- {'【新】' if k in new else '【上批已交，仍在等】'}{k} {NAMES.get(it['state'])}：{it['title']} —— {why[:200]}")
     todos = [e for e in inbox if e.get("todo")]
-    ext = [e for e in inbox if not e.get("todo")]
+    nolive = [e for e in inbox if e.get("nolive")]
+    ext = [e for e in inbox if not e.get("todo") and not e.get("nolive")]
+    if nolive:
+        lines.append("\n## 没有活路的件（没人在干、没闸门在等、也不在排队；面板已标红）")
+        lines += [f"- {e['item']} {NAMES.get(e.get('state'), e.get('state'))}：{e['title']} —— {e.get('note', '')}"
+                  "（可用 retry / rework / drop / ask_owner）" for e in nolive]
     if todos:
         lines.append("\n## 例行待办（接棒器定时放的，不是哪件的问题）")
         lines += [f"- {e['title']}：{e.get('note', '')}" for e in todos]
@@ -1094,7 +1171,7 @@ def decider_wake(s, T):
                  "（retry / rework / drop / split / ask_owner / answer），接棒器自动执行；外部来报在 issue 上补标签。")
     c = coord(s)
     t, _ = orca("orchestration", "task-create", "--from", c, "--task-title", f"{CODE} 决策批次 {TM.local().strftime('%m-%d %H:%M')}",
-                "--spec", role_prompt("decide") + "\n".join(lines))
+                "--spec", goal_head() + role_prompt("decide") + "\n".join(lines))
     tid = t["task"]["id"]
     models = rc.get("models") or [None]
     h, did = launch(c, CFG["repo"], f"{CODE}-decide", rc, models[0], tid)
@@ -1169,7 +1246,9 @@ def cmd_tick(a=None):
     check_usage(s)
     gl, j = orca("orchestration", "gate-list", "--from", c, ok=False)
     if j.get("ok"):
-        check_gates(s, [g for g in gl.get("gates", []) if g.get("status") in (None, "pending")])
+        pend = [g for g in gl.get("gates", []) if g.get("status") in (None, "pending")]
+        check_gates(s, pend)
+        check_no_live(s, tasks(s), {g["id"] for g in pend})   # 读不到闸门就不判（免得误报）
     decider_wake(s, T)
     auto_ship(s, gl.get("gates", []) if j.get("ok") else None)
     save(s)
@@ -1205,6 +1284,8 @@ def handle_msg(s, m, by_task):
             return requeue_rate_limited(s, k, it, role, rl)
         if typ == "worker_done":
             worker_end(s, it, role)
+            tl(k, "report", role=role, outcome=outcome, dispatch=(it["dispatch"].get(role) or {}).get("id"),
+               body=(m.get("body") or "")[:2000])
     if typ == "worker_done" and role == "build" and outcome not in (None, "succeeded"):
         # 施工自己报失败：算一轮返工
         it["round"] += 1
@@ -1227,6 +1308,11 @@ def handle_msg(s, m, by_task):
             it["state"] = "verified"; it["verified_sha"] = git(it["worktree"], "rev-parse", "HEAD")
             it["verified_patch"] = patch_id(it["worktree"])
             log(s, f"{k} 验收通过（{it['verified_sha'][:8]}）")
+            if it["ui"] and it["gates"].get("look"):
+                # 看效果闸门从这一刻起归老板：绑定这一版的改动指纹，之后版本变了，旧闸门上的「通过」不算数
+                it["look_bound"] = {"gate": it["gates"]["look"], "patch": it["verified_patch"], "sha": it["verified_sha"]}
+                it["gate_open_at"] = TM.now()
+                tl(k, "gate_open", kind="look", gate=it["gates"]["look"], sha=it["verified_sha"])
             if it["ui"]:
                 mc = (it.get("report") or {}).get("manual_checks") or []
                 notify("gate_created", "等你看效果", it["title"] + ("\n请看：" + "；".join(map(str, mc)) if mc else ""),
@@ -1340,6 +1426,9 @@ def relook_needed(s, c, k, it):
     g, _ = orca("orchestration", "gate-create", "--from", c, "--task", it["merge"],
                 "--question", f"看效果（改动后重看）：{it['title']}", "--options", json.dumps(["通过", "打回"]))
     it["gates"]["look"] = g["gate"]["id"]; it.pop("look_patch", None)
+    it["look_bound"] = {"gate": g["gate"]["id"], "patch": now, "sha": git(it["worktree"], "rev-parse", "HEAD")}
+    it["gate_open_at"] = TM.now()
+    tl(k, "gate_open", kind="look", gate=g["gate"]["id"], note=RELOOK_NOTE, sha=it["look_bound"]["sha"])
     it["relooks"] = it.get("relooks", 0) + 1
     s.setdefault("gate_since", {}).pop(g["gate"]["id"], None)
     log(s, f"{k} {RELOOK_NOTE}（看过 {it.get('look_sha', '?')[:8]}），重开看效果闸门")
@@ -1358,6 +1447,8 @@ def merge_one(s, c, k, it):
     if not err:
         orca("orchestration", "task-update", "--from", c, "--id", it["merge"], "--status", "completed")
         it["state"] = "pushing"; log(s, f"{k} 已本地合并，等推送")
+        it["merged_sha"] = git(CFG["repo"], "rev-parse", "HEAD")
+        tl(k, "merge", sha=it["merged_sha"], verified=it.get("verified_sha"), premerge_log=(it.get("premerge") or {}).get("log"))
         cleanup(it)
     elif kind == "rework":
         log(s, f"{k} 合并受阻（自动返工）：{err[:120]}")
@@ -1413,13 +1504,13 @@ def restart_worker(s, k, it, role):
     note = "\n（上一个工人进程意外退出，接棒器已自动重启一次；工作区里已有的改动接着做，不要从头来）"
     if role == "build":
         nb, _ = orca("orchestration", "task-create", "--from", c, "--task-title", f"{k} 施工（工人重启）",
-                     "--spec", it.get("build_spec", role_prompt("build") + it["spec"]) + note)
+                     "--spec", it.get("build_spec", goal_head() + role_prompt("build") + it["spec"]) + note)
         nv, _ = orca("orchestration", "task-create", "--from", c, "--task-title", f"{k} 验收",
-                     "--spec", it.get("verify_spec", role_prompt("verify") + it["spec"]), "--deps", json.dumps([nb["task"]["id"]]))
+                     "--spec", it.get("verify_spec", goal_head() + role_prompt("verify") + it["spec"]), "--deps", json.dumps([nb["task"]["id"]]))
         it["build"], it["verify"] = nb["task"]["id"], nv["task"]["id"]; tid = it["build"]
     else:
         nv, _ = orca("orchestration", "task-create", "--from", c, "--task-title", f"{k} 验收（工人重启）",
-                     "--spec", it.get("verify_spec", role_prompt("verify") + it["spec"]) + note, "--deps", json.dumps([it["build"]]))
+                     "--spec", it.get("verify_spec", goal_head() + role_prompt("verify") + it["spec"]) + note, "--deps", json.dumps([it["build"]]))
         it["verify"] = nv["task"]["id"]; tid = it["verify"]
     model = d.get("model")
     h, did = launch(c, it["worktree"], f"{k}-{role}", rc, model, tid)
@@ -1428,6 +1519,7 @@ def restart_worker(s, k, it, role):
     it["restarts"] = it.get("restarts", 0) + 1
     it.pop("stalled", None); it.pop("rl_probe", None)
     usage_add(s, it, role, runs=1)
+    tl(k, "restart", role=role, model=model, dispatch=did, replaced=d["id"])
     log(s, f"{k} {'施工' if role == 'build' else '验收'}工人进程不在了，已在原工作区自动重启一次（同岗位、同模型 {model}）")
     notify("worker_restarted", "工人自动重启", f"{it['title']}：{'施工' if role == 'build' else '验收'}工人进程不在了，已重启一次",
            item=k, role=role, model=model)
@@ -1440,6 +1532,7 @@ def drop_item(s, k, it, why):
     orca("orchestration", "task-update", "--from", coord(s), "--id", it["merge"], "--status", "completed",
          "--result", "dropped", ok=False)
     cleanup(it)
+    tl(k, "drop", why=why[:500])
     log(s, f"{k} 不做：{why[:80]}")
 
 
@@ -1475,6 +1568,7 @@ def apply_decisions(s, body):
         if it["state"] in ("merged", "shipped", "dropped", "pushing"):
             log(s, f"{k} 已是{NAMES.get(it['state'])}，决策岗的 {act} 不执行"); continue
         note = str(d.get("note") or "").strip()
+        tl(k, "decision", action=act, note=note[:1000], state=it["state"])
         try:
             DECIDE_DO[act](s, k, it, note, d)
         except SystemExit as e:                          # 例如拆分的子件标题不合规：这条不执行，别的照做
@@ -1507,8 +1601,8 @@ def decide_retry(s, k, it, note, d=None):
     it.pop("stalled", None)
     if it["state"] == "escalated" and it.get("resume"):
         it["state"] = it.pop("resume"); log(s, f"{k} 决策岗：从断点继续（{it['state']}）")
-    elif it["state"] in ("escalated", "asking"):
-        decide_rework(s, k, it, note or "重试", d)
+    elif it["state"] in ("escalated", "asking") or it.get("no_live"):
+        decide_rework(s, k, it, note or "重试", d)        # 没有活路的件「继续」推不动：带说明重开施工
     else:
         log(s, f"{k} 决策岗：清掉卡住标记，继续（{it['state']}）")
 
@@ -1568,6 +1662,336 @@ DECIDE_DO = {"retry": decide_retry, "rework": decide_rework, "drop": decide_drop
              "ask_owner": decide_ask_owner, "answer": decide_answer}
 
 
+# ---------- 新反馈作废旧闸门（借 Paperclip「确认卡会过期」）----------
+def pending_gate_ids(s):
+    """Orca 里还 pending 的闸门号；读不到返回 None（调用方别据此做决定）。"""
+    gl, j = orca("orchestration", "gate-list", "--from", coord(s), ok=False)
+    if not j.get("ok"):
+        return None
+    return {g["id"] for g in gl.get("gates", []) if g.get("status") in (None, "pending")}
+
+
+def open_owner_gate(it, pend):
+    """这件此刻在等老板的闸门：("look", 号) / ("do", 号) / (None, None)。看效果闸门要等验收通过才算开。"""
+    look, do = it["gates"].get("look"), it["gates"].get("do")
+    if look and look in pend and it["state"] == "verified" and it.get("ui"):
+        return "look", look
+    if do and do in pend and not it.get("do_ok"):
+        return "do", do
+    return None, None
+
+
+def close_gate(s, k, it, gid, kind, why):
+    """把旧闸门标作废：Orca 里结掉（结果「作废」），记进 superseded_gates，之后谁点它都不执行。"""
+    orca("orchestration", "gate-resolve", "--from", coord(s), "--id", gid, "--resolution", "作废（有新反馈）", ok=False)
+    s.setdefault("superseded_gates", {})[gid] = {"item": k, "kind": kind, "at": TM.iso(), "why": why[:200]}
+    s.setdefault("gate_since", {}).pop(gid, None)
+    s["gate_pushed"] = [g for g in s.get("gate_pushed") or [] if g != gid]
+    tl(k, "gate_superseded", kind=kind, gate=gid, words=why[:1000])
+
+
+def new_look_gate(s, k, it, label, note):
+    g, _ = orca("orchestration", "gate-create", "--from", coord(s), "--task", it["merge"],
+                "--question", f"看效果（{label}）：{it['title']}", "--options", json.dumps(["通过", "打回"]))
+    it["gates"]["look"] = g["gate"]["id"]
+    tl(k, "gate_open", kind="look", gate=g["gate"]["id"], note=note)
+    return g["gate"]["id"]
+
+
+def feedback_item(s, k, it, words, source):
+    """老板对某件补了新反馈（evo feedback --item / 面板 / 可信作者的 issue 评论）。
+    它等你的看效果闸门 → 作废，带着原话返工，改完验收通过再重开；做不做闸门 → 作废，补进任务书后重开；
+    都没开 → 记下，下一轮返工带上。返回一句说明。"""
+    words = words.strip()
+    tl(k, "feedback", words=words[:2000], source=source)
+    it.setdefault("owner_notes", []).append({"at": TM.iso(), "words": words[:2000], "source": source})
+    it["spec"] = it["spec"] + f"\n老板补充反馈（{TM.local().strftime('%m-%d %H:%M')}）：{words}"
+    pend = pending_gate_ids(s) or set()
+    kind, gid = open_owner_gate(it, pend)
+    c = coord(s)
+    if kind == "look":
+        close_gate(s, k, it, gid, "look", words)
+        it.pop("look_patch", None)
+        rework(s, k, it, "老板补充反馈（看效果闸门已作废，改完重开）：" + words)
+        new_look_gate(s, k, it, "补充反馈后重看", "上一个看效果闸门因新反馈作废")
+        msg = f"{k} 看效果闸门 {gid} 已作废，带着你的话返工，改完验收通过再请你看"
+    elif kind == "do":
+        close_gate(s, k, it, gid, "do", words)
+        orca("orchestration", "task-update", "--from", c, "--id", it["build"], "--status", "completed", "--result", "superseded by feedback", ok=False)
+        it["build_spec"] = goal_head() + role_prompt("build") + it["spec"]
+        it["verify_spec"] = goal_head() + role_prompt("verify") + it["spec"]
+        nb, _ = orca("orchestration", "task-create", "--from", c, "--task-title", f"{k} 施工", "--spec", it["build_spec"],
+                     *(["--deps", json.dumps(it["after"])] if it.get("after") else []))
+        nv, _ = orca("orchestration", "task-create", "--from", c, "--task-title", f"{k} 验收", "--spec", it["verify_spec"],
+                     "--deps", json.dumps([nb["task"]["id"]]))
+        it["build"], it["verify"] = nb["task"]["id"], nv["task"]["id"]
+        g, _ = orca("orchestration", "gate-create", "--from", c, "--task", it["build"],
+                    "--question", f"做不做（补充反馈后）：{it['title']}", "--options", json.dumps(["做", "不做"]))
+        it["gates"]["do"] = g["gate"]["id"]; it["gate_open_at"] = TM.now(); it["rev"] = it.get("rev", 0) + 1
+        tl(k, "gate_open", kind="do", gate=g["gate"]["id"], note="上一个做不做闸门因新反馈作废")
+        notify("gate_created", "等你点头：做不做（补充反馈后）", it["title"], item=k, gate=g["gate"]["id"])
+        msg = f"{k} 做不做闸门 {gid} 已作废，反馈已写进任务书，新闸门 {g['gate']['id']}"
+    else:
+        msg = f"{k} 现在没有等你的闸门：反馈已记下，写进任务书，下一轮返工带上"
+    log(s, msg)
+    if kind:
+        notify("gate_superseded", "旧闸门已作废（有新反馈）", msg, item=k, gate=gid, source=source)
+    return msg
+
+
+def pull_item_comments(s, trusted):
+    """件对应的 issue 上，可信作者在闸门开着之后写的新评论 = 老板补反馈（接棒器自己留的评论带标记，跳过）。"""
+    pend = None
+    seen = s.setdefault("comment_seen", [])
+    for k, it in list(s["items"].items()):
+        if not it.get("issue") or it["state"] in ("merged", "shipped", "dropped", "pushing"):
+            continue
+        pend = pending_gate_ids(s) if pend is None else pend
+        if pend is None:
+            return
+        kind, gid = open_owner_gate(it, pend)
+        if not kind:
+            continue
+        r = subprocess.run(["gh", "api", f"repos/{CFG['github_repo']}/issues/{it['issue']}/comments", "--paginate"],
+                           capture_output=True, text=True)
+        try:
+            cs = json.loads(r.stdout or "[]")
+        except ValueError:
+            continue
+        for cm in cs if isinstance(cs, list) else []:
+            cid, body = str(cm.get("id")), cm.get("body") or ""
+            who = (cm.get("user") or {}).get("login")
+            if cid in seen or who not in trusted or EVO_MARK in body or body.startswith(AGENT_MARK):
+                continue
+            try:
+                at = TM.parse_iso((cm.get("created_at") or "").replace("Z", "+00:00"))
+            except ValueError:
+                continue
+            seen.append(cid); del seen[:-1000]
+            if at < it.get("gate_open_at", 0):
+                continue                              # 闸门开之前的旧评论：老板点闸门时已经看得到，不算新反馈
+            feedback_item(s, k, it, body, f"issue 评论（{who}）")
+            pend = pending_gate_ids(s) or set()
+            break                                     # 一件一次只认一条，其余下轮再看（新闸门开之后的才算）
+    save(s)
+
+
+# ---------- 无活路检查（借 Paperclip 任务巡检员）：每件没完结的事必须有一条活路 ----------
+QUIET_STATES = ("merged", "shipped", "dropped")     # 可收菜（等上线批次）、已上线、不做：不查活路、不算卡太久
+
+
+def live_path(s, k, it, T, pend):
+    """这件有没有活路。有返回 None；没有返回 (原因代号, 说明)。只看本地状态 + Orca 任务/闸门，不动任何东西。"""
+    st = it["state"]
+    ts = lambda r: T.get(it.get(r), {}).get("status")
+    if st in QUIET_STATES or st == "pushing":            # 推送每轮自动重试
+        return None
+    if st in ("building", "verifying"):
+        return ("stalled", "工人疑似卡住（自动重启也用过了），没人会再推它") if it.get("stalled") else None
+    if st == "queued":
+        b = ts("build")
+        if b in ("ready", "blocked"):                   # 等名额/时间窗/额度/老板点做不做：都会自己放开或有人在等
+            return None
+        if b == "pending":
+            dead = [d for d in it.get("after") or [] if T.get(d, {}).get("status") in (None, "failed")]
+            return ("dep_dead", f"排在 {len(dead)} 个已不存在或已失败的任务后面，永远轮不到") if dead else None
+        return ("task_dead", f"施工任务是「{b or '找不到'}」，没人会派工")
+    if st == "built":
+        v = ts("verify")
+        return None if v in ("ready", "blocked") else ("task_dead", f"验收任务是「{v or '找不到'}」，没人会派验收")
+    if st == "verified":
+        if it.get("ui") and it["gates"].get("look") in pend:
+            return None                                 # 等老板看效果
+        m = ts("merge")
+        return None if m in ("ready", "pending", "blocked") else ("task_dead", f"合并任务是「{m or '找不到'}」，合并不了")
+    if st in ("escalated", "asking"):
+        if any(a.get("key") == k and g in pend for g, a in (s.get("owner_asks") or {}).items()):
+            return None                                 # 决策岗转老板，老板还没答
+        if not ((CFG.get("roles") or {}).get("decide") or {}).get("cmd"):
+            return ("no_decider", "交决策岗了，但没配置决策岗命令：只能你手动处理（evo retry / 改配置）")
+        dec = s.get("decide") or {}
+        if dec.get("task") and not dec.get("done") and k in (dec.get("items") or []):
+            return None                                 # 决策岗正在看
+        if (s.get("decide_seen") or {}).get(k) != f"{st}:{it.get('round', 0)}":
+            return None                                 # 下一批决策岗会看到它
+        if _rl_peek().get("decide", {}).get("until", 0) > TM.now():
+            return None                                 # 决策岗额度暂停，到点会叫
+        return ("decider_idle", "决策岗看过了，没给能执行的决定，状态也没变：没人会再推它")
+    return ("unknown_state", f"状态「{st}」接棒器不认识")
+
+
+def check_no_live(s, T, pend):
+    """每轮查一遍。没有活路超过 limits.no_live_path_minutes（默认 30）分钟：交决策岗一次（同件、同原因、状态没变只交一次），标红。"""
+    mins = LIM.get("no_live_path_minutes", CFG.get("no_live_path_minutes", 30))
+    flagged = s.setdefault("nolive_flagged", [])
+    for k, it in s["items"].items():
+        why = live_path(s, k, it, T, pend)
+        if not why:
+            if it.pop("no_live", None):
+                tl(k, "live_again", state=it["state"])
+            it.pop("no_live_since", None)
+            continue
+        code, text = why
+        since = it.setdefault("no_live_since", TM.now())
+        it["no_live"] = {"reason": code, "why": text}
+        if TM.now() - since < mins * 60:
+            continue
+        key = f"{k}:{code}:{it['state']}:{it.get('round', 0)}"
+        if key in flagged:
+            continue
+        flagged.append(key); del flagged[:-500]
+        s.setdefault("decide_inbox", []).append({"nolive": True, "item": k, "issue": None, "title": it["title"], "reason": code,
+                                                 "state": it["state"], "note": text})
+        tl(k, "no_live_path", reason=code, why=text, minutes=int((TM.now() - since) / 60))
+        log(s, f"{k} 没有活路 {int((TM.now() - since) / 60)} 分钟（{text}）→ 交决策岗（只交一次）")
+        notify("no_live_path", "没有活路", f"{it['title']}：{text}", item=k, reason=code)
+
+
+def no_live_list(s):
+    mins = LIM.get("no_live_path_minutes", CFG.get("no_live_path_minutes", 30))
+    out = []
+    for k, it in s["items"].items():
+        nl, since = it.get("no_live"), it.get("no_live_since")
+        if nl and since and TM.now() - since >= mins * 60 and it["state"] not in QUIET_STATES:
+            out.append({"key": k, "title": it["title"], "state": state_name(it), "raw": it["state"], "reason": nl["reason"],
+                        "why": nl["why"], "since": TM.iso(since), "minutes": int((TM.now() - since) / 60)})
+    return out
+
+
+# ---------- 首页：岗位忙闲、卡太久 ----------
+ROLE_LABELS = {"busy": "忙", "idle": "闲", "paused": "暂停", "rate_limited": "额度满"}
+
+
+def roles_doc(s):
+    rl = {r: e for r, e in _rl_peek().items() if e["until"] > TM.now()}
+    items = s["items"].values()
+    backlog = sum(1 for it in items if it["state"] == "verified" and it.get("ui"))
+    dec = s.get("decide") or {}
+    out = []
+    for role, name in (("build", "施工"), ("verify", "验收"), ("decide", "决策")):
+        rc = (CFG.get("roles") or {}).get(role) or {}
+        if role == "decide":
+            on = [] if not (dec.get("task") and not dec.get("done")) else (dec.get("items") or ["（批次）"])
+        else:
+            on = [k for k, it in s["items"].items() if it["state"] == ("building" if role == "build" else "verifying")]
+        why, until = None, None
+        if role in rl:
+            st, until, why = "rate_limited", TM.iso(rl[role]["until"]), (rl[role].get("why") or "")[:120]
+        elif on:
+            st = "busy"
+        elif not rc.get("cmd"):
+            st, why = "paused", "没配置命令"
+        elif role == "build" and backlog > LIM.get("owner_queue_pause", 5):
+            st, why = "paused", f"等你看效果的有 {backlog} 件（超过 {LIM.get('owner_queue_pause', 5)}），暂停新施工"
+        else:
+            st = "idle"
+        out.append({"role": role, "name": name, "status": st, "label": ROLE_LABELS[st], "items": on, "why": why, "until": until})
+    return out
+
+
+def stale_list(s):
+    hrs = float(LIM.get("stale_hours", CFG.get("stale_hours", 6)) or 0)
+    out = []
+    if hrs <= 0:
+        return out
+    for k, it in s["items"].items():
+        since = it.get("state_since")
+        if it["state"] in QUIET_STATES or not since or TM.now() - since < hrs * 3600:
+            continue
+        out.append({"key": k, "title": it["title"], "state": state_name(it), "raw": it["state"], "since": TM.iso(since),
+                    "hours": round((TM.now() - since) / 3600, 1)})
+    return sorted(out, key=lambda x: -x["hours"])
+
+
+# ---------- 项目目标 ----------
+GOAL_MAX = 200
+
+
+def check_goal(g):
+    g = (g or "").strip()
+    if len(g) > GOAL_MAX:
+        return None, f"项目目标最多 {GOAL_MAX} 字（现在 {len(g)}）"
+    if len(g.splitlines()) > 2:
+        return None, "项目目标写一两句（最多两行）"
+    if re.search(r"[\x00-\x08\x0b-\x1f\x7f]", g):
+        return None, "项目目标里有控制字符"
+    if scan_terms(g):
+        return None, "项目目标命中脱敏词表，请改用代称"
+    return g, None
+
+
+def cmd_goal(a):
+    """evo -p AB goal：看项目目标；goal set "一两句"：改；goal clear：清掉。外部 Agent 不能改。"""
+    act = a.action or "show"
+    if act == "show":
+        print(CFG.get("goal") or "（没写项目目标）"); return
+    refuse_agents("改项目目标")
+    g, err = check_goal(" ".join(a.text or []) if act == "set" else "")
+    if err:
+        sys.exit(err)
+    if act == "set" and not g:
+        sys.exit("项目目标是空的；要清掉用 evo goal clear")
+    p = _project_cfg_path(CODE); c = _read_json(p)
+    if g:
+        c["goal"] = g
+    else:
+        c.pop("goal", None)
+    tmp = p + ".tmp"
+    json.dump(c, open(tmp, "w", encoding="utf-8"), ensure_ascii=False, indent=2); os.replace(tmp, p)
+    print(f"{CODE} 项目目标：" + (g or "（已清掉）") + "。下一份任务书起生效")
+
+
+# ---------- evo log <件号> ----------
+KEY_RE = re.compile(r"^[A-Z]{2,4}-[A-Z]+-\d{3,}$")
+
+
+def read_state_ro(code=None):
+    """只读状态文件（不抢锁、不管暂停）：面板和 evo log 用。"""
+    p = os.path.join(HOME_DIR, code, "state", "state.json") if code else STATE
+    try:
+        return json.load(open(p, encoding="utf-8"))
+    except (OSError, ValueError, TypeError):
+        return {"items": {}}
+
+
+def item_diff(it, limit=1 << 20):
+    """这件的改动：工作区还在就看分支对主线；合并过就看合并提交。"""
+    try:
+        if it.get("worktree") and os.path.isdir(it["worktree"]):
+            base = git(it["worktree"], "merge-base", CFG["main_branch"], "HEAD")
+            d = git(it["worktree"], "diff", "--stat", "-p", base, "HEAD")
+        elif it.get("merged_sha"):
+            d = git(CFG["repo"], "diff", "--stat", "-p", it["merged_sha"] + "^1", it["merged_sha"])
+        else:
+            return ""
+    except RuntimeError as e:
+        return f"（读不出 diff：{e}）"
+    return d if len(d) <= limit else d[:limit] + "\n…（太长，截断）"
+
+
+def cmd_log(a):
+    if not KEY_RE.match(a.key or ""):
+        sys.exit("件号格式不对，例：TB-FIX-012")
+    s = read_state_ro(); it = s["items"].get(a.key)
+    evs = read_timeline(a.key)
+    if not it and not evs:
+        sys.exit(f"没有 {a.key}")
+    it = it or {}
+    if a.diff:
+        print(item_diff(it) or "（没有改动可看：还没施工，或工作区已清理且没有合并提交）"); return
+    if a.json:
+        print(json.dumps({"key": a.key, "title": it.get("title"), "state": state_name(it) if it else None, "raw": it.get("state"),
+                          "goal": CFG.get("goal") or None, "report": it.get("report"),
+                          "manual_checks": (it.get("report") or {}).get("manual_checks") or [],
+                          "has_diff": bool(it.get("worktree") and os.path.isdir(it.get("worktree") or "")) or bool(it.get("merged_sha")),
+                          "merged_sha": it.get("merged_sha"), "notes": it.get("owner_notes") or [], "events": evs}, ensure_ascii=False))
+        return
+    print(f"【{a.key}】{it.get('title', '')}  现在：{state_name(it) if it else '?'}")
+    for e in evs:
+        extra = {x: v for x, v in e.items() if x not in ("at", "item", "event", "body")}
+        print(f"  {e['at'][5:16].replace('T', ' ')}  {e['event']:<15} " + json.dumps(extra, ensure_ascii=False)[:200])
+
+
 def cmd_pull(a):
     """统一入口：把带 autopilot:ready 标签的 GitHub issue 登记进来。
     标签约定：scope:<目录>（可多个）、look（用户能感知：界面/交互/流程/文案；旧标签 ui、ux 也认）、product（要你点「做不做」）。
@@ -1578,6 +2002,7 @@ def cmd_pull(a):
                         "--json", "number,title,labels,body,author", "--limit", "50"], capture_output=True, text=True)
     trusted = set(CFG.get("trusted_authors") or [])
     pull_reports(s, trusted)
+    pull_item_comments(s, trusted)
     for iss in json.loads(r.stdout or "[]"):
         if str(iss["number"]) in seen:
             continue
@@ -1819,7 +2244,7 @@ LABELS = [("autopilot:ready", "0e8a16", "决策岗分拣完，接棒器可登记
          [(f"type:{k}", "c5def5", v) for k, v in KINDS.items()]
 
 
-def _setup_project(code, name, path, github, test_cmd, notes):
+def _setup_project(code, name, path, github, test_cmd, notes, goal=None):
     """只写项目自己的 config.json；岗位、模型、上限、提醒都在全局 ~/.evoloop/config.json。"""
     code = code.upper()
     if not re.fullmatch(r"[A-Z]{2,4}", code):
@@ -1833,6 +2258,8 @@ def _setup_project(code, name, path, github, test_cmd, notes):
             "trusted_authors": [github.split("/")[0]] if github else [], "test_cmd": test_cmd or "",
             "push_cmd": f"git push origin {mb}" if has_origin else "", "deploy_cmd": "", "policy_terms": "",
             "lessons_file": DEFAULTS["lessons_file"], "standards_file": DEFAULTS["standards_file"], "digest_issue": None}
+    if goal:
+        base["goal"] = goal
     if not has_origin:
         notes.append("没有 origin 远端：push_cmd 留空，合并后只在本地（之后在 config.json 补 push_cmd）")
     d = os.path.join(HOME_DIR, code); os.makedirs(os.path.join(d, "state"), exist_ok=True)
@@ -1849,8 +2276,16 @@ def _setup_project(code, name, path, github, test_cmd, notes):
     print(f"  · 下一步：evo -p {code} status；第一件建议先跑一个小的非界面件")
 
 
+def _goal_arg(a):
+    g, err = check_goal(getattr(a, "goal", None) or "")
+    if err:
+        raise SystemExit(err)
+    return g or None
+
+
 def cmd_new(a):
     """开新项目：建仓库骨架（AGENTS / 错题本 / 规范），可选在 GitHub 建私有仓库。"""
+    goal = _goal_arg(a)                   # 先校验，免得建了仓库才发现目标写得不对
     path = os.path.abspath(a.path); os.makedirs(path, exist_ok=True)
     notes = []
     if not os.path.isdir(os.path.join(path, ".git")):
@@ -1866,11 +2301,12 @@ def cmd_new(a):
     if a.github and a.create:
         r = subprocess.run(["gh", "repo", "create", a.github, "--private", "--source", path, "--push"], capture_output=True, text=True)
         notes.append("GitHub 私有仓库已建并推送" if r.returncode == 0 else "GitHub 建仓没成功：" + r.stderr.strip()[:120])
-    _setup_project(a.code, a.name, path, a.github, a.test, notes)
+    _setup_project(a.code, a.name, path, a.github, a.test, notes, goal)
 
 
 def cmd_import(a):
     """导入旧项目：不动它的代码和历史，只补登记、标签和缺的文档。"""
+    goal = _goal_arg(a)
     path = os.path.abspath(a.path)
     if not os.path.isdir(os.path.join(path, ".git")):
         raise SystemExit("这个目录不是 git 仓库")
@@ -1902,7 +2338,7 @@ def cmd_import(a):
     if not os.path.exists(ai):     # 只放文件不提交（导入不动历史），要不要提交你定
         open(ai, "w", encoding="utf-8").write(open(os.path.join(KIT, "templates", "project", "AGENT_INTERFACE.md"), encoding="utf-8").read())
         notes.append("放了 AGENT_INTERFACE.md（外部 Agent 怎么读、怎么报；未提交，要用就自己提交）")
-    _setup_project(a.code, a.name, path, gh, t, notes)
+    _setup_project(a.code, a.name, path, gh, t, notes, goal)
 
 
 def cmd_projects(a):
@@ -1947,6 +2383,65 @@ def panel_token(create=True):
     return t, tf, True
 
 
+# ---------- 看效果闸门里的产出物预览：本件工作区 artifacts/ 下的文件 ----------
+ARTIFACT_IMAGES = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".gif": "image/gif", ".webp": "image/webp"}
+ARTIFACT_MAX_FILES = 200
+
+
+def artifact_max():
+    try:
+        return int(float((GCFG.get("panel") or {}).get("artifact_max_mb", 5)) * 1024 * 1024)
+    except (TypeError, ValueError):
+        return 5 * 1024 * 1024
+
+
+def artifact_root(it):
+    wt = (it or {}).get("worktree")
+    d = os.path.join(wt, "artifacts") if wt else None
+    return os.path.realpath(d) if d and os.path.isdir(d) else None
+
+
+def artifact_list(it):
+    """列出 artifacts/ 下的文件（不跟随指到外面的软链），每项 {path, kind: image|html|file, bytes, too_big}。"""
+    root = artifact_root(it)
+    out = []
+    if not root:
+        return out
+    mx = artifact_max()
+    for dp, dns, fns in os.walk(root):
+        dns[:] = sorted(d for d in dns if not d.startswith("."))
+        for fn in sorted(fns):
+            if fn.startswith("."):
+                continue
+            full = os.path.join(dp, fn); real = os.path.realpath(full)
+            if os.path.commonpath([root, real]) != root or not os.path.isfile(real):
+                continue
+            ext = os.path.splitext(fn)[1].lower()
+            size = os.path.getsize(real)
+            out.append({"path": os.path.relpath(full, root).replace(os.sep, "/"), "bytes": size, "too_big": size > mx,
+                        "kind": "image" if ext in ARTIFACT_IMAGES else "html" if ext in (".html", ".htm") else "file"})
+            if len(out) >= ARTIFACT_MAX_FILES:
+                return out
+    return out
+
+
+def artifact_file(it, rel):
+    """取一个产出物的真实路径：只许在本件 artifacts/ 里（挡 ..、绝对路径、软链跑出去），超过上限不给。返回 (状态码, 路径, 错误)。"""
+    root = artifact_root(it)
+    if not root:
+        return 404, None, "这件没有 artifacts/（或工作区已清理）"
+    if not rel or "\x00" in rel or rel.startswith(("/", "\\")) or any(p in ("..", "") for p in rel.replace("\\", "/").split("/")):
+        return 400, None, "路径不合法"
+    real = os.path.realpath(os.path.join(root, rel))
+    if os.path.commonpath([root, real]) != root:
+        return 403, None, "不在本件 artifacts/ 里"
+    if not os.path.isfile(real):
+        return 404, None, "没有这个文件"
+    if os.path.getsize(real) > artifact_max():
+        return 413, None, f"文件超过 {artifact_max() // (1024 * 1024)}MB，不在面板里打开"
+    return 200, real, None
+
+
 LOGIN_HTML = """<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>循环面板 · 登录</title><style>body{font:15px -apple-system,"PingFang SC",sans-serif;background:#f6f5f2;display:flex;min-height:100vh;
 align-items:center;justify-content:center;margin:0}form{background:#fff;border:1px solid #e5e3de;border-radius:14px;padding:22px;width:300px}
@@ -1960,7 +2455,7 @@ def cmd_panel(a):
     """本机网页面板。默认只在本机 127.0.0.1；手机要看就 --host 绑 Tailscale 地址（别绑公网）。
     所有接口都要口令：浏览器先过登录页拿 cookie；脚本可带 Authorization: Bearer <口令>。"""
     from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
-    from urllib.parse import parse_qs
+    from urllib.parse import parse_qs, unquote, quote
     from http.cookies import SimpleCookie
     me = [sys.executable, SELF]
     token, where, fresh = panel_token()
@@ -2022,6 +2517,35 @@ def cmd_panel(a):
             if m and m.group(1) in list_projects():
                 rc, o, e = run("-p", m.group(1), "status", "--json")
                 return self.send(200 if rc == 0 else 500, o if rc == 0 else json.dumps({"error": e[-200:]}, ensure_ascii=False))
+            m = re.fullmatch(r"/api/(item|diff)/([A-Z]{2,4})/([A-Z]{2,4}-[A-Z]+-\d{3,})", path)
+            if m and m.group(2) in list_projects():               # 每件时间线 / 改动
+                rc, o, e = run("-p", m.group(2), "log", m.group(3), "--json" if m.group(1) == "item" else "--diff")
+                if m.group(1) == "diff":
+                    return self.send(200 if rc == 0 else 404, o if rc == 0 else e[-200:], "text/plain; charset=utf-8",
+                                     [("X-Content-Type-Options", "nosniff")])
+                return self.send(200 if rc == 0 else 404, o if rc == 0 else json.dumps({"error": e[-200:]}, ensure_ascii=False))
+            m = re.fullmatch(r"/api/artifacts/([A-Z]{2,4})/([A-Z]{2,4}-[A-Z]+-\d{3,})", path)
+            if m and m.group(1) in list_projects():               # 看效果闸门里的产出物清单
+                it = read_state_ro(m.group(1))["items"].get(m.group(2)) or {}
+                return self.send(200, json.dumps({"item": m.group(2), "files": artifact_list(it),
+                                                  "manual_checks": (it.get("report") or {}).get("manual_checks") or [],
+                                                  "max_bytes": artifact_max()}, ensure_ascii=False))
+            m = re.fullmatch(r"/api/artifact/([A-Z]{2,4})/([A-Z]{2,4}-[A-Z]+-\d{3,})/(.+)", path)
+            if m and m.group(1) in list_projects():               # 单个产出物：防目录穿越、限大小、不让浏览器按网页执行
+                it = read_state_ro(m.group(1))["items"].get(m.group(2)) or {}
+                code_, f, err = artifact_file(it, unquote(m.group(3)))
+                if err:
+                    return self.send(code_, json.dumps({"error": err}, ensure_ascii=False))
+                ext = os.path.splitext(f)[1].lower()
+                hd = [("X-Content-Type-Options", "nosniff"), ("Content-Security-Policy", "default-src 'none'; sandbox")]
+                if ext in ARTIFACT_IMAGES:
+                    ct = ARTIFACT_IMAGES[ext]
+                elif ext in (".html", ".htm"):
+                    ct = "text/plain; charset=utf-8"            # 页面拿文本放进 iframe srcdoc（沙盒）；直接打开也只是文本
+                else:
+                    ct = "application/octet-stream"
+                    hd.append(("Content-Disposition", "attachment; filename*=UTF-8''" + quote(os.path.basename(f))))
+                return self.send(200, open(f, "rb").read(), ct, hd)
             self.send(404, "{}")
 
         def do_POST(self):
@@ -2046,6 +2570,11 @@ def cmd_panel(a):
                 args = ["-p", code, "approve", body["gate"], body["choice"]] + ([body["why"]] if body.get("why") else [])
             elif self.path == "/api/feedback":
                 args = ["-p", code, "feedback", body["words"]]
+            elif self.path == "/api/note":                      # 件页「补充反馈」：作废它等你的旧闸门
+                args = ["-p", code, "feedback", "--item", str(body.get("item") or ""), "--source", "面板", str(body.get("words") or "")]
+            elif self.path == "/api/goal":                      # 项目设置：项目目标（空 = 清掉）；子命令里拒绝外部 Agent、校验长度
+                g = str(body.get("goal") or "").strip()
+                args = ["-p", code, "goal", "set", g] if g else ["-p", code, "goal", "clear"]
             elif self.path == "/api/models":                    # 空 = 跟随全局；子命令里会拒绝外部 Agent、校验模型名
                 model = str(body.get("model") or "").strip()
                 args = ["-p", code, "models", "set" if model else "clear", str(body.get("role") or "")] + ([model] if model else [])
@@ -2101,7 +2630,20 @@ def cmd_suite(a):
 
 
 def cmd_feedback(a):
-    """老板以用户视角提的意见，原话进 GitHub issue，决策岗分拣成任务。"""
+    """老板以用户视角提的意见，原话进 GitHub issue，决策岗分拣成任务。
+    --item <件号>：对某件补反馈，它等你的旧闸门作废、改完重开（不开 issue；件有 issue 就在上面留一条）。"""
+    if getattr(a, "item", None):
+        refuse_agents("对某件补反馈（会作废等老板的闸门）")
+        s = load(); it = s["items"].get(a.item)
+        if not it:
+            sys.exit(f"没有 {a.item}")
+        if it["state"] in ("merged", "shipped", "dropped", "pushing"):
+            sys.exit(f"{a.item} 已是{NAMES.get(it['state'])}，补反馈请另提一件：evo feedback \"…\"")
+        if not a.words.strip():
+            sys.exit("反馈是空的")
+        print(feedback_item(s, a.item, it, a.words, getattr(a, "source", None) or "命令行"))
+        gh_comment(it, f"老板补充反馈：\n> {a.words.strip()}")
+        save(s); return
     if not CFG.get("github_repo"):
         sys.exit("配置里没有 github_repo，先在 config.json 填上")
     agent = os.environ.get("EVO_AGENT")
@@ -2213,12 +2755,18 @@ def status_doc(s, pend):
         "last_tick": read_heartbeats().get(CODE),
         "count": cnt,
         "stuck": sum(1 for it in s["items"].values() if it.get("stalled") or it["state"] in ("escalated", "asking")),
+        "goal": CFG.get("goal") or None,
+        "roles": roles_doc(s),
+        "stale": stale_list(s),
+        "no_live_path": no_live_list(s),
         "gates": gates,
         "items": [{"key": k, "title": it["title"], "kind": it.get("kind"), "state": state_name(it), "raw": it["state"],
                    "waiting": waiting_reason(it), "window": it.get("window"),
                    "stalled": bool(it.get("stalled")), "look": bool(it.get("ui")), "round": it.get("round", 0),
                    "issue": it.get("issue"), "parent": it.get("parent"),
                    "manual_checks": (it.get("report") or {}).get("manual_checks") or [],
+                   "state_since": TM.iso(it["state_since"]) if it.get("state_since") else None,
+                   "no_live_path": bool(it.get("no_live")), "look_gate": it["gates"].get("look"),
                    "usage": {"runs": (it.get("usage") or {}).get("runs", 0), "minutes": round(item_minutes(it), 1)}}
                   for k, it in s["items"].items()],
         "rate_limits": rl,
@@ -2235,10 +2783,34 @@ def refuse_agents(what):
         sys.exit(f"{what}只能老板本人做（面板 / Telegram 按钮 / 本机命令）；外部 Agent（EVO_AGENT={os.environ['EVO_AGENT']}）不行。")
 
 
+def gate_owner(s, gid):
+    """闸门属于哪件、哪一类：(件号, 类别) 或 (None, None)。"""
+    for k, it in s["items"].items():
+        if gid == it["gates"].get("look"):
+            return k, "look"
+        if gid == it["gates"].get("do"):
+            return k, "do"
+        if gid == it.get("ship_gate"):
+            return k, "ship"
+    ask = (s.get("owner_asks") or {}).get(gid)
+    if ask:
+        return ask.get("key"), "ask"
+    return None, None
+
+
 def cmd_approve(a):
     refuse_agents("批闸门")
     s = load()
+    sup = (s.get("superseded_gates") or {}).get(a.gate)
+    if sup:                                              # 作废的闸门：任何人、任何途径点了都不执行
+        sys.exit(f"闸门 {a.gate} 已作废（{sup.get('item')} 有新反馈：{sup.get('why', '')[:60]}），这次不执行；请看新开的闸门")
+    k0, kind0 = gate_owner(s, a.gate)
+    if kind0 == "look" and (s["items"][k0].get("look_bound") or {}).get("gate") not in (None, a.gate):
+        sys.exit(f"闸门 {a.gate} 不是 {k0} 当前这一版的看效果闸门，这次不执行")
     orca("orchestration", "gate-resolve", "--from", coord(s), "--id", a.gate, "--resolution", a.choice)
+    bad = a.choice in ("打回", "不做", "不同意", "再等等")
+    for k1 in ([x for x, it in s["items"].items() if it.get("ship_gate") == a.gate] if kind0 == "ship" else [k0] if k0 else []):
+        tl(k1, "gate_reject" if bad else "gate_approve", kind=kind0, gate=a.gate, choice=a.choice, words=a.why)
     ext = (s.get("ext_gates") or {}).pop(a.gate, None)
     if ext:                                             # 外部来报里的红线请求：老板定
         orca("orchestration", "task-update", "--from", coord(s), "--id", ext["task"], "--status", "completed", ok=False)
@@ -2258,6 +2830,8 @@ def cmd_approve(a):
             drop_item(s, k, it, "老板选了不做")
         if a.gate == it["gates"].get("look") and a.choice == "通过":
             look_fingerprint(it)
+        if a.gate == it["gates"].get("do") and a.choice != "不做":
+            it["do_ok"] = True
         if a.gate == it["gates"].get("look") and a.choice == "打回":
             it.pop("look_patch", None)
             it["round"] += 1
@@ -2265,6 +2839,7 @@ def cmd_approve(a):
             g, _ = orca("orchestration", "gate-create", "--from", coord(s), "--task", it["merge"],
                         "--question", f"看效果（第 {it['round']} 轮）：{it['title']}", "--options", json.dumps(["通过", "打回"]))
             it["gates"]["look"] = g["gate"]["id"]
+            tl(k, "gate_open", kind="look", gate=g["gate"]["id"], note="打回后重开，改完验收通过才轮到你")
     batch = [k for k, it in s["items"].items() if it.get("ship_gate") == a.gate]
     if batch:
         ship_resolved(s, batch, a.choice == "上线")
@@ -2295,11 +2870,14 @@ def ship_resolved(s, batch, go):
         if r.returncode:
             tail = (r.stdout + r.stderr)[-300:]
             log(s, f"上线命令失败，{len(batch)} 件留在可收菜：{tail}")
+            for k in batch:
+                tl(k, "deploy_failed", tail=tail[-300:])
             notify("deploy_failed", "上线失败", f"{len(batch)} 件留在可收菜：{tail[-200:]}", items=batch)
             return
         log(s, "上线命令成功")
     for k in batch:
         it = s["items"][k]; it["state"] = "shipped"
+        tl(k, "ship")
         gh_comment(it, "已上线。")
         gh_close(it)
 
@@ -2431,7 +3009,7 @@ if __name__ == "__main__":
     x.add_argument("--window", help='时间窗：trading:cn，或 "mon-fri 09:30-11:30,13:00-15:00"（Asia/Shanghai），窗外不开工')
     for nm in ("new", "import"):
         x = sp.add_parser(nm); x.add_argument("code"); x.add_argument("--name", required=True); x.add_argument("--path", required=True)
-        x.add_argument("--github"); x.add_argument("--test")
+        x.add_argument("--github"); x.add_argument("--test"); x.add_argument("--goal", help="项目目标（一两句），写进每份任务书开头")
         if nm == "new":
             x.add_argument("--create", action="store_true", help="在 GitHub 建私有仓库并推送")
     sp.add_parser("projects"); sp.add_parser("once")
@@ -2441,7 +3019,10 @@ if __name__ == "__main__":
     sp.add_parser("tick"); x = sp.add_parser("run"); x.add_argument("--every", type=int, default=30)
     x = sp.add_parser("status"); x.add_argument("--json", action="store_true"); x = sp.add_parser("approve"); x.add_argument("gate"); x.add_argument("choice"); x.add_argument("why", nargs="?")
     sp.add_parser("ship"); sp.add_parser("pull"); sp.add_parser("watchdog")
-    x = sp.add_parser("feedback"); x.add_argument("words")
+    x = sp.add_parser("feedback"); x.add_argument("words"); x.add_argument("--item", help="对某件补反馈（作废它等你的旧闸门）")
+    x.add_argument("--source", help=argparse.SUPPRESS)
+    x = sp.add_parser("log"); x.add_argument("key"); x.add_argument("--json", action="store_true"); x.add_argument("--diff", action="store_true")
+    x = sp.add_parser("goal"); x.add_argument("action", nargs="?", choices=["show", "set", "clear"]); x.add_argument("text", nargs="*")
     x = sp.add_parser("suite"); x.add_argument("command", nargs=argparse.REMAINDER)
     sp.add_parser("retro")
     x = sp.add_parser("models", help="核对施工/验收模型；-p 代号 models set|clear build|verify [模型] 改单项目覆盖")
@@ -2453,4 +3034,5 @@ if __name__ == "__main__":
     if not HAS_PROJECT and a.cmd not in ("new", "import", "projects", "status", "run", "suite", "panel", "notify-test", "bot", "watchdog", "models"):
         sys.exit(f"有多个项目，请加 -p <代号>：{', '.join(list_projects()) or '（还没有项目）'}")
     {"panel": cmd_panel, "new": cmd_new, "import": cmd_import, "projects": cmd_projects, "once": cmd_once, "add": cmd_add, "tick": cmd_tick, "run": cmd_run, "status": cmd_status, "approve": cmd_approve, "ship": cmd_ship, "pull": cmd_pull, "digest": cmd_digest, "retry": cmd_retry, "resume": cmd_resume, "feedback": cmd_feedback, "suite": cmd_suite, "retro": cmd_retro,
-     "notify-test": cmd_notify_test, "bot": cmd_bot, "watchdog": cmd_watchdog, "models": cmd_models}[a.cmd](a)
+     "notify-test": cmd_notify_test, "bot": cmd_bot, "watchdog": cmd_watchdog, "models": cmd_models, "log": cmd_log,
+     "goal": cmd_goal}[a.cmd](a)
