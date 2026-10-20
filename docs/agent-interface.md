@@ -24,6 +24,7 @@
   "project": "TB",
   "name": "土布",
   "generated_at": "2026-10-20T12:00:00+08:00",
+  "last_tick": "2026-10-20T11:59:30+08:00",
   "count": {"queued": 1, "building": 1, "merged": 2},
   "stuck": 0,
   "gates": [
@@ -49,9 +50,10 @@
 
 | 字段 | 含义 |
 |---|---|
+| `last_tick` | 本项目上次接棒一轮结束的时间（读 `~/.evoloop/heartbeat.json`）；从没转过为 `null`。第十轮新增 |
 | `count` | 按内部状态（`raw`）计数 |
 | `stuck` | 疑似卡住 + 交决策岗 + 有提问 的件数 |
-| `gates[].kind` | `do` 做不做 · `look` 看效果 · `ship` 上线 · `external` 外部请求碰红线 · `other` |
+| `gates[].kind` | `do` 做不做 · `look` 看效果 · `ship` 上线 · `external` 外部请求碰红线 · `ask` 决策岗转来问老板的（选项 同意/不同意）· `other` |
 | `gates[].waiting_since` | 从什么时候开始等老板（看效果闸门从验收通过才算）；没开始计时为 `null` |
 | `items[].state` | 给人看的中文状态：排队、施工中、待验收、验收中、验收通过、已合并·等推送、已合并·可收菜、已上线、交决策岗、有提问、不做，另有 **等窗口**、**等额度** |
 | `items[].raw` | 内部状态：`queued` `building` `built` `verifying` `verified` `pushing` `merged` `shipped` `escalated` `asking` `dropped` |
@@ -62,6 +64,16 @@
 | `usage.tokens` | 配了 `magpie.usage_url` 才有：`{"by_model": {...}, "project": 数或 null, "source": "..."}`；否则 `null` |
 
 不带 `-p` 的 `evo status` 是多项目总览（纯文本，不是稳定接口）；要多项目就对每个代号各跑一次 `--json`（`evo projects` 列代号）。
+
+### 2.1b `~/.evoloop/heartbeat.json`（心跳）
+
+每个项目每接棒一轮写一次：`{"TB": "2026-10-20T12:00:00+08:00", "AB": "..."}`。外部 Agent 可以直接读它判断循环还活着没有。
+`evo watchdog`（launchd 定时跑，或 `evo bot` 每轮顺带）发现某个项目超过 `limits.heartbeat_stale_minutes`（默认 10）分钟没更新，就推一条 `stalled`；恢复后发 `watchdog_recovered`，再停才再推。launchd 定时跑的写法：
+
+```xml
+<key>ProgramArguments</key><array><string>/usr/bin/python3</string><string>…/kit/bin/evo</string><string>watchdog</string></array>
+<key>StartInterval</key><integer>300</integer>
+```
 
 ### 2.2 `~/.evoloop/outbox.jsonl`（事件，schema_version 1）
 
@@ -76,11 +88,13 @@
 | kind | level | 什么时候 |
 |---|---|---|
 | `gate_waiting` | push | 闸门 5 分钟（`notify.gate_push_minutes`）没人处理；`data.options` 是选项 |
-| `stalled` | push | 件疑似卡住（工人没了或超时没回报） |
+| `stalled` | push | 件疑似卡住（工人没了或超时没回报）；或接棒器心跳超过 10 分钟没更新（看门狗发，`item` 为空，同一次停只发一次） |
 | `state_corrupt` | push | 项目状态文件损坏，接棒暂停 |
 | `push_failed` | push | 推送 GitHub 连续失败 3 次 |
 | `rate_limited` | push | 岗位订阅额度用完，暂停；`data.until`、`data.roles` |
 | `usage_abnormal` | push | 一件的派工次数或工人分钟数超过上限 |
+| `deploy_failed` | push | 点了「上线」但上线命令失败；件留在可收菜，`data.items` |
+| `watchdog_recovered` | info | 看门狗报过停的项目又转起来了 |
 | `gate_created` | info | 新闸门（做不做 / 看效果 / 上线） |
 | `escalated` | info | 交决策岗（返工超限、合并受阻、远端冲突、工作区不干净） |
 | `redline_request` | info | 外部请求碰红线，建了老板闸门（5 分钟没处理会再发 `gate_waiting`） |
