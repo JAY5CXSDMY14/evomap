@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "evo 施工交卷",
+  "description": "施工岗最后一条 worker_done 的正文里放一个 ```json 块，内容按此格式。接棒器据此决定送验收、返工还是交决策岗。改编自 mu-zi-lee/hitl-dev-loop 的 report.schema.json。",
+  "type": "object",
+  "required": ["status", "summary", "changes", "tests", "unfinished", "risks", "manual_checks"],
+  "additionalProperties": true,
+  "properties": {
+    "status": {"enum": ["done", "in_progress", "blocked"], "description": "done=提请验收；in_progress=没做完（会自动返工）；blocked=要决策岗拍板"},
+    "summary": {"type": "string", "minLength": 1, "description": "用户现在会看到什么，一两句"},
+    "changes": {"type": "array", "items": {"type": "object", "required": ["path", "why"], "properties": {"path": {"type": "string"}, "why": {"type": "string"}}}},
+    "tests": {"type": "array", "description": "只写真跑过的命令；没跑的写 not_run", "items": {"type": "object", "required": ["command", "result"],
+              "properties": {"command": {"type": "string"}, "result": {"enum": ["passed", "failed", "not_run"]}}}},
+    "unfinished": {"type": "array", "items": {"type": "string"}},
+    "risks": {"type": "array", "items": {"type": "string"}},
+    "manual_checks": {"type": "array", "items": {"type": "string"}, "description": "老板在「看效果」时该看哪几处，会原样推给他"}
+  }
+}

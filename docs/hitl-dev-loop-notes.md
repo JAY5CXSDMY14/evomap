@@ -4,7 +4,7 @@ lang: zh
 ---
 ## A 结论
 ```callout ok 值得借 6 处，方向不用改
-mu-zi-lee/hitl-dev-loop 和 evo 是同一类东西：主 Agent 拆活，编码 Agent 在独立 worktree 里干，调度脚本判定完成、验证、合并，人只看效果和拍板。它是 Claude Code 插件加 bash 脚本，单机、单项目。evo 已经多出了多项目、GitHub issue 队列、手机通知、夜审错题本和外部 Agent 接口。它强在「施工这一段」抠得更细，有 6 处值得直接搬进 evo。
+mu-zi-lee/hitl-dev-loop 和 evo 是同一类东西：主 Agent 拆活，编码 Agent 在独立 worktree 里干，调度脚本判定完成、验证、合并，人只看效果和拍板。它是 Claude Code 插件加 bash 脚本，单机、单项目。evo 已经多出了多项目、GitHub issue 队列、手机通知、夜审错题本和外部 Agent 接口。它强在「施工这一段」抠得更细，有 6 处值得直接搬进 evo。前三处（JSON 交卷、scope 越界打回、git 配置守卫）已做进 kit，带 7 个自动测试。
 ```
 
 ## B 值得搬进 evo 的

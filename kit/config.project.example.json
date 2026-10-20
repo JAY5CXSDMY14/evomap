@@ -15,6 +15,12 @@
   "lessons_file": "docs/LESSONS.md",
   "standards_file": "docs/code-standards.md",
   "digest_issue": null,
+  "scope_allow": ["artifacts/"],
+  "_scope_allow": "任何件都可以写的目录（证据）。其余改动必须落在本件 scope 内，否则打回返工",
+  "report_required": true,
+  "_report_required": "施工必须按 templates/report.schema.json 交 JSON；真机上模型实在交不好时可临时关掉",
+  "git_guard": true,
+  "_git_guard": "每轮检查并复原 .git/config 的 core.worktree / core.bare；本仓库确实要用 core.worktree 才关",
   "overrides": {
     "_说明": "可选：覆盖全局配置里的任意键。limits.builders 是本项目自己的并行上限（整机上限 builders_total 只认全局）。",
     "limits": {"builders": 1}

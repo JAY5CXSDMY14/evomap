@@ -407,6 +407,9 @@ def do_merge(s, key, it):
            if re.search(r"(^|/)\.env|\.local$|(^|/)\.gitignore$", f)]
     if bad:
         return "危险文件（契约 R6/R8）：" + ", ".join(bad)
+    oos = out_of_scope(it)
+    if oos:
+        return "改动超出本件范围：" + ", ".join(oos[:8])
     # 先留记录再合并：验收的是哪一版、合并前在哪个提交上跑了什么（magpie：没有记录的合并事后查不了）
     gh_comment(it, f"合并记录：验收于 {it.get('verified_sha', '?')[:8]}；对齐主线后在 "
                    f"{it.get('premerge', {}).get('at', '?')[:8]} 跑 `{t or '（未配置测试）'}`：通过。"
@@ -515,6 +518,121 @@ def rework(s, k, it, why):
     it["model_i"] += 1   # 返工换一个施工模型，避免同一个模型反复犯同样的错
     it["state"] = "queued"; it.pop("verified_sha", None)
     log(s, f"{k} 第 {it['round']} 轮返工：{why[:60]}")
+
+
+# ---------- 交卷格式、范围、git 配置守卫（借鉴 mu-zi-lee/hitl-dev-loop） ----------
+REPORT_STATUS = ("done", "in_progress", "blocked")
+TEST_RESULTS = ("passed", "failed", "not_run")
+
+
+def parse_report(body):
+    """施工交卷：worker_done 正文里的 ```json 块（格式见 templates/report.schema.json）。
+    返回 (报告, 错误)。只做轻量校验，不依赖 jsonschema。"""
+    body = body or ""
+    m = re.findall(r"```(?:json)?\s*(\{.*?\})\s*```", body, re.S)
+    raw = m[-1] if m else None
+    if raw is None:
+        i, j = body.find("{"), body.rfind("}")
+        raw = body[i:j + 1] if 0 <= i < j else None
+    if raw is None:
+        return None, "没有 JSON 交卷"
+    try:
+        r = json.loads(raw)
+    except ValueError as e:
+        return None, f"JSON 读不出：{e}"
+    if not isinstance(r, dict):
+        return None, "交卷不是对象"
+    if r.get("status") not in REPORT_STATUS:
+        return None, f"status 必须是 {'/'.join(REPORT_STATUS)}"
+    if not isinstance(r.get("summary"), str) or not r["summary"].strip():
+        return None, "缺 summary"
+    for f in ("changes", "tests", "unfinished", "risks", "manual_checks"):
+        if not isinstance(r.setdefault(f, []), list):
+            return None, f"{f} 必须是列表"
+    for t in r["tests"]:
+        if not isinstance(t, dict) or not t.get("command") or t.get("result") not in TEST_RESULTS:
+            return None, f"tests 每项要有 command 和 result（{'/'.join(TEST_RESULTS)}）"
+    return r, None
+
+
+def in_scope(path, scope):
+    """scope 为空、「.」或「*」表示整个仓库；另有 scope_allow（默认 artifacts/，证据目录）任何件都可以写。"""
+    allow = list(scope) + list(CFG.get("scope_allow", ["artifacts/"]))
+    if any(x.strip() in ("", ".", "./", "*") for x in scope) or not scope:
+        return True
+    p = path[2:] if path.startswith("./") else path
+    return any(p == x.rstrip("/") or p.startswith(x.rstrip("/") + "/") or (not x.endswith("/") and p.startswith(x)) for x in allow)
+
+
+def out_of_scope(it):
+    wt = it.get("worktree")
+    if not wt:
+        return []
+    base = git(wt, "merge-base", CFG["main_branch"], "HEAD", check=False)
+    if not base:
+        return []
+    files = git(wt, "diff", "--name-only", base, "HEAD", check=False).splitlines()
+    return [f for f in files if f and not in_scope(f, it.get("scope") or [])]
+
+
+def guard_git(s):
+    """Agent 在 worktree 里乱改共享配置（core.worktree / core.bare），主目录所有 git 命令都会指到别处。
+    每轮先查：改了就复原并留记录；复原后主目录还是指错，就整个项目暂停等人。"""
+    if CFG.get("git_guard") is False:
+        return
+    repo = CFG["repo"]; fixed = []
+    wt = git(repo, "config", "--local", "--get", "core.worktree", check=False)
+    if wt:
+        git(repo, "config", "--local", "--unset", "core.worktree", check=False); fixed.append(f"core.worktree={wt}")
+    if git(repo, "config", "--local", "--get", "core.bare", check=False) == "true":
+        git(repo, "config", "--local", "core.bare", "false", check=False); fixed.append("core.bare=true")
+    if fixed:
+        log(s, "复原了被改动的 git 共享配置：" + "，".join(fixed))
+        notify("git_repaired", "git 配置被改动，已复原", "，".join(fixed))
+    top = os.path.realpath(git(repo, "rev-parse", "--show-toplevel", check=False) or "?")
+    base = s.setdefault("git_top", top)
+    if top != base:
+        msg = f"主目录 git 指向 {top}，登记时是 {base}"
+        open(PAUSED, "w", encoding="utf-8").write(msg)
+        notify("state_corrupt", "git 主目录指错了，接棒暂停", msg)
+        save(s)
+        sys.exit(msg + "；接棒暂停，处理好后 evo -p " + CODE + " resume")
+
+
+def build_reject(s, k, it, why):
+    """施工交付不合格：算一轮返工，超限交决策岗。"""
+    it["round"] += 1
+    if it["round"] > LIM["rework_rounds"]:
+        it["state"] = "escalated"; log(s, f"{k} 返工 {it['round']-1} 轮仍不合格，交决策岗：{why[:60]}")
+        notify("escalated", "需要决策", f"{it['title']}：{why[:80]}", item=k)
+    else:
+        rework(s, k, it, why)
+
+
+def check_delivery(s, k, it, body):
+    """施工说交了：先看交卷格式，再看报告内容，最后看改动是否越界。返回 True 表示可以送验收。"""
+    rep, err = parse_report(body)
+    if err:
+        if CFG.get("report_required", True):
+            build_reject(s, k, it, f"交卷格式不对（{err}）：最后一条 worker_done 正文里放一个 ```json 块，字段见施工岗规则第 7 条")
+            return False
+        rep = None
+    if rep:
+        it["report"] = rep
+        if rep["status"] == "blocked":
+            it["state"] = "asking"; it["ask"] = rep["summary"] + ("；" + "；".join(map(str, rep["unfinished"])) if rep["unfinished"] else "")
+            log(s, f"{k} 施工报告卡住：{it['ask'][:60]} → 交决策岗"); return False
+        if rep["status"] == "in_progress":
+            build_reject(s, k, it, "报告说没做完：" + ("；".join(map(str, rep["unfinished"])) or rep["summary"])); return False
+        red = [t["command"] for t in rep["tests"] if t["result"] == "failed"]
+        if red:
+            build_reject(s, k, it, "报告里有没通过的测试：" + "；".join(red)); return False
+    bad = out_of_scope(it)
+    if bad:
+        build_reject(s, k, it, f"改到了范围（{','.join(it.get('scope') or [])}）以外：{', '.join(bad[:8])}。"
+                     "需要改别处先 ask 决策岗，不要自己扩大范围")
+        return False
+    return True
 
 
 # ---------- 订阅额度（限流）：岗位暂停到重置时间，不算失败、不算返工 ----------
@@ -841,7 +959,7 @@ def red_lines(text):
 
 # ---------- 接棒一轮 ----------
 def cmd_tick(a=None):
-    s = load(); c = coord(s); T = tasks(s)
+    s = load(); guard_git(s); c = coord(s); T = tasks(s)
     by_task = {}
     for k, it in s["items"].items():
         for r in ("build", "verify", "merge"):
@@ -901,7 +1019,7 @@ def cmd_tick(a=None):
             elif dirty:   # 返工用完了还是不干净：不送验收（以前会把脏工作区送去验收）
                 it["state"] = "escalated"; log(s, f"{k} 返工 {it['round']} 轮工作区仍不干净，交决策岗")
                 notify("escalated", "需要决策", f"{it['title']} 工作区一直不干净", item=k)
-            else:
+            elif check_delivery(s, k, it, m.get("body") or ""):
                 it["state"] = "built"; log(s, f"{k} 施工交付 → 自动接验收")
         elif typ == "worker_done" and role == "verify":
             if outcome == "succeeded":
@@ -909,7 +1027,9 @@ def cmd_tick(a=None):
                 it["verified_patch"] = patch_id(it["worktree"])
                 log(s, f"{k} 验收通过（{it['verified_sha'][:8]}）")
                 if it["ui"]:
-                    notify("gate_created", "等你看效果", it["title"], item=k, gate=it["gates"].get("look"))
+                    mc = (it.get("report") or {}).get("manual_checks") or []
+                    notify("gate_created", "等你看效果", it["title"] + ("\n请看：" + "；".join(map(str, mc)) if mc else ""),
+                           item=k, gate=it["gates"].get("look"), manual_checks=mc)
             else:
                 it["round"] += 1
                 if it["round"] > LIM["rework_rounds"]:
@@ -1589,6 +1709,7 @@ def status_doc(s, pend):
                    "waiting": waiting_reason(it), "window": it.get("window"),
                    "stalled": bool(it.get("stalled")), "look": bool(it.get("ui")), "round": it.get("round", 0),
                    "issue": it.get("issue"), "parent": it.get("parent"),
+                   "manual_checks": (it.get("report") or {}).get("manual_checks") or [],
                    "usage": {"runs": (it.get("usage") or {}).get("runs", 0), "minutes": round(item_minutes(it), 1)}}
                   for k, it in s["items"].items()],
         "rate_limits": rl,

@@ -33,7 +33,7 @@
   "items": [
     {"key": "TB-FIX-012", "title": "修复注册页验证码不刷新", "kind": "fix",
      "state": "施工中", "raw": "building", "waiting": null, "window": null,
-     "stalled": false, "look": false, "round": 0, "issue": "41", "parent": null,
+     "stalled": false, "look": false, "round": 0, "issue": "41", "parent": null, "manual_checks": [],
      "usage": {"runs": 1, "minutes": 12.5}}
   ],
   "rate_limits": [
@@ -56,6 +56,7 @@
 | `items[].state` | 给人看的中文状态：排队、施工中、待验收、验收中、验收通过、已合并·等推送、已合并·可收菜、已上线、交决策岗、有提问、不做，另有 **等窗口**、**等额度** |
 | `items[].raw` | 内部状态：`queued` `building` `built` `verifying` `verified` `pushing` `merged` `shipped` `escalated` `asking` `dropped` |
 | `items[].waiting` | 排队没动的原因：`window`（时间窗外）、`rate_limit`（该岗位额度暂停）或 `null` |
+| `items[].manual_checks` | 施工交卷里写的「看效果时该看哪几处」（列表，可能为空） |
 | `items[].usage` | 这件累计派工次数、工人分钟数（含正在跑的） |
 | `rate_limits` | 现在因订阅额度暂停的岗位；`guessed: true` 表示提示里没写重置时间，按默认 60 分钟 |
 | `usage.tokens` | 配了 `magpie.usage_url` 才有：`{"by_model": {...}, "project": 数或 null, "source": "..."}`；否则 `null` |

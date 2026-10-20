@@ -121,12 +121,18 @@ Telegram 环境变量改名 `EVO_TG_TOKEN` / `EVO_TG_CHAT`，旧名 `TUBU_TG_TOK
 - webhook 没配密钥时会借用默认环境变量的密钥签名 → 每个 webhook 只用自己的 `secret_env`。
 - 额度提示：回报正文里的一句「rate limited」会盖过终端里带重置时间的那句 → 优先取能解析出时间的那句。
 
+## 第九轮：借鉴 hitl-dev-loop 的三道检查（均有自动测试，共 97 个）
+- **JSON 交卷**：施工最后一条 worker_done 正文放一个 ```json 块（`templates/report.schema.json`：status / summary / changes / tests / unfinished / risks / manual_checks）。没按格式交、`in_progress`、报告里有 `failed` 的测试 → 打回返工；`blocked` → 交决策岗。`manual_checks` 跟着「等你看效果」一起推给你，也出现在 `status --json`。真机上模型交不好时可以先把 `report_required` 设成 false。
+- **改动不许越界**：施工交付时和合并前各查一次，改动文件必须落在本件 scope 内（`scope_allow` 默认放行 `artifacts/` 证据目录），越界直接返工，不送验收、不合并。
+- **git 共享配置守卫**：每轮先查主仓库 `.git/config`，发现 `core.worktree` 被写入或 `core.bare=true` 就复原并记一笔；复原后主目录 git 仍指向别处 → 项目暂停推送，等 `evo resume`。`git_guard: false` 可关。
+
 ## 只能在 Mac mini 上验的
 - DSH、Claude Code、Codex 真跑时会不会按说明回报（Orca 已认得 `dsh`）。
 - magpie 下施工和验收同用一个工具时，各自指定模型是否生效。
 - Hook 日志照常记录；手机提醒。
 - `orca terminal read --terminal <句柄> --json` 回的字段名（按文档是累积输出；evo 依次认 `text` / `output` / `content` / `lines`），以及 Codex、Claude Code 额度用完时的原文是否被现有规则认出。
 - Telegram 真机：按钮回调、群聊里 `EVO_TG_OWNER` 过滤；国内要 `HTTPS_PROXY`。
+- 真实模型能否稳定按 JSON 交卷；Orca worker_done 正文有没有长度上限。
 - 钥匙串：第一次 `security add-generic-password` 可能弹授权框。
 - magpie 有没有用量接口、记录长什么样（`magpie.usage_url` 先留空）。
 - 真工人的权限弹窗：Claude Code 建议用 acceptEdits 模式，危险动作仍由现有 Hook 拦截；DSH 同理配置。

@@ -13,7 +13,7 @@ while IFS= read -r line; do
     else
       [[ -f FAIL_ONCE && ! -f .failed ]] && { touch .failed; out=failed; }
     fi
-    $ORCA orchestration send --from "${ORCA_TERMINAL_HANDLE:-worker}" --type worker_done --subject "$ROLE $out" --body "mock $ROLE $out. nothing else. none left." --task-id $T --dispatch-id $D --outcome $out --json >/dev/null
+    $ORCA orchestration send --from "${ORCA_TERMINAL_HANDLE:-worker}" --type worker_done --subject "$ROLE $out" --body "$( [[ $ROLE == build ]] && printf '```json\n{"status":"done","summary":"mock %s","changes":[],"tests":[],"unfinished":[],"risks":[],"manual_checks":[]}\n```' "$T" || echo "mock $ROLE $out")" --task-id $T --dispatch-id $D --outcome $out --json >/dev/null
     T=; D=
   fi
 done

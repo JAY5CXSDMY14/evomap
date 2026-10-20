@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """假工人：由假 Orca 在派工时同步启动，工作目录是本件工作区。
 按 $FAKE_ORCA_DIR/plan.json 里的剧本依次出招（每个角色一个队列，用完默认 ok/pass）：
-  build:  ok（在 scope 目录写文件并提交） | dirty（提交后再改一个已跟踪文件不提交） | fail（回报失败）
+  build:  ok（在 scope 目录写文件并提交，按格式交卷） | dirty（提交后再改一个已跟踪文件不提交） | fail（回报失败）
+          noreport（不交 JSON） | oos（另外改了范围外的文件） | blocked / unfinished / redtest（交卷内容不合格）
   verify: pass | fail
   任何角色：ratelimit（打印额度提示并回报失败）| ratelimit-hang（打印提示后不回报）| silent（不回报）
   decide（决策岗）：默认 pass
@@ -43,10 +44,22 @@ elif role == "build":
         subprocess.run(["git", "add", fn], check=True)
         subprocess.run(["git", "add", "-u"], check=True)      # 返工时把上一轮没提交的也收拾进来
         subprocess.run(["git", "commit", "-qm", f"feat: {task}"], check=True)
+        if move == "oos":
+            open("outside-scope.txt", "w").write("越界\n")
+            subprocess.run(["git", "add", "outside-scope.txt"], check=True)
+            subprocess.run(["git", "commit", "-qm", "chore: 顺手改别处"], check=True)
         if move == "dirty":
             open(fn, "a").write("没提交的改动\n")
 else:
     outcome = "succeeded" if move == "pass" else "failed"
+body = f"假{role}：{move}"
+if role == "build" and outcome == "succeeded" and move != "noreport":
+    rep = {"status": {"blocked": "blocked", "unfinished": "in_progress"}.get(move, "done"), "summary": f"假施工 {task}",
+           "changes": [{"path": "web/", "why": "测试"}],
+           "tests": [{"command": "make test", "result": "failed" if move == "redtest" else "passed"}],
+           "unfinished": ["还差一半"] if move in ("unfinished", "blocked") else [], "risks": [],
+           "manual_checks": ["在 1280px 宽度下看注册页"]}
+    body += "\n```json\n" + json.dumps(rep, ensure_ascii=False) + "\n```"
 subprocess.run(["orca", "orchestration", "send", "--from", os.environ["ORCA_TERMINAL_HANDLE"], "--type", "worker_done",
-                "--subject", f"{role} {outcome}", "--body", f"假{role}：{move}", "--task-id", task, "--dispatch-id", disp,
+                "--subject", f"{role} {outcome}", "--body", body, "--task-id", task, "--dispatch-id", disp,
                 "--outcome", outcome, "--json"], check=True, capture_output=True)
