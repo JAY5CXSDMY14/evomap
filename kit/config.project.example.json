@@ -2,6 +2,8 @@
   "_说明": "项目配置：evo new / evo import 会自动生成到 ~/.evoloop/projects/<代号>/config.json，一般只需改 test_cmd、push_cmd。只写这个仓库自己的东西；想让本项目和全局不一样（例如换模型、少开一路施工），写在 overrides 里。",
   "code": "AB",
   "name": "示例项目",
+  "goal": "让布艺店主十分钟上架一款新品",
+  "_goal": "项目目标，一两句（最多 200 字）：写进每份任务书第一行「项目目标：…」。evo new/import --goal、evo goal set、面板项目页都能改",
   "repo": "/path/to/your-repo",
   "main_branch": "main",
   "github_repo": "owner/repo",

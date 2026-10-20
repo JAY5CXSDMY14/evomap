@@ -62,6 +62,18 @@
 | `items[].usage` | 这件累计派工次数、工人分钟数（含正在跑的） |
 | `rate_limits` | 现在因订阅额度暂停的岗位；`guessed: true` 表示提示里没写重置时间，按默认 60 分钟 |
 | `usage.tokens` | 配了 `magpie.usage_url` 才有：`{"by_model": {...}, "project": 数或 null, "source": "..."}`；否则 `null` |
+| `goal` | 项目目标（一两句，写进每份任务书开头）；没写为 `null`。第十二轮新增 |
+| `roles` | 岗位状态列表：`{"role": "build"/"verify"/"decide", "name": "施工"…, "status": "busy"/"idle"/"paused"/"rate_limited", "label": "忙"/"闲"/"暂停"/"额度满", "items": [件号], "why": 说明或 null, "until": 额度恢复时间或 null}`。第十二轮新增 |
+| `stale` | 卡太久：同一状态超过 `limits.stale_hours`（默认 6）小时的件，`{"key","title","state","raw","since","hours"}`，按时长倒序；可收菜、已上线、不做不算。第十二轮新增 |
+| `no_live_path` | 没有活路超过 `limits.no_live_path_minutes`（默认 30）分钟的件（面板标红，已交决策岗一次）：`{"key","title","state","raw","reason","why","since","minutes"}`；`reason` 取 `stalled` `dep_dead` `task_dead` `no_decider` `decider_idle` `unknown_state`。第十二轮新增 |
+| `items[].state_since` | 进入当前状态的时间。第十二轮新增 |
+| `items[].no_live_path` | 这件此刻有没有活路的判断（`true` = 没有，正在计时；到阈值才进顶层 `no_live_path`）。第十二轮新增 |
+| `items[].look_gate` | 这件的看效果闸门号（没有为 `null`）。第十二轮新增 |
+
+第十二轮只加字段，`schema_version` 仍是 1。
+
+### 2.1c `evo -p <代号> log <件号> --json`（每件时间线）
+读 `~/.evoloop/projects/<代号>/state/timeline.jsonl`（只追加，一行一个事件）。每行 `{"at", "item", "event", …}`，`event` 取 `add` `dispatch` `report` `gate_open` `gate_approve` `gate_reject` `gate_superseded` `feedback` `rework` `merge` `push` `ship` `deploy_failed` `restart` `decision` `drop` `state` `no_live_path` `live_again`；打回/补充反馈的原话在 `words`，合并、推送带 `sha`。`--diff` 输出这件的改动（工作区还在看分支，合并后看合并提交）。不抢锁，只读。
 
 不带 `-p` 的 `evo status` 是多项目总览（纯文本，不是稳定接口）；要多项目就对每个代号各跑一次 `--json`（`evo projects` 列代号）。
 
@@ -146,7 +158,9 @@
 
 | 动作 | 怎么挡的 |
 |---|---|
-| 批闸门 / 打回 | `evo approve` 在设了 `EVO_AGENT` 时直接拒绝；面板要口令；Telegram 只认老板的 chat id / 用户 id；issue 评论里的「/approve」之类一律不解析 |
+| 批闸门 / 打回 | `evo approve` 在设了 `EVO_AGENT` 时直接拒绝；面板要口令；Telegram 只认老板的 chat id / 用户 id；issue 评论里的「/approve」之类一律不解析为批准（第十二轮起，可信作者在闸门开着之后写的新评论只会让旧闸门作废、带着原话返工，不会通过任何东西） |
+| 对某件补反馈（会作废老板的闸门） | `evo feedback --item` 在设了 `EVO_AGENT` 时拒绝 |
+| 改项目目标 | `evo goal set/clear` 在设了 `EVO_AGENT` 时拒绝；面板改要口令 |
 | 上线 | `evo ship` 同上；上线还要老板点「上线」闸门 |
 | 自己给 issue 打 `autopilot:ready` | 不可信作者的 issue 要查打标签的人 |
 | 红线请求 | 转老板闸门 |

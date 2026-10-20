@@ -148,6 +148,14 @@ Telegram 环境变量改名 `EVO_TG_TOKEN` / `EVO_TG_CHAT`，旧名 `TUBU_TG_TOK
 - **装进 Evo 应用**：`install.sh --apply` 写的 launchd plist 环境变量里加 `PYTHONDONTWRITEBYTECODE=1`（常驻进程不在套件目录写 `__pycache__`）；evo 从应用包里跑（路径含 `.app/Contents/Resources`）时 `notify.macos` 默认关（本机通知由应用发），任何一层配置显式写了 `notify.macos` 就听配置的。
 - **面板单项目覆盖**：项目页新增「模型（本项目）」：施工模型 / 验收模型下拉框，选项来自 magpie（读不到就改成手填），第一项「跟随全局（…）」。保存写项目配置 `overrides.roles.<岗位>.models=[模型]`，选跟随全局就删掉覆盖。接口 `GET /api/models/<代号>`、`POST /api/models {code, role, model}`，都要面板口令；实际由 `evo -p <代号> models set|clear <岗位> [模型]` 执行，设了 `EVO_AGENT` 一律拒绝；模型名只许字母数字和 `. _ : / @ + -`（会进工人命令行）。下一次派工生效。
 
+## 第十二轮：借 Paperclip 面板 6 处（均有自动测试，共 154 个；见 docs/paperclip-notes.md）
+- **无活路检查**：每轮 `check_no_live`：没完结的件（可收菜 / 已上线 / 不做不查）必须有一条活路——施工中/验收中且没标疑似卡住；排队且施工任务 ready（等名额、时间窗、额度、「等你的事太多」都会放开）或 blocked（做不做闸门等你）或 pending 且依赖都还在；待验收且验收任务 ready；验收通过且看效果闸门等你或合并任务还能走；交决策岗/有提问且（决策岗正在看 / 下一批会看到 / 转老板的闸门没答 / 决策岗额度暂停到点会叫）；等推送（每轮自动重试）。都不是就开始计时，超过 `limits.no_live_path_minutes`（默认 30）：往决策岗收件箱放一条「没有活路」（同件、同原因、状态和轮次没变只放一次），时间线记 `no_live_path`，outbox 记事件；`status --json` 顶层 `no_live_path`、每件 `no_live_path`，面板标红。决策岗用原有决定处理：`retry` 对这类件等于带说明返工，`rework` / `drop` / `ask_owner` 照旧。原因代号：`stalled`（自动重启也用过了）、`dep_dead`、`task_dead`、`no_decider`（没配决策岗命令）、`decider_idle`（决策岗看过没给决定、状态没变）。
+- **看效果闸门内预览产出物**：面板看效果闸门卡片和件页列出本件工作区 `artifacts/`：png / jpg / gif / webp 直接显示；`.html` 拿文本放进 `<iframe sandbox="allow-scripts" srcdoc>`，前面加 CSP meta（`default-src 'none'`、`connect-src 'none'`，断网），绝不给同源权限；其他文件给下载链接。接口 `GET /api/artifacts/<代号>/<件号>`（清单 + 施工交卷的 manual_checks）、`GET /api/artifact/<代号>/<件号>/<路径>`，都要面板口令；挡 `..`、绝对路径、软链跑出 artifacts/（软链不列出），超过 5MB（全局 `panel.artifact_max_mb`）回 413；所有产出物响应带 `X-Content-Type-Options: nosniff` 和 `Content-Security-Policy: default-src 'none'; sandbox`，HTML 以 `text/plain` 返回，其他非图片以附件下载。
+- **面板首页**：项目页顶上「岗位状态」一行（施工 / 验收 / 决策：忙、闲、暂停、额度满；暂停原因如「没配置命令」「等你看效果的超过上限，暂停新施工」），另有「没有活路」「卡太久」清单。卡太久 = 同一状态超过 `limits.stale_hours`（默认 6）小时（进入状态的时间 `state_since` 在每次存盘时记）。`status --json` 新增 `roles`、`stale`、`goal`、`no_live_path`、`items[].state_since / no_live_path / look_gate`，只加字段，schema_version 仍是 1。
+- **每件时间线**：`~/.evoloop/projects/<代号>/state/timeline.jsonl` 只追加，记登记、派工、交卷（正文前 2000 字）、开闸门、通过 / 打回（原话在 `words`）、闸门作废、补充反馈、返工（原因）、合并（提交号）、推送、上线 / 上线失败、工人重启、决策岗决定、不做、每次换状态、没有活路 / 恢复活路。`evo -p TB log TB-FIX-012 [--json | --diff]`（只读、不抢锁）；面板点件进件页看时间线、交卷、产出物和 diff（`GET /api/item/…`、`GET /api/diff/…`）。
+- **新反馈作废旧闸门**：老板对某件补新话——`evo feedback --item <件号> "原话"`、件页「补充反馈」（`POST /api/note`）、或可信作者在它的 issue 下写的新评论（`evo pull` 时读；只认闸门开之后写的、不带 `<!-- evo -->` 标记的，接棒器自己留的评论都带这个标记）。原话先写进件的任务说明；它等你的看效果闸门（验收已通过）→ 旧闸门在 Orca 结成「作废（有新反馈）」，带着原话返工，新开「看效果（补充反馈后重看）」，验收通过才轮到你；做不做闸门 → 作废，补进任务书重建施工/验收任务，新开「做不做（补充反馈后）」；没开闸门 → 只记下，下一轮返工带上。作废的闸门记在 `superseded_gates`，之后从命令行、面板、Telegram 点它都拒绝执行。看效果闸门在验收通过那一刻绑定这一版的改动指纹（`look_bound`），版本变了照旧由合并前的指纹检查拦。外部 Agent 不能对件补反馈。
+- **项目目标进任务书**：项目配置 `goal`（一两句，最多 200 字、两行，过脱敏词表）；`evo new/import --goal "…"`、`evo -p TB goal set "…" | clear`、面板项目页「项目目标」（要口令；设了 `EVO_AGENT` 一律拒绝）。施工、验收、返工、重启、决策岗的每份任务书第一行都是「项目目标：…」，下一份任务书起生效。
+
 ## 只能在 Mac mini 上验的
 - 真 Orca 的消息有没有 `id` 字段（evo 依次认 `id` / `message_id` / `messageId`；都没有就不去重）、没确认的消息会不会重投。
 - 真决策岗模型能否稳定按 decisions JSON 交决定；Orca 将来若有「回复工人」的命令，换掉 `deliver_answer()`。
@@ -165,3 +173,6 @@ Telegram 环境变量改名 `EVO_TG_TOKEN` / `EVO_TG_CHAT`，旧名 `TUBU_TG_TOK
 - magpie `/v1/models` 是否列出组（`group/…`）、组有没有成员字段；没有成员字段时重叠检查只比名字。国内设了 `HTTP_PROXY` 时访问本机 magpie 是否被代理挡（要 `NO_PROXY=127.0.0.1,localhost`）。
 - 真模型能否按 ponytail full 档写、把收尾写进交卷；验收能否分清必须修 / 应该修并给出触发情形。
 - 真工人的权限弹窗：Claude Code 建议用 acceptEdits 模式，危险动作仍由现有 Hook 拦截；DSH 同理配置。
+- 真浏览器里看效果闸门的沙盒 iframe：HTML 产出物里的脚本能跑但连不了网、读不到面板 cookie；图片、下载链接正常。
+- 真 Orca 对 `gate-resolve --resolution "作废（有新反馈）"` 的显示（手机端会不会当成老板点了一个选项）。
+- GitHub 评论的 `created_at` 时区和 `--paginate` 输出格式；`<!-- evo -->` 标记在 gh 留言里是否原样保留。
