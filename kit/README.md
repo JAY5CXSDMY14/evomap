@@ -27,7 +27,7 @@
 | `~/.evoloop/projects/<代号>/config.json` | 这个仓库：`repo`、`main_branch`、`github_repo`、`trusted_authors`、`test_cmd`、`push_cmd`、`deploy_cmd`、`policy_terms`、`lessons_file`、`standards_file`；可选 `overrides` | `config.project.example.json`，土布实例 `profiles/tubu/project.json` |
 
 生效顺序：内置默认 ← 全局 ← 项目（顶层同名键）← 项目 `overrides`。老的项目配置里带着 `roles`/`limits`/`notify` 照旧生效（当本项目覆盖）。整机上限 `builders_total` 只认全局；项目里的 `limits.builders` 是本项目自己的上限。`evo new/import` 只写项目配置。
-Telegram 环境变量改名 `EVO_TG_TOKEN` / `EVO_TG_CHAT`，旧名 `TUBU_TG_TOKEN` / `TUBU_TG_CHAT` 仍认。
+Telegram 环境变量改名 `EVO_TG_TOKEN` / `EVO_TG_CHAT`，旧名 `TUBU_TG_TOKEN` / `TUBU_TG_CHAT` 仍认；老配置键 `notify.telegram_bot_token_env` / `telegram_chat_id_env` 写了照样优先。全局配置新增 `notify`（通道、免打扰、汇总时间）、`windows`、`magpie.usage_url`、`roles.decide`、`limits` 里的用量/额度/叫醒参数，见样例。
 
 ## 已在 Hark 沙箱实测（假工人）
 - 两件不冲突并行；同目录的件自动排在前一件合并之后。
@@ -86,8 +86,47 @@ Telegram 环境变量改名 `EVO_TG_TOKEN` / `EVO_TG_CHAT`，旧名 `TUBU_TG_TOK
   - 拉取远端失败（断网/代理没开）被当成「远端冲突」交决策岗 → 现在算一次推送未成，下轮重试。
   - 并入远端后测试红，下一轮重试时不再重测就推了 → 现在留标记，测绿才推。
 
+## 第八轮：提醒通道 + 外部 Agent 接口 + 额度/用量 + 面板口令 + 时间窗 + 决策岗叫醒（均有自动测试）
+**提醒通道**（`notify.channels`，可同时发几个；代码在 `bin/evo_notify.py`）
+- `outbox`：每个事件一行 JSON 写进 `~/.evoloop/outbox.jsonl`，永远开着。
+- `telegram`：Bot API（urllib，认 `HTTPS_PROXY`），`EVO_TG_TOKEN` / `EVO_TG_CHAT`。闸门消息带「通过 / 打回」按钮；`evo bot` 长轮询收按钮，点「打回」后你回的那句话原样当返工原话（回「跳过」不写）。**只认老板**：chat id 必须是 `EVO_TG_CHAT`；配了 `EVO_TG_OWNER`（你的用户 id）就只认这个人，没配只认私聊本人；其他人点了、说了都忽略并记一条 `bot_rejected`。
+- `email`：SMTP，全在环境变量（`EVO_SMTP_HOST/PORT/USER/PASS/TLS`、`EVO_MAIL_FROM`、`EVO_MAIL_TO`）。默认兜底：Telegram 没配或发失败才发；另外收早间、晚间汇总。
+- `webhook`：POST 事件 JSON，`secret_env` 配了就带 `X-Evo-Signature: sha256=<HMAC-SHA256>`；`events: push|all`。给 Muse 或任何 bot 用。
+- macOS 通知照旧（只发要推的事）。
+- **只推五类事**：闸门 5 分钟没人处理（看效果闸门从验收通过起算）、件卡住（含状态文件损坏暂停）、推送连续失败 3 次、岗位因额度暂停、用量异常。交决策岗、合并受阻这类改为只进 outbox，交给决策岗。
+- **免打扰** 0:00–8:00（上海时间，可配）：要推的先攒着，8:30（可配）合成一条「早间汇总」发 Telegram + 邮件，汇总里的闸门同样带按钮。
+- `evo notify-test`：每个通道各发一条测试，逐个报 ✓ / ✗ / 没配置。
+- `install.sh --apply` 在设了 Telegram 变量时另装一个 `evo bot` 常驻；邮件、webhook 密钥、代理变量一并带进常驻进程。
+
+**外部 Agent 接口**（Muse、Grok bot、本机 DSH、插件 bot）：见 `docs/agent-interface.md`，项目里放短版 `AGENT_INTERFACE.md`（`evo new` 放并提交，`evo import` 只放不提交）。
+- 读：`evo status --json`（加了 `schema_version: 1`，字段表在文档里，只加不改）、`outbox.jsonl` 事件、webhook、GitHub issues/标签。私有仓库要老板显式给读权限。
+- 写：只有 GitHub issue（标签 `agent-report`）或 `evo feedback`（设了 `EVO_AGENT` 时建 `agent-report` 并打「外部 Agent 来报」标记）。一律当不可信，除非作者在 `trusted_authors`。
+- 外部 Agent 永远不能批闸门、不能上线：设了 `EVO_AGENT` 时 `evo approve` / `evo ship` / `evo bot` 直接拒绝；面板要口令；Telegram 只认老板。不可信作者 issue 上的 `autopilot:ready` 要查是谁打的（`trusted_labelers`，默认同 `trusted_authors`），自己打的不算。
+- 红线请求（删数据、改线上、花钱、对外发布）：不可信来报碰到就建老板闸门「外部请求碰红线」，同意才交决策岗，拒绝就在 issue 上留言。
+- 不加 webhook 进来的写入口。
+
+**额度 / 用量**
+- 工人回报或终端尾部出现订阅额度提示（rate limit、usage limit、429、try again at/in、limit will reset……）→ 该岗位（和同一账号的岗位）暂停到重置时间（解析得出就用，否则 60 分钟），这件原样重排：不算失败、不算返工、不换模型；推一次「额度暂停」；到点自动恢复。工人卡在提示上不回报的，安静 3 分钟后看终端，连续两次同一提示且输出没变才判定（防止把代码里的字样当真）。
+- 每个项目/岗位的派工次数、工人分钟数，每件也记；`magpie.usage_url` 配了再显示 token。显示在 `evo status`、`--json`、面板。一件超过 `usage_item_runs` 次或 `usage_item_minutes` 分钟 → 推「用量异常」一次。没有花钱上限。
+
+**面板口令**：第一次 `evo panel` 随机生成，macOS 有 `security` 就存钥匙串（服务名 `evoloop-panel`），否则 `~/.evoloop/panel.token`（600）。所有 `/api/*` 都要口令：浏览器过登录页拿 HttpOnly cookie，脚本带 `Authorization: Bearer <口令>`。忘了用 `evo panel --show-token`。
+
+**时间窗**：`evo add --window trading:cn`（周一到周五 09:30–11:30、13:00–15:00 上海时间，排除 `windows.holidays`），或 `--window "mon-fri 09:30-15:00"`（多段用逗号，多组用分号，跨午夜可以）。窗外不开工也不开验收，状态显示「等窗口」。issue 标签 `window:<写法>` 也认。
+
+**决策岗叫醒**：有件在「交决策岗」「有提问」或有外部来报时，按 `roles.decide` 叫醒决策岗，至多每 30 分钟一次，一批处理；上批交过、状态没变的不会单独再叫。`roles.decide` 没写 `cmd` 就不叫。
+
+**这轮测试抓到并修掉的问题**
+- 施工自己回报「失败」时被当成交付送去验收，验收任务依赖一个失败的任务，这件永远卡在「待验收」→ 现在算一轮返工。
+- `~/.local/bin/evo` 软链运行时套件目录算错（`abspath` 不解软链），岗位说明和面板页读不到 → 改用 `realpath`。
+- webhook 没配密钥时会借用默认环境变量的密钥签名 → 每个 webhook 只用自己的 `secret_env`。
+- 额度提示：回报正文里的一句「rate limited」会盖过终端里带重置时间的那句 → 优先取能解析出时间的那句。
+
 ## 只能在 Mac mini 上验的
 - DSH、Claude Code、Codex 真跑时会不会按说明回报（Orca 已认得 `dsh`）。
 - magpie 下施工和验收同用一个工具时，各自指定模型是否生效。
 - Hook 日志照常记录；手机提醒。
+- `orca terminal read --terminal <句柄> --json` 回的字段名（按文档是累积输出；evo 依次认 `text` / `output` / `content` / `lines`），以及 Codex、Claude Code 额度用完时的原文是否被现有规则认出。
+- Telegram 真机：按钮回调、群聊里 `EVO_TG_OWNER` 过滤；国内要 `HTTPS_PROXY`。
+- 钥匙串：第一次 `security add-generic-password` 可能弹授权框。
+- magpie 有没有用量接口、记录长什么样（`magpie.usage_url` 先留空）。
 - 真工人的权限弹窗：Claude Code 建议用 acceptEdits 模式，危险动作仍由现有 Hook 拦截；DSH 同理配置。
