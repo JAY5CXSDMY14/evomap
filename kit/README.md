@@ -139,6 +139,14 @@ Telegram 环境变量改名 `EVO_TG_TOKEN` / `EVO_TG_CHAT`，旧名 `TUBU_TG_TOK
 - **夜审补跑**：过了 23:30 当天没跑的下一轮照跑；第二天中午前开机先补昨天的（只补一天，新项目不补）。日志时间统一走 `evo_time` 的钟。
 - **install.sh 防睡眠检查**：macOS 上 `pmset -g` 显示 sleep / disksleep 不是 0 就警告，并给出 `sudo pmset -a sleep 0 disksleep 0`（只提示，不替你跑 sudo）。
 
+## 第十一轮：看效果指纹 + 死工人自动重启 + ponytail + 模型核对与面板覆盖（均有自动测试，共 138 个）
+- **看效果指纹**：老板「看效果 通过」时记下本件自己改动的 patch-id（复用 `patch_id()`）和提交号。之后这件又返工（C6 冲突 / 合并前测试红、决策岗返工），合并前重算：指纹相同 → 不重看直接合并；不同 → 在合并任务上重开看效果闸门「看效果（改动后重看）」，说明「解冲突/返工时改了你看过的内容」，和普通看效果闸门一样 5 分钟没人点就推（带按钮）。打回会清掉指纹。配置 `relook_on_change`（默认 true）。
+- **C7 死工人自动重启**：`check_stalls` 发现工人进程不在了（`worker-show` 的 orphaned / observation 不是 live），且这次派工的任务还没交 worker_done，就在原工作区、同岗位、同模型重启一次：关旧终端、旧任务标 failed、新建任务（施工连带新验收）、立刻派工，记日志和 `worker_restarted` 事件（只进 outbox）。次数记在派工上（`dispatch.restarts`），重启出来的派工再死 → 老路：标疑似卡住并推送。新一轮返工的派工重新计数。
+- **ponytail 进岗位**：`kit/vendor/ponytail/` 放官方仓库固定提交 `09c434ab73ca43761c5d8b0c5d341926c2fba710` 的 `ponytail/SKILL.md`、`ponytail-review/SKILL.md` 和 MIT `LICENSE`（README 写来源和升级办法）。`roles/builder.md` 第 13–16 条：full 档、不用 ultra；任务书验收标准压过「最少代码」；收尾的跳过/没查/风险写进交卷 unfinished / risks；允许 `shortcut:` 注释。`roles/verifier.md` 第 14–18 条：按 review 清单读调用方；必须修 → 打回；应该修 → 结论里建议另开 issue，不挡合并；每条发现要有具体触发情形。工人没装 skill 时提示词里的 `{KIT}` 换成本机套件路径，指向固定副本。
+- **每周 audit 待办**：夜审那天是 `audit_weekday`（0=周一 … 6=周日，默认 6 周日）就往决策岗收件箱放一条「每周 ponytail-audit」例行待办（决策岗任务书里单列「例行待办」一节，不和外部来报混），只提醒不自动跑。
+- **模型核对**：新命令 `evo models [--json]` 读 magpie `GET {magpie_url}/v1/models`，全局（和改过模型的项目）里 `roles.build.models` / `roles.verify.models` 不在列表里就警告；施工和验收有重叠也警告（列表里的组带 `members`/`models` 字段时按成员比）。magpie 不通只跳过列表核对。退出码：有警告 1。`install.sh` 检查时 magpie 通就顺带跑一遍（只警告不拦）。全局模型可直接写 magpie 组名，如 `group/evo-build`、`group/evo-verify`。
+- **面板单项目覆盖**：项目页新增「模型（本项目）」：施工模型 / 验收模型下拉框，选项来自 magpie（读不到就改成手填），第一项「跟随全局（…）」。保存写项目配置 `overrides.roles.<岗位>.models=[模型]`，选跟随全局就删掉覆盖。接口 `GET /api/models/<代号>`、`POST /api/models {code, role, model}`，都要面板口令；实际由 `evo -p <代号> models set|clear <岗位> [模型]` 执行，设了 `EVO_AGENT` 一律拒绝；模型名只许字母数字和 `. _ : / @ + -`（会进工人命令行）。下一次派工生效。
+
 ## 只能在 Mac mini 上验的
 - 真 Orca 的消息有没有 `id` 字段（evo 依次认 `id` / `message_id` / `messageId`；都没有就不去重）、没确认的消息会不会重投。
 - 真决策岗模型能否稳定按 decisions JSON 交决定；Orca 将来若有「回复工人」的命令，换掉 `deliver_answer()`。
@@ -152,4 +160,7 @@ Telegram 环境变量改名 `EVO_TG_TOKEN` / `EVO_TG_CHAT`，旧名 `TUBU_TG_TOK
 - 真实模型能否稳定按 JSON 交卷；Orca worker_done 正文有没有长度上限。
 - 钥匙串：第一次 `security add-generic-password` 可能弹授权框。
 - magpie 有没有用量接口、记录长什么样（`magpie.usage_url` 先留空）。
+- 真 Orca 下工人进程死掉时 `worker-show` 回什么（evo 认 `terminal.orphaned` 或 `observation.status` 不是 `live`）；重启后的派工能不能正常回报。
+- magpie `/v1/models` 是否列出组（`group/…`）、组有没有成员字段；没有成员字段时重叠检查只比名字。国内设了 `HTTP_PROXY` 时访问本机 magpie 是否被代理挡（要 `NO_PROXY=127.0.0.1,localhost`）。
+- 真模型能否按 ponytail full 档写、把收尾写进交卷；验收能否分清必须修 / 应该修并给出触发情形。
 - 真工人的权限弹窗：Claude Code 建议用 acceptEdits 模式，危险动作仍由现有 Hook 拦截；DSH 同理配置。

@@ -29,7 +29,7 @@
   .btn { font:inherit; border:0; border-radius:10px; padding:7px 14px; cursor:pointer; background:var(--accent); color:#fff; }
   .btn.ghost { background:var(--bg); color:var(--ink); border:1px solid var(--line); }
   .btn.warn { background:var(--warn); }
-  input[type=text], textarea { font:inherit; flex:1; min-width:180px; border:1px solid var(--line); border-radius:10px; padding:7px 10px; background:#fff; }
+  input[type=text], select, textarea { font:inherit; flex:1; min-width:180px; border:1px solid var(--line); border-radius:10px; padding:7px 10px; background:#fff; }
   textarea { width:100%; min-height:64px; resize:vertical; }
   table { width:100%; border-collapse:collapse; }
   td { padding:8px 6px; border-top:1px solid var(--line); vertical-align:top; }
@@ -117,8 +117,36 @@ async function refresh(){
       <td class="key">${esc(it.key)}</td><td>${esc(it.title)}${it.round?` <span class="others">返工 ${it.round}</span>`:""}${it.window?` <span class="others">窗口 ${esc(it.window)}</span>`:""}
       <div class="others">派工 ${it.usage?.runs||0} 次 · ${Math.round(it.usage?.minutes||0)} 分钟</div></td>
       <td style="text-align:right"><span class="st ${stuck(it)?"stuck":(/可收菜|已上线/.test(it.state)?"done":"")}">${it.stalled?"疑似卡住":esc(it.state)}</span></td></tr>`).join("") || '<tr><td class="empty">还没有件</td></tr>'}</table></div>
+    <h2>模型（本项目）</h2><div class="card" id="models"><span class="others">读取中…</span></div>
     <h2>用量</h2><div class="card others">${roles || "还没有派过工"}${tok ? `<br>token（magpie）：${Object.entries(tok.by_model||{}).map(([m,n]) => esc(m)+" "+n).join(" · ")}${tok.project?`；本项目 ${tok.project}`:""}` : ""}</div>
     <h2>最近动静</h2><div class="others" style="margin:-4px 0 6px">上次转动：${data.last_tick ? esc(data.last_tick.slice(5,16).replace("T"," ")) : "还没转过"}</div><div class="card log">${esc((data.log||[]).slice().reverse().join("\n")) || "（无）"}</div>`;
+  loadModels(cur);
+}
+
+// 施工模型 / 验收模型：选项来自 magpie /v1/models；读不到 magpie 就改成手填。「跟随全局」= 删掉本项目覆盖
+const ROLE_NAMES = {build: "施工模型", verify: "验收模型"};
+async function loadModels(code){
+  let m; try { m = await api("api/models/" + code); } catch (e) { return; }
+  if (cur !== code || !$("models")) return;
+  if (m.error) { $("models").innerHTML = `<span class="others">读不出：${esc(m.error)}</span>`; return; }
+  const row = role => {
+    const ov = (m.override || {})[role], cur1 = ov && ov.length ? ov[0] : "";
+    const follow = `跟随全局（${esc(((m.follow || {})[role] || []).join("、") || "未设")}）`;
+    const ctl = m.models
+      ? `<select id="md_${role}"><option value="">${follow}</option>${[...new Set([...(cur1 ? [cur1] : []), ...m.models])].map(x =>
+          `<option value="${esc(x)}" ${x === cur1 ? "selected" : ""}>${esc(x)}</option>`).join("")}</select>`
+      : `<input type="text" id="md_${role}" value="${esc(cur1)}" placeholder="magpie 没响应：手填模型名，留空 = ${follow}">`;
+    return `<div class="row" style="margin:6px 0"><b style="min-width:72px">${ROLE_NAMES[role]}</b>${ctl}
+      <button class="btn ghost" onclick="saveModel('${code}','${role}')">保存</button></div>`;
+  };
+  $("models").innerHTML = row("build") + row("verify") +
+    (m.warnings && m.warnings.length ? `<div class="others" style="color:var(--warn)">${m.warnings.map(esc).join("<br>")}</div>` : "") +
+    `<div class="others">${m.magpie_ok ? "选项来自 magpie" : "magpie 读不到，先手填"}；只影响这个项目，下一次派工生效</div>`;
+}
+async function saveModel(code, role){
+  const model = ($("md_" + role) || {}).value || "";
+  const r = await api("api/models", {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({code, role, model})});
+  toast(r.ok ? (ROLE_NAMES[role] + "：" + (model || "跟随全局")) : "没成功：" + r.error); loadModels(code);
 }
 
 async function approve(code, gate, choice, whyId){

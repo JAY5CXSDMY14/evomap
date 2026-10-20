@@ -4,7 +4,9 @@
   build:  ok（在 scope 目录写文件并提交，按格式交卷） | dirty（提交后再改一个已跟踪文件不提交） | fail（回报失败）
           noreport（不交 JSON） | oos（另外改了范围外的文件） | blocked / unfinished / redtest（交卷内容不合格）
   verify: pass | fail
+          same（不改任何东西，照常交卷：返工后指纹不变）
   任何角色：ratelimit（打印额度提示并回报失败）| ratelimit-hang（打印提示后不回报）| silent（不回报）
+          die（工人进程死掉：不回报，worker-show 报这次派工 exited）
   decide（决策岗）：默认 pass（不交决定 JSON）；剧本项写成对象 {"decisions": [...]} 就原样放进 ```json 块交卷
   FAKE_ORCA_NO_ACK=1 时假 Orca 不认确认，消息每轮重投（测去重）
 每次出招记一行到 workers.log：角色、任务号、招式、任务说明（JSON）。
@@ -39,6 +41,10 @@ elif move == "ratelimit-hang":           # 额度用完：打印提示后不回�
     print("working...\n" + RL); sys.exit(0)
 elif move == "silent":                   # 什么都不回报（模拟卡住）
     sys.exit(0)
+elif move == "die":                      # 工人进程死掉：不回报，假 Orca 的 worker-show 对这次派工报「不在了」
+    open(os.path.join(D, "dead.txt"), "a").write(disp + "\n"); sys.exit(0)
+elif role == "build" and move == "same":  # 返工时什么都不改（改动指纹不变），照常按格式交卷
+    pass
 elif role == "build":
     if move == "fail":
         outcome = "failed"

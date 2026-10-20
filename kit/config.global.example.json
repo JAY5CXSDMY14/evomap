@@ -10,6 +10,10 @@
   "_自动收菜": "auto_ship_gate 为 true 时，每天 ship_gate_at 之后第一次有已合并的件、又没有等着的上线闸门，就自动建上线闸门（主线测试绿才建）",
   "auto_ship_gate": true,
   "ship_gate_at": "08:20",
+  "_看效果指纹": "relook_on_change 为 true 时：老板看效果通过后，这件又因冲突/测试红/决策岗返工，合并前重算改动指纹；内容变了就重开看效果闸门（说明「解冲突/返工时改了你看过的内容」），没变直接合并",
+  "relook_on_change": true,
+  "_每周体检": "audit_weekday：每周哪天夜审时给决策岗放一条「跑 ponytail-audit」的待办。0=周一 … 6=周日，默认 6（周日）",
+  "audit_weekday": 6,
   "limits": {
     "_说明": "builders_total 整机并行施工上限；owner_queue_pause 全部项目「等你点头」超过多少件就暂停新施工；usage_item_runs / usage_item_minutes 一件派工次数或工人分钟数超过就推「用量异常」（0 = 不查）；rate_limit_default_minutes 额度提示里没写重置时间时暂停多久；rate_limit_idle_minutes 工人安静多久后去看终端有没有额度提示；decide_every_minutes 决策岗至多多久叫醒一次；heartbeat_stale_minutes 接棒器心跳多久没更新算停了（evo watchdog / evo bot 推送）。没有花钱上限。",
     "builders_total": 2,
@@ -24,7 +28,7 @@
     "heartbeat_stale_minutes": 10
   },
   "roles": {
-    "_说明": "account 可选：同一个订阅账号的岗位一起因额度暂停；不写就按命令第一个词（claude、codex、dsh）算同一个账号。decide 不写 cmd 就不自动叫醒决策岗。",
+    "_说明": "account 可选：同一个订阅账号的岗位一起因额度暂停；不写就按命令第一个词（claude、codex、dsh）算同一个账号。decide 不写 cmd 就不自动叫醒决策岗。models 可以写 magpie 的组名（例如 group/evo-build、group/evo-verify），换模型在 magpie 里点；施工组和验收组的成员不要重叠，evo models 会拿 magpie 的 /v1/models 核对（install.sh 检查时也跑）。单个项目换模型：面板项目页「施工模型 / 验收模型」下拉框，或 evo -p 代号 models set build 模型。",
     "build": {
       "cmd": "dsh",
       "models": ["glm/glm-5.3-flash", "deepseek/deepseek-v4.1"],

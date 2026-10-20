@@ -2,6 +2,21 @@
 title: Ponytail 能不能进施工和审查 · 默认模型在哪设
 lang: zh
 ---
+## 0 实现状态（第十一轮，已实现）
+```callout ok 已实现，有自动测试
+施工岗 full 档、验收岗 review 清单、每周 audit 提醒、magpie 组名做默认模型、evo models 核对、面板单项目覆盖，都已进 kit。提示词固定在官方仓库提交 09c434ab，副本在 kit/vendor/ponytail/。
+```
+| 设想 | 状态 | 落在哪 |
+|---|---|---|
+| 施工用主规则 full 档，任务书优先，收尾进交卷，允许 shortcut 注释 | 已实现 | roles/builder.md 第 13–16 条 |
+| 验收用 review 清单：必须修打回，应该修建议开 issue，每条要触发情形 | 已实现 | roles/verifier.md 第 14–18 条 |
+| 只取官方仓库、固定一个提交、不装插件和 hook | 已实现 | kit/vendor/ponytail/（README 记来源、提交号、MIT） |
+| 每周一次 audit | 已实现（最小版） | 每周日夜审给决策岗放一条待办（audit_weekday 可改），不自动开 issue |
+| shortcut 注释收成欠账清单 | 部分 | 写进 audit 待办的说明里，由决策岗安排；没有单独的收集脚本 |
+| 审查岗（云端）跑 review | 未动 | 审查岗在另一个仓库，规则可直接引用同一个副本 |
+| 默认模型用 magpie 组 | 已实现 | 全局 roles.*.models 写组名即可；evo models 和 install.sh 核对列表与重叠 |
+| 面板下拉覆盖 | 已实现 | 项目页「施工模型 / 验收模型」，写项目 overrides，可「跟随全局」 |
+
 ## A 结论
 ```callout ok 两件都能做，而且不冲突
 Ponytail 本质是一段 MIT 提示词。施工岗用主规则，验收和审查岗用 review 清单，夜审可加 audit。默认模型放在 magpie 里设：magpie 建「施工组」「验收组」，evo 只认组名，换模型在 magpie 里点一下，所有项目一起生效；面板里再给单个项目一个覆盖下拉框。

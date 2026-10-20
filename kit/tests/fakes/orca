@@ -168,6 +168,9 @@ def main():
                     m["delivery"] = did
                 out({"messages": box, "deliveryId": did if box else None})
             if sub == "worker-show":
+                dead = os.path.join(D, "dead.txt")
+                if os.path.exists(dead) and o.get("dispatch") in open(dead).read().split():
+                    out({"observation": {"status": "exited"}, "terminal": {"orphaned": True}})
                 out({"observation": {"status": os.environ.get("FAKE_WORKER_STATUS", "live")}, "terminal": {"orphaned": False}})
         if run_after is None:
             out(ok=False, error={"code": "unknown_command", "message": " ".join(argv[:2])})

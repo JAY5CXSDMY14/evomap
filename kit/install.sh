@@ -38,7 +38,15 @@ if command -v orca >/dev/null; then
 else
   warn "没有 orca 命令：装 Orca 后在 设置 → CLI 里安装命令行（安装第三方工具需老板同意）"
 fi
-curl -s -m 3 "$MAGPIE/v1/models" >/dev/null 2>&1 && ok "magpie 网关在跑（$MAGPIE）" || warn "magpie 网关没响应（$MAGPIE）：岗位用到模型时才需要"
+if curl -s -m 3 "$MAGPIE/v1/models" >/dev/null 2>&1; then
+  ok "magpie 网关在跑（$MAGPIE）"
+  # 施工/验收模型（可以是 magpie 组名）在不在 magpie 列表里、两边有没有重叠：只警告，不拦安装
+  if command -v python3 >/dev/null && [ -f "$EVO_DIR/config.json" ]; then
+    python3 "$KIT/bin/evo" models 2>&1 || true
+  fi
+else
+  warn "magpie 网关没响应（$MAGPIE）：岗位用到模型时才需要"
+fi
 for a in dsh claude codex; do command -v $a >/dev/null && ok "$a 已装" || info "$a 未装（岗位表用到才需要）"; done
 
 echo "■ 现状"
