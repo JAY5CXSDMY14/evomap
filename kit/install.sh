@@ -27,6 +27,17 @@ PLIST=$HOME/Library/LaunchAgents/$LABEL.plist
 ok(){ echo "  ✓ $1"; }; warn(){ echo "  ! $1"; }; info(){ echo "  · $1"; }; bad(){ echo "  ✗ $1"; HARD=1; }
 HARD=0
 
+# 常驻进程用的 PATH（Air 试跑 10-21：launchd 不读 ~/.zshrc，claude/dsh 装在 ~/.claude/local、npm 全局等目录时后台找不到）。
+# 取你登录 shell 的 PATH + 常用目录，去重、只留存在的目录；本脚本的检查也用它，结果和后台一致。可用 EVO_PATH=… 自己指定。
+LPATH=${EVO_PATH:-}
+if [ -z "$LPATH" ]; then
+  SHP=$("${SHELL:-/bin/zsh}" -ilc 'printf "\n__EVOPATH=%s\n" "$PATH"' </dev/null 2>/dev/null | sed -n 's/^__EVOPATH=//p' | tail -1)
+  LPATH=$(printf '%s' "$PATH:$SHP:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:$HOME/.local/bin" | tr ':' '\n' |
+    awk 'NF && !/[<>&]/ && !seen[$0]++' | while read -r d; do [ -d "$d" ] && printf '%s:' "$d"; done)
+  LPATH=${LPATH%:}
+fi
+export PATH="$LPATH"
+
 echo "■ 检查环境"
 command -v python3 >/dev/null && ok "python3 $(python3 -c 'import sys;print(sys.version.split()[0])')" || bad "没有 python3（evo 跑不起来）"
 command -v git >/dev/null && ok "git $(git --version | awk '{print $3}')" || bad "没有 git"
@@ -54,6 +65,7 @@ fi
 for a in dsh claude codex; do command -v $a >/dev/null && ok "$a 已装" || info "$a 未装（岗位表用到才需要）"; done
 
 echo "■ 现状"
+info "常驻进程的 PATH：$LPATH"
 [ -f "$EVO_DIR/config.json" ] && ok "全局配置 $EVO_DIR/config.json" || info "还没有全局配置，--apply 时从 config.global.example.json 放一份"
 if [ "$(uname)" = Darwin ]; then
   [ -f "$PLIST" ] && ok "launchd 常驻已写入 $PLIST" || info "launchd 常驻还没装"
@@ -153,7 +165,7 @@ if [ "$(uname)" = Darwin ]; then
 <key>ProgramArguments</key><array><string>$PY</string><string>$RUN_KIT/bin/evo</string>$args</array>
 <key>RunAtLoad</key><true/><key>KeepAlive</key><true/>
 <key>StandardOutPath</key><string>$LOGS/$what.log</string><key>StandardErrorPath</key><string>$LOGS/$what.log</string>
-<key>EnvironmentVariables</key><dict><key>PATH</key><string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:$HOME/.local/bin</string><key>PYTHONDONTWRITEBYTECODE</key><string>1</string>$ENVX</dict>
+<key>EnvironmentVariables</key><dict><key>PATH</key><string>$LPATH</string><key>PYTHONDONTWRITEBYTECODE</key><string>1</string>$ENVX</dict>
 </dict></plist>
 PL
     if [ -f "$plist" ] && cmp -s "$TMP" "$plist" && launchctl list 2>/dev/null | grep -q "$label"; then
@@ -173,7 +185,7 @@ PL
 <key>ProgramArguments</key><array><string>/bin/bash</string><string>$EVO_DIR/guard/evo-guard.sh</string></array>
 <key>StartInterval</key><integer>60</integer><key>RunAtLoad</key><true/>
 <key>StandardOutPath</key><string>$LOGS/guard.log</string><key>StandardErrorPath</key><string>$LOGS/guard.log</string>
-<key>EnvironmentVariables</key><dict><key>PATH</key><string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string><key>EVO_DIR</key><string>$EVO_DIR</string>$ENVX</dict>
+<key>EnvironmentVariables</key><dict><key>PATH</key><string>$LPATH</string><key>EVO_DIR</key><string>$EVO_DIR</string>$ENVX</dict>
 </dict></plist>
 PL
     if [ -f "$GP" ] && cmp -s "$TMPG" "$GP" && launchctl list 2>/dev/null | grep -q com.evoloop.guard; then
