@@ -132,6 +132,16 @@ app/
 - 纯逻辑在 `Sources/EvoCore/MateMotion.swift`（`EyeFollow.compute`：球心 + 球径 + 鼠标 → 偏移向量、在不在范围、是不是很近；眨眼间隔；状态 → 身体动作），有测试。
 - CI 实机演示多一段：鼠标从右下远处慢慢移近调度球 → 绕一圈 → 贴近 → 移开，截 `03a-eyes-far`、`03b-eyes-near-right`、`03c-eyes-circle-left`、`03d-eyes-circle-below`、`03e-eyes-very-near`、`03f-eyes-away`，每张旁边在 `HOW.txt` 记下应用报出的注视值（`mate-gaze`：x、y、在不在范围、是不是很近）；图标拍 `15-dock`、`15b-dock-strip`（Dock 那一条）、`16-finder-icon`，再用 `sips` 把包里的 icns 读成 `AppIcon-from-icns.png`。
 
+| 眼睛：远 → 右边近处 → 绕到左边 → 下方 → 贴近 → 移开（CI 实机截图） |
+|---|
+| ![眼睛跟鼠标](docs/mac-demo/03-eyes-strip.png) |
+
+| Dock 里的新图标 | Finder 里的 Evo.app |
+|---|---|
+| ![Dock](docs/mac-demo/15b-dock-strip.png) | ![Finder](docs/mac-demo/16-finder-icon.png) |
+
+注意：GitHub 的 macOS runner 默认开着「减弱动态效果」，调度球在那上面只画静态帧；演示脚本会先 `defaults write com.apple.universalaccess reduceMotion -bool false`，并用 `EVO_DEMO_MOTION=1`（只给录屏用）让应用忽略这个设置。
+
 ### 动效和无障碍
 
 - 按钮、胶囊按下压到 0.92、松手弹过头到 1.04 再回来（`spring(response: 0.3, dampingFraction: 0.55)`）；卡片依次弹入；批过的卡片缩小飞走；「等你处理」数字变了会晃一下；状态胶囊换状态时弹一下。
