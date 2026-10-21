@@ -76,7 +76,9 @@ struct MenuBarLabel: View {
     var body: some View {
         let img = Image(nsImage: MenuBarIcon.image(state.mood))
         if let t = Badge.text(state.badge) {
-            Text("\(img) \(t)")
+            // 菜单栏标签只认 Label / Image / Text；把图片插进 Text 里在真菜单栏上会被丢掉（CI 实机截图里只剩数字）
+            Label { Text(t) } icon: { Image(nsImage: img) }
+                .labelStyle(.titleAndIcon)
                 .accessibilityLabel("Evo，\(t) 件等你")
         } else {
             img.accessibilityLabel("Evo，\(state.loopState.label)")

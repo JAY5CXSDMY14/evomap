@@ -148,8 +148,7 @@ struct MainWindowView: View {
                     ToolbarItem(placement: .navigation) { ToolbarStatus(state: state) }
                     ToolbarItem(placement: .primaryAction) { ToolbarActions(state: state) }
                 }
-                .toolbarBackground(Theme.bg, for: .windowToolbar)
-                .toolbarBackground(.visible, for: .windowToolbar)
+                .toolbarBackground(.hidden, for: .windowToolbar)     // 工具栏透出内容区的象牙底，不要一条白边
         }
         .navigationSplitViewStyle(.balanced)
         .frame(minWidth: WindowSizing.minWidth, minHeight: WindowSizing.minHeight)

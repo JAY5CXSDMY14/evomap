@@ -23,6 +23,7 @@ final class PaletteController {
             p.level = .floating
             p.isReleasedWhenClosed = false
             p.hidesOnDeactivate = true
+            p.standardWindowButton(.closeButton)?.isHidden = true      // Esc 关；不要左上角红点
             p.standardWindowButton(.miniaturizeButton)?.isHidden = true
             p.standardWindowButton(.zoomButton)?.isHidden = true
             p.contentViewController = NSHostingController(rootView: PaletteView(state: AppState.shared, model: model))
