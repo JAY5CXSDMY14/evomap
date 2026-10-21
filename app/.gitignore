@@ -2,3 +2,5 @@
 build/
 *.dmg
 .swiftpm/
+docs/mac-demo/*.mp4
+docs/mac-demo/*.mov
