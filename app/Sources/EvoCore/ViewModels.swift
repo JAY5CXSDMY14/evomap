@@ -193,12 +193,14 @@ public enum MascotMood: String, CaseIterable, Sendable {
     case worried    // 心跳过期 / 出错 / 卡住
     case sleepy     // 暂停
 
-    public static func derive(state: LoopState, waiting: Int, building: Int, stuck: Int) -> MascotMood {
+    /// quiet = 正在免打扰时段：循环照转，但小家伙睡觉（不吵你）。
+    public static func derive(state: LoopState, waiting: Int, building: Int, stuck: Int, quiet: Bool = false) -> MascotMood {
         switch state {
         case .error, .stale: return .worried
         case .paused: return .sleepy
         case .loading, .empty: return .idle
         case .running:
+            if quiet { return .sleepy }
             if waiting > 0 { return .waiting }
             if stuck > 0 { return .worried }
             return building > 0 ? .working : .idle
@@ -269,7 +271,7 @@ public enum Fuzzy {
 
 public struct PaletteEntry: Identifiable, Equatable, Sendable {
     public enum Action: Equatable, Sendable {
-        case tick, openPanel, togglePause, harvest, refresh, settings, setup, watchdog
+        case tick, openPanel, togglePause, harvest, refresh, settings, setup, watchdog, openWindow, toggleAppearance
         case approve(String), reject(String)      // GateCard.id
         case focusProject(String)
     }
@@ -283,17 +285,19 @@ public struct PaletteEntry: Identifiable, Equatable, Sendable {
 
     public static func build(cards: [GateCard], rows: [ProjectRow], paused: Bool?) -> [PaletteEntry] {
         var out: [PaletteEntry] = [
+            .init(id: "window", title: "打开 Evo 窗口", subtitle: "window ⌘0", symbol: "macwindow", action: .openWindow),
             .init(id: "tick", title: "立即 tick", subtitle: "每个项目转一轮 tick", symbol: "bolt", action: .tick),
             .init(id: "panel", title: "打开面板", subtitle: "panel 网页面板", symbol: "rectangle.on.rectangle", action: .openPanel),
             .init(id: "harvest", title: "收菜清单", subtitle: "已合并可上线 harvest", symbol: "basket", action: .harvest),
             .init(id: "refresh", title: "刷新", subtitle: "重新读状态 refresh", symbol: "arrow.clockwise", action: .refresh),
             .init(id: "watchdog", title: "看门狗检查", subtitle: "evo watchdog", symbol: "heart.text.square", action: .watchdog),
+            .init(id: "appearance", title: "切换深色 / 浅色", subtitle: "dark light appearance 外观", symbol: "circle.lefthalf.filled", action: .toggleAppearance),
             .init(id: "settings", title: "设置", subtitle: "settings", symbol: "gearshape", action: .settings),
             .init(id: "setup", title: "首次设置向导", subtitle: "setup install", symbol: "wand.and.stars", action: .setup),
         ]
         if let paused {
             out.insert(.init(id: "pause", title: paused ? "恢复循环" : "暂停循环", subtitle: paused ? "resume" : "pause",
-                             symbol: paused ? "play" : "pause", action: .togglePause), at: 2)
+                             symbol: paused ? "play" : "pause", action: .togglePause), at: 3)
         }
         for c in cards {
             let sub = "\(c.project) · \(c.kindLabel)" + (c.itemID.map { " · \($0)" } ?? "")

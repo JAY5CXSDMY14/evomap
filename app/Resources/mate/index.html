@@ -1,0 +1,63 @@
+<!doctype html>
+<!-- Evo 的表情宿主页：本地文件、不联网（应用侧还挡掉了所有 http/https 请求）。
+     ?engine=ball|mates  &c=blob|nimbo|twinkle  &e=表情编号  &eye=眼睛放大  &lite=1  &still=1（减弱动态效果：只画静态帧）
+     Swift 通过 evoMate.set(id, celebrate) / evoMate.gaze(x, y) 驱动。角色版权见 ../vendor/NOTICE.md -->
+<html><head><meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="connect-src 'none'; font-src 'none'; frame-src 'none'; object-src 'none'">
+<style>
+  html, body { margin: 0; padding: 0; background: transparent; overflow: hidden; width: 100%; height: 100%;
+               -webkit-user-select: none; cursor: default; font-family: -apple-system, 'PingFang SC', sans-serif; }
+  #mate { position: absolute; inset: 0; }
+  #mate svg { width: 100%; height: 100%; overflow: visible; filter: drop-shadow(0 1.5px 3px rgba(60, 40, 20, .18)); }
+</style></head>
+<body><div id="mate"></div>
+<script>
+(function () {
+  var q = new URLSearchParams(location.search);
+  var engine = q.get('engine') === 'mates' ? 'mates' : 'ball';
+  var still = q.get('still') === '1';
+  var files = engine === 'ball'
+    ? ['emotion-ball/js/rings.js', 'emotion-ball/js/emotions.js', 'emotion-ball/js/ball.js', 'emotion-ball/js/engine.js']
+    : ['mood-mates/src/core/geometry.js', 'mood-mates/src/core/render.js', 'mood-mates/src/core/features.js',
+       'mood-mates/src/core/fx.js', 'mood-mates/src/data/emotions.js', 'mood-mates/src/core/engine.js',
+       'mood-mates/src/characters/nimbo.js', 'mood-mates/src/characters/twinkle.js'];
+  var mate = null, cur = q.get('e') || '02', pending = null;
+  function post(m) { try { webkit.messageHandlers.evo.postMessage(m); } catch (e) {} }
+  function load(i) {
+    if (i >= files.length) return start();
+    var s = document.createElement('script');
+    s.src = '../vendor/' + files[i];
+    s.onload = function () { load(i + 1); };
+    s.onerror = function () { post('error 加载失败 ' + files[i]); };
+    document.head.appendChild(s);
+  }
+  function start() {
+    var el = document.getElementById('mate');
+    var opts = { emotion: cur, idle: false, autostart: !still, eyeScale: +(q.get('eye') || 1),
+                 lite: still || q.get('lite') === '1' };
+    try {
+      if (engine === 'ball') { opts.shape = q.get('c') || 'blob'; mate = EmotionBall.create(el, opts); }
+      else { opts.character = q.get('c') || 'nimbo'; mate = MoodMates.create(el, opts); }
+    } catch (e) { post('error ' + e.message); return; }
+    if (still) mate.renderStatic();
+    if (pending) { var p = pending; pending = null; window.evoMate.set(p[0], p[1]); }
+    post('ready');
+  }
+  window.evoMate = {
+    set: function (id, celebrate) {
+      if (!mate) { pending = [id, celebrate]; cur = id; return; }
+      cur = id;
+      mate.handleAIMessage({ emotionId: id });
+      if (celebrate && !still) {
+        try { mate.burst(24); } catch (e) {}
+        try { if (mate.bounce) mate.bounce(); } catch (e) {}
+      }
+      if (still) mate.renderStatic();
+    },
+    gaze: function (x, y) { if (mate && !still) mate.setGaze(x, y); },
+    current: function () { return cur; }
+  };
+  load(0);
+})();
+</script>
+</body></html>

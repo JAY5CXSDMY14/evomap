@@ -363,3 +363,190 @@ final class ViewModelTests: XCTestCase {
         XCTAssertGreaterThan(w.max()!, 0.5); XCTAssertLessThan(w.min()!, -0.5)   // 真的在东张西望
     }
 }
+
+// MARK: - v0.3.0：表情角色、件时间线、主窗口逻辑
+
+final class MateMapTests: XCTestCase {
+    func testMoodToEmotionTable() {
+        let table: [(MascotMood, String)] = [(.idle, "02"), (.working, "30"), (.waiting, "35"), (.worried, "34"), (.sleepy, "00")]
+        for (m, id) in table { XCTAssertEqual(MateMap.emotion(for: m).id, id, "\(m)") }
+        XCTAssertEqual(MateMap.emotion(state: .loading, mood: .idle), .searching)
+        XCTAssertEqual(MateMap.emotion(state: .running, mood: .waiting), .listening)
+        // 每个心情都映射到不同的表情
+        XCTAssertEqual(Set(MascotMood.allCases.map { MateMap.emotion(for: $0) }).count, MascotMood.allCases.count)
+    }
+
+    func testStatesFlowThroughMood() {
+        func e(_ s: LoopState, w: Int = 0, b: Int = 0, st: Int = 0, q: Bool = false) -> String {
+            MateMap.emotion(state: s, mood: MascotMood.derive(state: s, waiting: w, building: b, stuck: st, quiet: q)).id
+        }
+        XCTAssertEqual(e(.running), "02")                // 顺利 → 待机
+        XCTAssertEqual(e(.running, b: 2), "30")          // 施工 → 思考
+        XCTAssertEqual(e(.running, w: 1, b: 2), "35")    // 等你 → 等待输入
+        XCTAssertEqual(e(.running, st: 1), "34")         // 卡住 / 没活路 → 出错
+        XCTAssertEqual(e(.stale), "34")
+        XCTAssertEqual(e(.error("x")), "34")
+        XCTAssertEqual(e(.paused, w: 3), "00")           // 暂停 → 睡
+        XCTAssertEqual(e(.running, w: 1, q: true), "00") // 免打扰 → 睡
+        XCTAssertEqual(e(.stale, q: true), "34")         // 免打扰也挡不住出错
+        XCTAssertEqual(e(.loading), "40")
+    }
+
+    func testEventReactions() {
+        XCTAssertEqual(MateMap.reaction(.launch).emotion.id, "01")
+        XCTAssertEqual(MateMap.reaction(.approved).emotion.id, "33")
+        XCTAssertTrue(MateMap.reaction(.approved).celebrate)
+        XCTAssertTrue(MateMap.reaction(.merged).celebrate)
+        XCTAssertEqual(MateMap.reaction(.replyFailed).emotion.id, "34")
+        XCTAssertEqual(MateMap.reaction(.replied).emotion.id, "39")
+        XCTAssertFalse(MateMap.reaction(.rejected).celebrate)
+        for e in [MateEvent.launch, .approved, .merged, .rejected, .sending, .replied, .replyFailed] {
+            XCTAssertGreaterThan(MateMap.reaction(e).seconds, 0)
+        }
+    }
+
+    func testMergedIncreased() {
+        XCTAssertFalse(MateMap.mergedIncreased(old: [:], new: ["TB": 3]))
+        XCTAssertFalse(MateMap.mergedIncreased(old: ["TB": 3], new: ["TB": 3]))
+        XCTAssertTrue(MateMap.mergedIncreased(old: ["TB": 3], new: ["TB": 4]))
+        XCTAssertFalse(MateMap.mergedIncreased(old: ["TB": 3], new: ["TB": 2, "EV": 5]))   // 新项目不算
+    }
+
+    func testIdsAreEngineContract() {
+        // 编号是引擎契约：两位数字，分段 00-09 / 10-29 / 30-49
+        for e in MateEmotion.allCases {
+            XCTAssertEqual(e.id.count, 2); XCTAssertNotNil(Int(e.id))
+            XCTAssertLessThan(Int(e.id)!, 50)
+        }
+        XCTAssertEqual(MateEmotion.done.id, "33")
+        XCTAssertEqual(MateEmotion.sleep.id, "00")
+    }
+
+    func testCharactersAndBridge() {
+        XCTAssertEqual(MateCharacter.default, .ball)
+        XCTAssertEqual(MateCharacter.from(nil), .ball)
+        XCTAssertEqual(MateCharacter.from("nimbo"), .nimbo)
+        XCTAssertEqual(MateCharacter.from("bogus"), .ball)
+        XCTAssertFalse(MateCharacter.ball.licensable)
+        XCTAssertTrue(MateCharacter.twinkle.licensable)
+        XCTAssertEqual(MateCharacter.ball.engine, "ball")
+        XCTAssertEqual(MateCharacter.nimbo.engine, "mates")
+        XCTAssertEqual(MateBridge.set(.done, celebrate: true), "window.evoMate && window.evoMate.set('33', true)")
+        XCTAssertEqual(MateBridge.gaze(2, -0.5), "window.evoMate && window.evoMate.gaze(1.00, -0.50)")
+        XCTAssertEqual(MateBridge.gaze(.nan, 0), "window.evoMate && window.evoMate.gaze(0.00, 0.00)")
+        let g = MateBridge.gazeVector(dx: 180, dy: -720)
+        XCTAssertEqual(g.0, 0.5, accuracy: 0.001); XCTAssertEqual(g.1, -1, accuracy: 0.001)
+        XCTAssertEqual(MateBridge.query(character: .ball, emotion: .standby, size: 120, still: false), "engine=ball&c=blob&e=02")
+        XCTAssertEqual(MateBridge.query(character: .nimbo, emotion: .sleep, size: 30, still: true),
+                       "engine=mates&c=nimbo&e=00&eye=1.8&lite=1&still=1")
+        XCTAssertTrue(MateBridge.query(character: .ball, emotion: .standby, size: 56, still: false).contains("eye=1.5&lite=1"))
+    }
+}
+
+final class ItemLogTests: XCTestCase {
+    func testDecodeLog() throws {
+        let l = try JSONDecoder().decode(ItemLog.self, from: fixture("log_tb_ux_003.json"))
+        XCTAssertEqual(l.key, "TB-UX-003")
+        XCTAssertEqual(l.summary, "注册页主按钮换成陶土色，悬停加深")
+        XCTAssertEqual(l.changes.map(\.path), ["web/src/pages/Register.tsx", "web/src/theme.css"])
+        XCTAssertEqual(l.tests.map(\.result), ["passed", "not_run"])
+        XCTAssertEqual(l.manualChecks.count, 2)
+        XCTAssertEqual(l.notes, ["按钮再圆一点", "旧格式的一句"])
+        XCTAssertTrue(l.hasDiff)
+        XCTAssertNil(l.mergedSha)
+        XCTAssertEqual(l.events.count, 6)                     // 坏行跳过
+        XCTAssertEqual(l.timeline.first?.event, "weird_new_event")
+        XCTAssertEqual(l.artifacts.count, 2)                  // 缺 path 的跳过
+        XCTAssertEqual(l.artifacts[0].symbol, "photo")
+        XCTAssertEqual(l.artifacts[0].sizeText, "51 KB")
+        XCTAssertEqual(l.artifacts[1].sizeText, "3.0 MB")
+    }
+
+    func testEventLabelsAndDetail() throws {
+        let l = try JSONDecoder().decode(ItemLog.self, from: fixture("log_tb_ux_003.json"))
+        let ev = Dictionary(uniqueKeysWithValues: l.events.map { ($0.event, $0) })
+        XCTAssertEqual(ev["dispatch"]?.label, "派活")
+        XCTAssertEqual(ev["dispatch"]?.detail, "build · 第 1 轮")
+        XCTAssertEqual(ev["merge"]?.detail, "abcdef1")
+        XCTAssertEqual(ev["merge"]?.tone, .success)
+        XCTAssertEqual(ev["gate_open"]?.tone, .accent)
+        XCTAssertEqual(ev["weird_new_event"]?.label, "weird_new_event")
+        XCTAssertEqual(ev["weird_new_event"]?.detail, "alpha=x=1 · zeta=1、2")
+        XCTAssertNotNil(ev["add"]?.date)
+        XCTAssertEqual(Set(l.events.map(\.id)).count, l.events.count)
+    }
+
+    func testMinimalLog() throws {
+        let l = try ItemLog.decode(#"{"key":"EV-1","title":null,"state":null,"raw":null,"report":null,"events":[]}"#)
+        XCTAssertEqual(l.key, "EV-1")
+        XCTAssertTrue(l.events.isEmpty && l.artifacts.isEmpty && l.changes.isEmpty)
+        XCTAssertThrowsError(try ItemLog.decode("没有 EV-9"))
+    }
+}
+
+final class NavigationTests: XCTestCase {
+    func testSidebarItems() {
+        let i = SidebarItem.item(project: "TB", key: "TB-UX-003")
+        XCTAssertEqual(i.sidebarHighlight, .project("TB"))
+        XCTAssertEqual(i.parent, .project("TB"))
+        XCTAssertEqual(SidebarItem.project("TB").parent, .inbox)
+        XCTAssertNil(SidebarItem.inbox.parent)
+        XCTAssertEqual(SidebarItem.project("TB").title { $0 == "TB" ? "土布" : nil }, "TB · 土布")
+        XCTAssertEqual(SidebarItem.project("ZZ").title { _ in nil }, "ZZ")
+        XCTAssertEqual(i.title { _ in nil }, "TB-UX-003")
+    }
+
+    func testStuckEntries() throws {
+        let ev = try snap("status_v11.json")
+        let l = StuckEntry.list([ev, try snap("status_tb.json")])
+        XCTAssertEqual(l.filter { $0.kind == .noLivePath }.map(\.key), ["EV-3", "EV-4", "EV-5"])
+        XCTAssertEqual(l.filter { $0.kind == .tooLong }.map(\.key), ["EV-6", "EV-7"])   // 24 小时排在 7 小时前
+        XCTAssertEqual(l.first?.kind, .noLivePath)
+        XCTAssertTrue(l.contains { $0.detail == "没活路：依赖的件没了" })
+        XCTAssertTrue(l.contains { $0.key == "EV-6" && $0.detail.hasPrefix("排队 · 同一状态 24.0 小时") })
+        XCTAssertEqual(Set(l.map(\.id)).count, l.count)
+        // 老格式（数字）没有明细
+        let old = try StatusDoc.decode(#"{"project":"AB","stale":3,"no_live_path":true}"#)
+        XCTAssertEqual(old.staleItems, 3)
+        XCTAssertTrue(StuckEntry.list([ProjectSnapshot(code: "AB", doc: old)]).isEmpty)
+    }
+
+    func testGateGridColumns() {
+        XCTAssertEqual(GateGrid.columns(width: 0), 1)
+        XCTAssertEqual(GateGrid.columns(width: 500), 1)
+        XCTAssertEqual(GateGrid.columns(width: 694), 2)
+        XCTAssertEqual(GateGrid.columns(width: 900), 2)
+        XCTAssertEqual(GateGrid.columns(width: 1100), 3)
+        XCTAssertEqual(GateGrid.columns(width: 4000), 3)
+        XCTAssertEqual(GateGrid.columns(width: .infinity), 1)
+    }
+
+    func testWindowSizing() {
+        let small = WindowSizing.initial(visibleWidth: 1024, visibleHeight: 740)
+        XCTAssertEqual(small.width, 944); XCTAssertEqual(small.height, 680)
+        let tiny = WindowSizing.initial(visibleWidth: 800, visibleHeight: 500)
+        XCTAssertEqual(tiny.width, 900); XCTAssertEqual(tiny.height, 600)       // 不小于最小尺寸
+        let big = WindowSizing.initial(visibleWidth: 2560, visibleHeight: 1400)
+        XCTAssertEqual(big.width, 1240); XCTAssertEqual(big.height, 820)
+        XCTAssertTrue(DockPolicy.showsDock(mainWindowOpen: true))
+        XCTAssertFalse(DockPolicy.showsDock(mainWindowOpen: false))
+    }
+
+    func testDemoScript() {
+        XCTAssertEqual(DemoScript.steps.first, .desktop)
+        XCTAssertEqual(DemoScript.steps.last, .done)
+        XCTAssertLessThan(DemoScript.steps.firstIndex(of: .approve)!, DemoScript.steps.firstIndex(of: .rejectWords)!)
+        XCTAssertLessThan(DemoScript.steps.firstIndex(of: .palette)!, DemoScript.steps.firstIndex(of: .dark)!)
+        XCTAssertEqual(DemoScript.shotName(.popover), "02-popover.png")
+        XCTAssertEqual(DemoScript.shotName(.done), "13-done.png")
+        XCTAssertGreaterThan(DemoScript.totalSeconds, 15)
+        XCTAssertLessThan(DemoScript.totalSeconds, 60)
+    }
+
+    func testPaletteHasWindowAndAppearance() throws {
+        let e = PaletteEntry.build(cards: [], rows: [], paused: false)
+        XCTAssertEqual(e.first?.action, .openWindow)
+        XCTAssertEqual(Fuzzy.filter(e, query: "深色", text: \.searchText).first?.action, .toggleAppearance)
+        XCTAssertEqual(e.firstIndex { $0.action == .togglePause }, 3)
+    }
+}

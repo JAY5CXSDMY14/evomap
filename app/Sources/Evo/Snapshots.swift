@@ -52,9 +52,15 @@ enum Snapshots {
         Calendar.current.date(bySettingHour: 21, minute: 10, second: 0, of: Date()) ?? Date()
     }
 
-    static func run(dir: String) {
+    static func run(dir: String) async {
         let out = URL(fileURLWithPath: dir)
         try? FileManager.default.createDirectory(at: out, withIntermediateDirectories: true)
+        // ImageRenderer 画不了 WKWebView：先在屏幕外把角色的各个表情拍成静态图，界面里换成图片
+        let needed = Array(Set(MateSheet.shown + [MateEmotion.listening, .happy, .curious, .error, .replying, .searching, .sleep]))
+        for c in MateCharacter.allCases {
+            await MateSnapshotCache.shared.prepare(c, c == MateAssets.character ? needed : MateSheet.shown)
+        }
+        print("角色静态图：\(MateCharacter.allCases.map { c in "\(c.label) \(needed.filter { MateSnapshotCache.shared.image(c, $0) != nil }.count)" }.joined(separator: "、"))")
         let snaps = sampleSnaps
         let quiet = [snaps[2]]
 
@@ -73,8 +79,12 @@ enum Snapshots {
             render(SettingsView(state: main), width: 520, dark: dark, name: "settings-\(sfx)", out: out)
             // 5 向导
             render(SetupView(model: sampleSetup()), width: 620, dark: dark, name: "wizard-\(sfx)", out: out)
-            // 6 吉祥物各种心情 + 菜单栏小脸
-            render(MascotSheet(), width: 560, dark: dark, name: "mascot-\(sfx)", out: out)
+            // 6 角色表情（球球 / 云宝 / 亮亮）+ 菜单栏小脸
+            render(VStack(spacing: 0) {
+                       ForEach(MateCharacter.allCases, id: \.self) { c in MateSheetStatic(character: c) }
+                       MascotSheet()
+                   },
+                   width: 640, dark: dark, name: "mascot-\(sfx)", out: out)
         }
         // 7 暂停（深色）、心跳过期（浅色）、对话 + 收菜（浅色）
         let paused = AppState.preview(snaps: snaps, beats: beats(snaps), loopRunning: false)
@@ -87,6 +97,7 @@ enum Snapshots {
         chat.showHarvest = true
         chat.hiddenGates = ["TB/gate_13"]
         render(MainPopover(state: chat, now: evening), width: MainPopover.width, dark: false, name: "popover-chat-light", out: out)
+        MainWindowController.shared.window?.close()
         print("snapshots → \(out.path)")
     }
 
@@ -126,21 +137,35 @@ enum Snapshots {
     }
 }
 
-/// 吉祥物各心情一字排开 + 菜单栏小脸。
-struct MascotSheet: View {
+/// 截图用：某个角色的表情表（不依赖 @AppStorage 当前角色）。
+struct MateSheetStatic: View {
+    let character: MateCharacter
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text("小陶的五种心情").font(Theme.title(17)).foregroundStyle(Theme.textPrimary)
-            HStack(alignment: .bottom, spacing: 18) {
-                ForEach(MascotMood.allCases, id: \.self) { m in
-                    VStack(spacing: 8) {
-                        EvoMascot(mood: m, size: 72, frozenAt: m == .waiting ? 0.55 : 0.4)
-                        Text(Self.name(m)).font(Theme.caption(12)).foregroundStyle(Theme.textSecondary)
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 8) {
+                Text("\(character.label)").font(Theme.title(16)).foregroundStyle(Theme.textPrimary)
+                Text(character.licensable ? "mood-mates · 可买商业许可" : "emotion-ball · 只许自用（默认）")
+                    .font(Theme.caption()).foregroundStyle(Theme.textSecondary)
+            }
+            HStack(alignment: .bottom, spacing: 10) {
+                ForEach(MateSheet.shown, id: \.self) { e in
+                    VStack(spacing: 4) {
+                        MateStill(character: character, emotion: e, size: 64).frame(width: 64, height: 64)
+                        Text("\(e.name) \(e.id)").font(Theme.caption(10.5)).foregroundStyle(Theme.textSecondary)
                     }
                     .frame(maxWidth: .infinity)
                 }
             }
-            Text("菜单栏小脸（单色 template）").font(Theme.title(13)).foregroundStyle(Theme.textPrimary)
+        }
+        .padding(.horizontal, 20).padding(.top, 16)
+    }
+}
+
+/// 吉祥物各心情一字排开 + 菜单栏小脸。
+struct MascotSheet: View {
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("菜单栏小脸（单色 template，沿用原来的矢量小脸）").font(Theme.title(13)).foregroundStyle(Theme.textPrimary)
             HStack(spacing: 14) {
                 ForEach(MascotMood.allCases, id: \.self) { m in
                     HStack(spacing: 4) {
@@ -151,10 +176,6 @@ struct MascotSheet: View {
                     .padding(.horizontal, 8).padding(.vertical, 3)
                     .background(RoundedRectangle(cornerRadius: 5).fill(Theme.surfaceSunk))
                 }
-            }
-            HStack(spacing: 8) {
-                EvoMascot(mood: .waiting, size: 30, frozenAt: 0.55)
-                SpeechBubble(text: "有 2 件等你看效果")
             }
         }
         .padding(20)

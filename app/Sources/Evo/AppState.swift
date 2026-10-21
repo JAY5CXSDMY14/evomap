@@ -1,5 +1,5 @@
 #if os(macOS)
-import Foundation
+import AppKit
 import EvoCore
 
 /// 应用的全部状态：每 30 秒跑一遍 `evo projects` + 每个项目 `evo -p X status --json`。
@@ -21,6 +21,16 @@ final class AppState: ObservableObject {
     @Published var chat: [ChatLine] = []           // 输入框发出去的话和 evo 的回话（最近几条）
     @Published var showHarvest = false
     @Published var flash: String?                  // 一句临时提示（通过成功、出错…）
+    @Published var windowSelection: SidebarItem? = .inbox   // 主窗口侧栏 / 详情
+    @Published var mateReaction: MateReaction?     // 一次性表情（通过 → 任务完成…），几秒后回常态
+    @Published var mateCelebrate = 0               // 每 +1 撒一次花
+    @Published var logs: [String: ItemLog] = [:]   // 「项目/件号」→ evo log --json
+    @Published var logErrors: [String: String] = [:]
+    @Published var appearance: String = UserDefaults.standard.string(forKey: "appearance") ?? "system"   // system / light / dark
+    @Published var demoReject: (id: String, words: String)?   // 演示模式：让某张卡展开打回输入框并填好原话
+    var previewQuiet: Bool?                        // 截图用：固定「是不是免打扰」
+    private var reactionToken = UUID()
+    private var mergedCounts: [String: Int] = [:]
 
     struct ChatLine: Identifiable, Equatable {
         let id = UUID()
@@ -58,7 +68,72 @@ final class AppState: ObservableObject {
     var mood: MascotMood {
         let r = rows
         return MascotMood.derive(state: loopState, waiting: allCards.count,
-                                 building: r.reduce(0) { $0 + $1.building }, stuck: r.reduce(0) { $0 + $1.stuck })
+                                 building: r.reduce(0) { $0 + $1.building }, stuck: r.reduce(0) { $0 + $1.stuck }, quiet: quietNow)
+    }
+    var quietNow: Bool { previewQuiet ?? (config.quietHours?.contains(Date()) ?? false) }
+    /// 角色现在的表情：一次性反应优先，其余跟心情走。
+    var mateEmotion: MateEmotion { mateReaction?.emotion ?? MateMap.emotion(state: loopState, mood: mood) }
+    var stuckEntries: [StuckEntry] { StuckEntry.list(snaps) }
+    var totals: (building: Int, verifying: Int, stuck: Int, tooLong: Int) {
+        let r = rows
+        return (r.reduce(0) { $0 + $1.building }, r.reduce(0) { $0 + $1.verifying }, r.reduce(0) { $0 + $1.stuck }, r.reduce(0) { $0 + $1.tooLong })
+    }
+    func snapshot(_ code: String) -> ProjectSnapshot? { snaps.first { $0.code == code } }
+    func row(_ code: String) -> ProjectRow? { rows.first { $0.code == code } }
+    func beat(_ code: String) -> HeartbeatStatus? { beats.first { $0.project == code } }
+
+    // MARK: 表情反应
+
+    func react(_ e: MateEvent) {
+        let r = MateMap.reaction(e)
+        let token = UUID()
+        reactionToken = token
+        mateReaction = r
+        if r.celebrate { mateCelebrate += 1 }
+        DispatchQueue.main.asyncAfter(deadline: .now() + r.seconds) { [weak self] in
+            guard let self, self.reactionToken == token else { return }
+            self.mateReaction = nil
+        }
+    }
+
+    // MARK: 外观（深色 / 浅色 / 跟系统）
+
+    func applyAppearance() {
+        switch appearance {
+        case "dark": NSApp.appearance = NSAppearance(named: .darkAqua)
+        case "light": NSApp.appearance = NSAppearance(named: .aqua)
+        default: NSApp.appearance = nil
+        }
+    }
+
+    func setAppearance(_ a: String) {
+        appearance = a
+        UserDefaults.standard.set(a, forKey: "appearance")
+        applyAppearance()
+    }
+
+    /// 命令面板「切换深色 / 浅色」：以眼前看到的为准取反。
+    func toggleAppearance() {
+        let dark = NSApp.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+        setAppearance(dark ? "light" : "dark")
+    }
+
+    // MARK: 件的时间线（evo log <件号> --json）
+
+    func loadLog(project: String, key: String) async {
+        let k = "\(project)/\(key)"
+        let r = await Shell.evo(["-p", project, "log", key, "--json"], timeout: 60)
+        if r.ok, let l = try? ItemLog.decode(r.out) {
+            logs[k] = l; logErrors[k] = nil
+        } else {
+            logErrors[k] = r.ok ? "不是 log JSON：\(r.out.prefix(80))" : (r.tail.isEmpty ? "退出码 \(r.code)" : r.tail)
+        }
+    }
+
+    /// ⌘1…9：窗口里选中第几个项目（弹窗里是「只看」过滤）。
+    func select(digit: Int) {
+        guard let c = Shortcuts.project(forDigit: digit, codes: codes) else { return }
+        windowSelection = .project(c)
     }
     var speech: String { Speech.status(state: loopState, cards: allCards, rows: rows, beats: beats) }
     var palette: [PaletteEntry] {
@@ -66,6 +141,7 @@ final class AppState: ObservableObject {
     }
 
     func start() {
+        react(.launch)
         refresh()
         timer?.invalidate()
         timer = Timer.scheduledTimer(withTimeInterval: Self.pollSeconds, repeats: true) { _ in
@@ -115,6 +191,9 @@ final class AppState: ObservableObject {
         UserDefaults.standard.set(gates.primed, forKey: "gatesPrimed")
         Notifier.shared.post(notes)
         pruneHidden()
+        let merged = Dictionary(uniqueKeysWithValues: snaps.compactMap { s in s.doc.map { (s.code, $0.mergedCount) } })
+        if MateMap.mergedIncreased(old: mergedCounts, new: merged) { react(.merged) }
+        mergedCounts = merged
         if Launchd.installed { loopRunning = await Launchd.isLoaded() } else { loopRunning = nil }
         lastRefresh = Date()
     }
@@ -166,6 +245,7 @@ final class AppState: ObservableObject {
             resolving.remove(card.id)
             if r.ok {
                 flash = "\(verb)了：\(card.title)"
+                react(verb == card.approveChoice ? .approved : .rejected)
                 refresh()
             } else {
                 hiddenGates.remove(card.id)
@@ -198,9 +278,11 @@ final class AppState: ObservableObject {
         case .success(let args):
             chat.append(ChatLine(text: text.trimmingCharacters(in: .whitespacesAndNewlines), mine: true))
             trimChat()
+            react(.sending)
             Task {
                 let r = await Shell.evo(args, timeout: 120)
                 chat.append(ChatLine(text: Composer.reply(mode: mode, ok: r.ok, out: r.out, err: r.err), mine: false, failed: !r.ok))
+                react(r.ok ? .replied : .replyFailed)
                 trimChat()
                 if r.ok { refresh() }
             }
@@ -238,14 +320,16 @@ final class AppState: ObservableObject {
         case .tick: tickNow()
         case .openPanel: PanelController.shared.open()
         case .togglePause: togglePause()
-        case .harvest: showHarvest = true; MenuWindow.show()
+        case .harvest: showHarvest = true; windowSelection = .inbox; MainWindowController.shared.show()
         case .refresh: refresh()
         case .settings: WindowManager.shared.showSettings()
         case .setup: WindowManager.shared.showSetup()
         case .watchdog: runWatchdog()
         case .approve(let id): if let c = card(id: id) { approve(c) }
         case .reject(let id): if let c = card(id: id) { reject(c, words: nil) }
-        case .focusProject(let code): focusedProject = code; MenuWindow.show()
+        case .focusProject(let code): windowSelection = .project(code); MainWindowController.shared.show()
+        case .openWindow: MainWindowController.shared.show()
+        case .toggleAppearance: toggleAppearance()
         }
     }
 
@@ -256,6 +340,7 @@ final class AppState: ObservableObject {
         let s = AppState()
         s.snaps = snaps; s.beats = beats; s.loopRunning = loopRunning; s.chat = chat
         s.globalError = error; s.lastRefresh = Date()
+        s.previewQuiet = false
         return s
     }
 

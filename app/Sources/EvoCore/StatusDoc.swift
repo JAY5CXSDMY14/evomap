@@ -19,6 +19,32 @@ public struct StatusDoc: Decodable, Equatable, Sendable {
     public var staleItems: Int?
     /// 第十二轮新字段：岗位状态（施工/验收/决策 忙、闲、暂停、额度满）。
     public var roles: [Role]
+    /// 顶层 stale / no_live_path 是件列表时的明细（数字或布尔的老格式就是空表，只有上面的件数）。
+    public var staleList: [Flag]
+    public var noLivePathList: [Flag]
+
+    /// 一件被点名的件：卡太久或没活路。
+    public struct Flag: Decodable, Equatable, Sendable {
+        public var key: String
+        public var title: String?
+        public var state: String?
+        public var reason: String?
+        public var hours: Double?
+        public var minutes: Double?
+        enum CodingKeys: String, CodingKey { case key, title, state, reason, hours, minutes }
+        public init(key: String, title: String? = nil, state: String? = nil, reason: String? = nil, hours: Double? = nil, minutes: Double? = nil) {
+            self.key = key; self.title = title; self.state = state; self.reason = reason; self.hours = hours; self.minutes = minutes
+        }
+        public init(from d: Decoder) throws {
+            let c = try d.container(keyedBy: CodingKeys.self)
+            key = try c.decode(String.self, forKey: .key)
+            title = try? c.decodeIfPresent(String.self, forKey: .title)
+            state = try? c.decodeIfPresent(String.self, forKey: .state)
+            reason = try? c.decodeIfPresent(String.self, forKey: .reason)
+            hours = try? c.decodeIfPresent(Double.self, forKey: .hours)
+            minutes = try? c.decodeIfPresent(Double.self, forKey: .minutes)
+        }
+    }
 
     public struct Role: Decodable, Equatable, Sendable {
         public var role: String
@@ -127,6 +153,8 @@ public struct StatusDoc: Decodable, Equatable, Sendable {
         staleItems = Lenient.count(c, .staleItems)
         // roles 可能是列表（第十二轮）也可能是别的形状：只认列表里像样的条目
         roles = ((try? c.decodeIfPresent([Lenient.Maybe<Role>].self, forKey: .roles)) ?? nil)?.compactMap(\.value).filter { !$0.role.isEmpty } ?? []
+        staleList = ((try? c.decodeIfPresent([Lenient.Maybe<Flag>].self, forKey: .staleItems)) ?? nil)?.compactMap(\.value) ?? []
+        noLivePathList = ((try? c.decodeIfPresent([Lenient.Maybe<Flag>].self, forKey: .noLivePath)) ?? nil)?.compactMap(\.value) ?? []
     }
 
     /// 这个版本的应用认得的最高 schema_version；更高的照样解析（只加字段），但界面上提示升级。

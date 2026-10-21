@@ -31,7 +31,12 @@ final class WindowManager {
     func close(_ id: String) { windows[id]?.close() }
 
     func showSettings() {
-        show("settings", title: "Evo 设置", size: NSSize(width: 520, height: 640)) { SettingsView(state: AppState.shared) }
+        if MainWindowController.shared.isOpen {      // 窗口开着就在窗口里打开设置页
+            AppState.shared.windowSelection = .settings
+            MainWindowController.shared.show()
+            return
+        }
+        show("settings", title: "Evo 设置", size: NSSize(width: 520, height: 700)) { SettingsView(state: AppState.shared) }
     }
 
     func showSetup() {
@@ -85,6 +90,8 @@ struct SettingsView: View {
     @AppStorage("notificationsEnabled") private var notificationsEnabled = true
     @State private var loginItem = SMAppService.mainApp.status == .enabled
     @State private var loginError: String?
+    @AppStorage("mateCharacter") private var mateCharacter = MateCharacter.default.rawValue
+    var embedded = false
     @Environment(\.evoStatic) private var isStatic
 
     private var portText: Binding<String> {
@@ -95,7 +102,7 @@ struct SettingsView: View {
         MaybeScroll(maxHeight: 2000) {
             VStack(alignment: .leading, spacing: 14) {
                 HStack(spacing: 12) {
-                    EvoMascot(mood: .idle, size: 40)
+                    MateView(emotion: .standby, size: 44)
                     VStack(alignment: .leading, spacing: 2) {
                         Text("设置").font(Theme.title(22)).foregroundStyle(Theme.textPrimary)
                         Text("Evo \(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "dev")")
@@ -104,6 +111,30 @@ struct SettingsView: View {
                     Spacer()
                 }
                 .staggeredAppear(0)
+                SettingsCard(title: "角色和外观", symbol: "face.smiling") {
+                    HStack(spacing: 8) {
+                        ForEach(MateCharacter.allCases, id: \.self) { c in
+                            Button { mateCharacter = c.rawValue; if MainWindowController.shared.isOpen { DockIcon.apply() } } label: {
+                                Text(c.label)
+                            }
+                            .buttonStyle(BouncyStyle(kind: mateCharacter == c.rawValue ? .primary : .chip, compact: true))
+                        }
+                        Spacer()
+                        MateView(emotion: .curious, size: 40)
+                    }
+                    Hint(text: mateCharacter == MateCharacter.ball.rawValue
+                         ? "球球（emotion-ball）只许自用：个人学习研究、非商业，带着它的 Evo 不能公开分发。要分发就换云宝 / 亮亮并买商业许可。"
+                         : "云宝 / 亮亮（mood-mates）：个人免费；商用或分发前要向作者买商业许可。", color: Theme.textSecondary)
+                    HStack(spacing: 8) {
+                        Text("外观").foregroundStyle(Theme.textPrimary)
+                        ForEach([("system", "跟系统"), ("light", "浅色"), ("dark", "深色")], id: \.0) { k, t in
+                            Button(t) { state.setAppearance(k) }
+                                .buttonStyle(BouncyStyle(kind: state.appearance == k ? .primary : .chip, compact: true))
+                        }
+                        Spacer()
+                    }
+                }
+                .staggeredAppear(1)
                 SettingsCard(title: "开机", symbol: "power") {
                     Toggle("登录时自动打开 Evo", isOn: $loginItem).toggleStyle(PillToggleStyle())
                         .onChange(of: loginItem) { on in if !isStatic { setLoginItem(on) } }
@@ -146,8 +177,8 @@ struct SettingsView: View {
             .padding(20)
         }
         .frame(width: 520)
-        .frame(minHeight: isStatic ? nil : 520)
-        .background(Theme.bg)
+        .frame(minHeight: isStatic || embedded ? nil : 520)
+        .background(embedded ? Color.clear : Theme.bg)
     }
 
     private var quietText: String {
@@ -255,7 +286,7 @@ struct SetupView: View {
         MaybeScroll(maxHeight: 2000) {
             VStack(alignment: .leading, spacing: 14) {
                 HStack(alignment: .center, spacing: 14) {
-                    EvoMascot(mood: model.running != nil ? .working : (model.requiredOK ? .idle : .waiting), size: 58)
+                    MateView(emotion: model.running != nil ? .searching : (model.requiredOK ? .happy : .curious), size: 64, followMouse: true)
                     VStack(alignment: .leading, spacing: 6) {
                         Text("欢迎使用 Evo").font(Theme.title(24)).foregroundStyle(Theme.textPrimary).accessibilityAddTraits(.isHeader)
                         SpeechBubble(text: bubble)

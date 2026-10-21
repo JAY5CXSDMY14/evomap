@@ -10,7 +10,7 @@ on:
 jobs:
   build:
     runs-on: macos-14
-    timeout-minutes: 30
+    timeout-minutes: 45
     defaults:
       run:
         working-directory: app
@@ -35,6 +35,10 @@ jobs:
           test -f build/Evo.app/Contents/Resources/evo/bin/evo
           test -f build/Evo.app/Contents/Resources/evo/panel/index.html
           test -f build/Evo.app/Contents/Resources/evo/install.sh
+          test -f build/Evo.app/Contents/Resources/mate/index.html
+          test -f build/Evo.app/Contents/Resources/vendor/emotion-ball/js/engine.js
+          test -f build/Evo.app/Contents/Resources/vendor/NOTICE.md
+          ! grep -rE "fonts\.googleapis|fonts\.gstatic" build/Evo.app/Contents/Resources/mate build/Evo.app/Contents/Resources/vendor
           du -sh build/Evo.app build/Evo.dmg
       - name: 自带 evo 能跑（空的 EVO_HOME）
         env:
@@ -51,7 +55,25 @@ jobs:
       - name: 界面截图（make snapshots）
         timeout-minutes: 8
         run: make snapshots
+      - name: 装录屏 / 点击工具（ffmpeg、cliclick）
+        timeout-minutes: 10
+        env:
+          HOMEBREW_NO_AUTO_UPDATE: "1"
+          HOMEBREW_NO_INSTALL_CLEANUP: "1"
+        run: brew install ffmpeg cliclick || brew install cliclick || true
+      - name: 实机演示（真桌面截图 + 录屏，mac-demo）
+        timeout-minutes: 12
+        run: bash scripts/mac-demo.sh build/Evo.app build/mac-demo
       - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: mac-demo
+          path: |
+            app/build/mac-demo
+          if-no-files-found: warn
+          retention-days: 30
+      - uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: snapshots
           path: app/build/snapshots

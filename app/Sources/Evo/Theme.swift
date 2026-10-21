@@ -25,6 +25,8 @@ enum Theme {
     static let success       = dynamic(0x4F8A5B, 0x7FB88A)
     static let warning       = dynamic(0xB7791F, 0xE0B25C)
     static let danger        = dynamic(0xC0473A, 0xE8806F)
+    static let sidebar       = dynamic(0xF0EEE6, 0x1F1E1D)
+    static let sidebarSelected = dynamic(0xE3DED1, 0x353430)
     static let mascotBody    = dynamic(0xD97757, 0xDE8566)
     static let mascotFace    = dynamic(0xFBF6EE, 0xFBF6EE)
     static let mascotInk     = dynamic(0x2A2522, 0x2A2522)

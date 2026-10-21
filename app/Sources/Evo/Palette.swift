@@ -13,6 +13,7 @@ final class PaletteController {
 
     func show() {
         model.query = ""; model.selected = 0
+        model.focusTick += 1
         if panel == nil {
             let p = KeyPanel(contentRect: NSRect(x: 0, y: 0, width: 520, height: 380),
                              styleMask: [.titled, .fullSizeContentView, .closable], backing: .buffered, defer: false)
@@ -69,6 +70,7 @@ final class KeyPanel: NSPanel {
 final class PaletteModel: ObservableObject {
     @Published var query = "" { didSet { selected = 0 } }
     @Published var selected = 0
+    @Published var focusTick = 0       // 每次打开 +1：把光标放进搜索框
     var count = 0
 
     func filtered(_ all: [PaletteEntry]) -> [PaletteEntry] {
@@ -85,6 +87,7 @@ struct PaletteView: View {
     @ObservedObject var state: AppState
     @ObservedObject var model: PaletteModel
     @Environment(\.evoStatic) private var isStatic
+    @FocusState private var fieldFocused: Bool
 
     var body: some View {
         let list = model.filtered(state.palette)
@@ -95,6 +98,8 @@ struct PaletteView: View {
                     PaletteController.shared.runSelected()
                 }
                 .font(.system(size: 15))
+                .focused($fieldFocused)
+                .uiProbe("palette-field")
                 Text("esc").font(.system(size: 10.5, design: .rounded)).foregroundStyle(Theme.textSecondary)
                     .padding(.horizontal, 6).padding(.vertical, 2)
                     .background(RoundedRectangle(cornerRadius: 5).strokeBorder(Theme.border))
@@ -117,7 +122,8 @@ struct PaletteView: View {
         }
         .frame(width: 520)
         .background(Theme.bg)
-        .onAppear { model.count = list.count }
+        .onAppear { model.count = list.count; fieldFocused = true }
+        .onReceive(model.$focusTick) { _ in DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { fieldFocused = true } }
         .onChange(of: list.count) { model.count = $0 }
     }
 }

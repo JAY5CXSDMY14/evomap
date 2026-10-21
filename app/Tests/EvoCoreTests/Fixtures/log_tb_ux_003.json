@@ -1,0 +1,13 @@
+{"key": "TB-UX-003", "title": "注册页按钮改成陶土色", "state": "等你看效果", "raw": "look", "goal": "让崇明土布被更多人买到",
+ "report": {"status": "done", "summary": "注册页主按钮换成陶土色，悬停加深", "changes": [{"path": "web/src/pages/Register.tsx", "why": "按钮颜色"}, {"path": "web/src/theme.css"}, "坏条目"],
+            "tests": [{"command": "pnpm test", "result": "passed"}, {"command": "pnpm e2e"}], "manual_checks": ["看注册页按钮颜色", "深色模式下对比度"]},
+ "manual_checks": ["看注册页按钮颜色", "深色模式下对比度"], "has_diff": true, "merged_sha": null,
+ "notes": [{"at": "2026-10-20T10:00:00+08:00", "words": "按钮再圆一点", "source": "app"}, "旧格式的一句"],
+ "events": [{"at": "2026-10-20T09:00:00+08:00", "item": "TB-UX-003", "event": "add", "title": "注册页按钮改成陶土色"},
+            {"at": "2026-10-20T09:05:00+08:00", "item": "TB-UX-003", "event": "dispatch", "role": "build", "round": 1},
+            {"at": "2026-10-20T09:40:00+08:00", "item": "TB-UX-003", "event": "report", "status": "done", "tests": 2},
+            {"at": "2026-10-20T09:41:00+08:00", "item": "TB-UX-003", "event": "gate_open", "gate": "gate_12", "kind": "look"},
+            {"at": "2026-10-20T09:50:00+08:00", "item": "TB-UX-003", "event": "merge", "sha": "abcdef1234567"},
+            {"at": "2026-10-20T09:51:00+08:00", "item": "TB-UX-003", "event": "weird_new_event", "zeta": [1, 2], "alpha": {"x": 1}},
+            "坏行"],
+ "artifacts": [{"path": "shots/register.png", "kind": "image", "bytes": 52400}, {"path": "report.html", "kind": "html", "bytes": 3100000, "too_big": false}, {"kind": "image"}]}

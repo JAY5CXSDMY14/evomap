@@ -12,6 +12,7 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
     /// UNUserNotificationCenter 只能在打包好的 .app 里用；`swift run` 时直接跳过，免得崩。
     var available: Bool {
         Bundle.main.bundleIdentifier != nil && Bundle.main.bundleURL.pathExtension == "app"
+            && ProcessInfo.processInfo.environment["EVO_NO_NOTIFY"] != "1"     // CI 录屏：不弹授权
     }
 
     var enabled: Bool {

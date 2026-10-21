@@ -3,7 +3,8 @@ import AppKit
 import SwiftUI
 import EvoCore
 
-/// 菜单栏弹窗（MenuBarExtra .window）：问候 + 状态胶囊、吉祥物气泡、等你处理的卡片、项目行、快捷小胶囊、输入框。
+/// 菜单栏弹窗（MenuBarExtra .window）。v0.3.0 起变紧凑：问候 + 状态、一行汇总、最前面两张闸门卡、「打开 Evo 窗口」。
+/// 细看、项目、时间线、输入框都在主窗口里。
 struct MainPopover: View {
     @ObservedObject var state: AppState
     /// 截图时固定时间；nil = 现在。
@@ -12,27 +13,41 @@ struct MainPopover: View {
     @Environment(\.evoStatic) private var isStatic
     @State private var hoveredCard: String?
 
-    static let width: CGFloat = 384
+    static let width = CGFloat(WindowSizing.popoverWidth)
 
     var body: some View {
         let cards = state.cards
+        let shown = Array(cards.prefix(WindowSizing.popoverCards))
         VStack(spacing: 0) {
             HeaderView(state: state, now: now)
-                .padding(.horizontal, 16).padding(.top, 16).padding(.bottom, 10)
+                .padding(.horizontal, 16).padding(.top, 16).padding(.bottom, 12)
                 .staggeredAppear(0)
-            MaybeScroll(maxHeight: 440) {
-                VStack(alignment: .leading, spacing: 14) {
-                    if let f = state.focusedProject { FocusChip(code: f) { withAnimation(Motion.or(Motion.spring)) { state.focusedProject = nil } } }
-                    GatesSection(state: state, cards: cards, focusedID: focusedID(cards), hovered: $hoveredCard)
-                    if state.showHarvest { HarvestCard(state: state).transition(.scale(scale: 0.9, anchor: .top).combined(with: .opacity)) }
-                    if !state.rows.isEmpty { ProjectsSection(state: state).staggeredAppear(3 + cards.count) }
-                    if !state.chat.isEmpty { ChatSection(lines: state.chat, mood: state.mood) }
+            VStack(alignment: .leading, spacing: 12) {
+                SummaryStrip(state: state).staggeredAppear(1)
+                if let f = state.focusedProject { FocusChip(code: f) { withAnimation(Motion.or(Motion.spring)) { state.focusedProject = nil } } }
+                GatesSection(state: state, cards: shown, total: cards.count, focusedID: focusedID(shown), hovered: $hoveredCard)
+                if cards.count > shown.count {
+                    Button { MainWindowController.shared.show() } label: {
+                        HStack(spacing: 4) { Text("还有 \(cards.count - shown.count) 件，去窗口里看"); Image(systemName: "arrow.right") }
+                            .font(.system(size: 12, weight: .medium)).foregroundStyle(Theme.accent)
+                    }
+                    .buttonStyle(PressScale())
+                    .frame(maxWidth: .infinity, alignment: .center)
                 }
-                .padding(.horizontal, 16).padding(.bottom, 12)
             }
+            .padding(.horizontal, 16).padding(.bottom, 14)
             VStack(spacing: 10) {
-                QuickChips(state: state).staggeredAppear(5 + cards.count)
-                ComposerView(state: state).staggeredAppear(6 + cards.count)
+                Button { MainWindowController.shared.show() } label: {
+                    HStack(spacing: 8) {
+                        Image(systemName: "macwindow")
+                        Text("打开 Evo 窗口")
+                        Spacer(minLength: 0)
+                        Text("⌘0").font(.system(size: 11, weight: .medium, design: .rounded)).opacity(0.8)
+                    }
+                    .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(BouncyStyle(kind: .primary))
+                .uiProbe("pop-open-window")
                 FooterView(state: state)
             }
             .padding(.horizontal, 16).padding(.vertical, 12)
@@ -41,8 +56,6 @@ struct MainPopover: View {
         .frame(width: Self.width)
         .background(Theme.bg)
         .animation(Motion.or(Motion.pop), value: cards.map(\.id))
-        .animation(Motion.or(Motion.softSpring), value: state.showHarvest)
-        .animation(Motion.or(Motion.softSpring), value: state.chat)
         .background(shortcuts)
     }
 
@@ -51,15 +64,16 @@ struct MainPopover: View {
         return cards.first?.id
     }
 
-    /// 看不见的按钮，只为挂快捷键：⌘1…9 选项目、⌘↩ 通过当前卡片、⌘K 命令面板、⌘R 刷新。
+    /// 看不见的按钮，只为挂快捷键：⌘0 打开窗口、⌘1…9 只看项目、⌘↩ 通过当前卡片、⌘K 命令面板、⌘R 刷新。
     private var shortcuts: some View {
         ZStack {
+            Button("") { MainWindowController.shared.show() }.keyboardShortcut("0", modifiers: .command)
             ForEach(1..<10) { d in
                 Button("") { withAnimation(Motion.or(Motion.spring)) { state.focus(digit: d) } }
                     .keyboardShortcut(KeyEquivalent(Character(String(d))), modifiers: .command)
             }
             Button("") {
-                if let id = focusedID(state.cards), let c = state.card(id: id) {
+                if let id = focusedID(Array(state.cards.prefix(WindowSizing.popoverCards))), let c = state.card(id: id) {
                     withAnimation(Motion.or(Motion.pop)) { state.approve(c) }
                 }
             }
@@ -68,6 +82,24 @@ struct MainPopover: View {
             Button("") { state.refresh() }.keyboardShortcut("r", modifiers: .command)
         }
         .opacity(0).frame(width: 0, height: 0).accessibilityHidden(true)
+    }
+}
+
+/// 一行汇总：等你 / 施工 / 验收 / 卡住 / 卡太久（跨项目）。
+struct SummaryStrip: View {
+    @ObservedObject var state: AppState
+    var body: some View {
+        let t = state.totals
+        HStack(spacing: 0) {
+            Metric(label: "等你", n: state.allCards.count, color: Theme.accent).frame(maxWidth: .infinity)
+            Metric(label: "施工", n: t.building, color: Theme.textPrimary).frame(maxWidth: .infinity)
+            Metric(label: "验收", n: t.verifying, color: Theme.textPrimary).frame(maxWidth: .infinity)
+            Metric(label: "卡住", n: t.stuck, color: Theme.danger).frame(maxWidth: .infinity)
+            Metric(label: "卡太久", n: t.tooLong, color: Theme.warning).frame(maxWidth: .infinity)
+        }
+        .padding(.vertical, 8)
+        .background(RoundedRectangle(cornerRadius: Theme.radiusSmall, style: .continuous).fill(Theme.surfaceSunk))
+        .accessibilityElement(children: .combine)
     }
 }
 
@@ -95,7 +127,7 @@ struct HeaderView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .center, spacing: 12) {
-                EvoMascot(mood: state.mood, size: 46)
+                MateView(emotion: state.mateEmotion, celebrate: state.mateCelebrate, size: 50, followMouse: true)
                 VStack(alignment: .leading, spacing: 2) {
                     if isStatic || now != nil { titleText(now ?? Date()) } else {
                         TimelineView(.everyMinute) { ctx in titleText(ctx.date) }
@@ -184,17 +216,18 @@ struct JiggleBadge: View {
 struct GatesSection: View {
     @ObservedObject var state: AppState
     let cards: [GateCard]
+    var total: Int? = nil
     let focusedID: String?
     @Binding var hovered: String?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            SectionTitle(text: "等你处理", count: cards.count).staggeredAppear(1)
+            SectionTitle(text: "等你处理", count: total ?? cards.count).staggeredAppear(1)
             if cards.isEmpty {
                 EmptyState().staggeredAppear(2).transition(.scale(scale: 0.9).combined(with: .opacity))
             } else {
                 ForEach(Array(cards.enumerated()), id: \.element.id) { i, c in
-                    GateCardView(state: state, card: c, focused: c.id == focusedID)
+                    GateCardView(state: state, card: c, focused: c.id == focusedID, probe: "pop-gate-\(i)")
                         .onHover { h in hovered = h ? c.id : (hovered == c.id ? nil : hovered) }
                         .staggeredAppear(2 + i)
                         .transition(.asymmetric(
@@ -226,6 +259,8 @@ struct GateCardView: View {
     @ObservedObject var state: AppState
     let card: GateCard
     let focused: Bool
+    var probe: String? = nil                // UI 测试点位名前缀（pop-gate-0 / win-gate-0）
+    var openItem: (() -> Void)? = nil       // 窗口里：打开这件的时间线
     @State private var rejecting = false
     @State private var words = ""
     @FocusState private var wordsFocused: Bool
@@ -260,6 +295,7 @@ struct GateCardView: View {
                         .padding(.horizontal, 10).padding(.vertical, 6)
                         .background(RoundedRectangle(cornerRadius: Theme.radiusSmall).fill(Theme.surfaceSunk))
                     Button("发送") { sendReject() }.buttonStyle(BouncyStyle(kind: .primary, compact: true))
+                        .uiProbe(probe.map { "\($0)-send" })
                     Button { withAnimation(Motion.or(Motion.spring)) { rejecting = false } } label: { Image(systemName: "xmark") }
                         .buttonStyle(BouncyStyle(kind: .ghost, compact: true)).accessibilityLabel("取消打回")
                 }
@@ -270,6 +306,7 @@ struct GateCardView: View {
                         Label(card.approveChoice, systemImage: "checkmark")
                     }
                     .buttonStyle(BouncyStyle(kind: .primary, compact: true))
+                    .uiProbe(probe.map { "\($0)-approve" })
                     .accessibilityLabel("\(card.approveChoice)：\(card.title)")
                     .accessibilityHint(focused ? "快捷键 Command 回车" : "")
                     Button {
@@ -281,7 +318,14 @@ struct GateCardView: View {
                         }
                     } label: { Label(card.rejectChoice, systemImage: "arrow.uturn.backward") }
                     .buttonStyle(BouncyStyle(kind: .secondary, compact: true))
+                    .uiProbe(probe.map { "\($0)-reject" })
                     .accessibilityLabel("\(card.rejectChoice)：\(card.title)")
+                    if let openItem {
+                        Button(action: openItem) { Label("时间线", systemImage: "clock.arrow.circlepath") }
+                            .buttonStyle(BouncyStyle(kind: .ghost, compact: true))
+                            .uiProbe(probe.map { "\($0)-timeline" })
+                            .accessibilityLabel("看 \(card.itemID ?? "") 的时间线")
+                    }
                     Spacer()
                     if focused {
                         Text("⌘↩").font(.system(size: 10.5, weight: .medium, design: .rounded)).foregroundStyle(Theme.textSecondary)
@@ -293,6 +337,10 @@ struct GateCardView: View {
         .padding(12)
         .card(highlighted: focused)
         .animation(Motion.or(Motion.spring), value: focused)
+        .onReceive(state.$demoReject) { d in
+            guard let d, d.id == card.id else { return }
+            withAnimation(Motion.or(Motion.spring)) { rejecting = true; words = d.words }
+        }
         .accessibilityElement(children: .contain)
         .accessibilityLabel(card.accessibilityText)
     }
@@ -455,6 +503,9 @@ struct HarvestCard: View {
 struct ChatSection: View {
     let lines: [AppState.ChatLine]
     let mood: MascotMood
+    var liveEmotion: MateEmotion? = nil
+    private var lastEvo: UUID? { lines.last { !$0.mine }?.id }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             ForEach(lines) { l in
@@ -463,7 +514,11 @@ struct ChatSection: View {
                         Spacer(minLength: 40)
                         SpeechBubble(text: l.text, side: .me)
                     } else {
-                        EvoMascot(mood: l.failed ? .worried : .idle, size: 22, frozenAt: 0.4)
+                        if l.id == lastEvo, let live = liveEmotion {
+                            MateView(emotion: live, size: 30)
+                        } else {
+                            MateView(emotion: l.failed ? .error : .happy, size: 26, forceStill: true)
+                        }
                         SpeechBubble(text: l.text, side: .evo, tone: l.failed ? .danger : .neutral)
                         Spacer(minLength: 40)
                     }
@@ -526,6 +581,7 @@ struct ComposerView: View {
             VStack(alignment: .leading, spacing: 8) {
                 ThemedField(placeholder: mode.placeholder, text: $text) { send() }
                     .accessibilityLabel("告诉 evo")
+                    .uiProbe("composer-field")
                 HStack(spacing: 6) {
                     Group {
                         if isStatic {      // 离屏渲染画不出 Menu（会是黄块），截图时画成同样的胶囊
@@ -561,6 +617,7 @@ struct ComposerView: View {
                     .scaleEffect(sentPulse ? 1.15 : 1)
                     .disabled(text.trimmingCharacters(in: .whitespaces).isEmpty)
                     .accessibilityLabel("发送")
+                    .uiProbe("composer-send")
                 }
             }
             .padding(10)
@@ -621,6 +678,12 @@ struct FooterView: View {
                 Text("· \(a)").font(Theme.caption(10.5)).foregroundStyle(Theme.textSecondary).lineLimit(1).truncationMode(.tail)
             }
             Spacer(minLength: 4)
+            Button { state.tickNow() } label: { Image(systemName: "bolt") }
+                .buttonStyle(BouncyStyle(kind: .ghost, compact: true)).accessibilityLabel("立即 tick").help("立即 tick")
+                .disabled(state.busy != nil || state.snaps.isEmpty)
+            Button { state.togglePause() } label: { Image(systemName: state.loopRunning == false ? "play" : "pause") }
+                .buttonStyle(BouncyStyle(kind: .ghost, compact: true)).accessibilityLabel(state.loopRunning == false ? "恢复循环" : "暂停循环")
+                .disabled(state.loopRunning == nil || state.busy != nil)
             Button { PaletteController.shared.show() } label: { Text("⌘K") }
                 .buttonStyle(BouncyStyle(kind: .ghost, compact: true)).accessibilityLabel("命令面板")
             Button { WindowManager.shared.showSettings() } label: { Image(systemName: "gearshape") }
