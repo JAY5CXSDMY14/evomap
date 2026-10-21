@@ -29,7 +29,6 @@ import json
 import os
 import re
 import sys
-import time
 
 API_VERSION = (1, 0)
 API = "1.0"

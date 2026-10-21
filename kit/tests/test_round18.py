@@ -225,3 +225,13 @@ def test_events_written_for_item_lifecycle(loop):
     r = loop.evo("watch", "--json", "--replay", "50", "--seconds", "1", "--ping", "0")
     lines = [json.loads(x) for x in r.stdout.splitlines()]
     assert lines[0]["event"] == "watch.ping" and any(x["event"] == "item.created" for x in lines)
+
+
+def test_no_undefined_names_in_kernel_and_features():
+    """搬家最容易漏的是名字（内核的全局名要写成 K.xxx）：有 ruff 就查一遍 F821。"""
+    ruff = shutil.which("ruff")
+    if not ruff:
+        pytest.skip("没装 ruff")
+    files = glob.glob(os.path.join(FEATURES, "*", "*.py")) + _kernel_files()
+    r = subprocess.run([ruff, "check", "--no-cache", "--select", "F821", *files], capture_output=True, text=True)
+    assert r.returncode == 0, r.stdout[-3000:]

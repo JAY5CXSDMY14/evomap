@@ -73,8 +73,7 @@ DEFAULTS = {
     "limits": {"builders_total": 2, "owner_queue_pause": 5, "rework_rounds": 2, "stall_minutes": 15,
                "usage_item_runs": 8, "usage_item_minutes": 180, "rate_limit_default_minutes": 60, "decide_every_minutes": 30,
                "heartbeat_stale_minutes": 10, "no_live_path_minutes": 30, "stale_hours": 6,
-               # 第十七轮：老板决定③每件上限（0 = 关）、决策岗卡住超时、推送失败退避
-               "decider_reworks": 2, "item_hard_runs": 12, "item_hard_hours": 6,
+               # 第十七轮：决策岗卡住超时、推送失败退避（每件上限第十八轮搬进功能包 item-caps，默认值在它的 manifest）
                "decide_timeout_minutes": 45, "push_backoff_minutes": 1, "push_backoff_max_minutes": 30},
     "roles": {"build": {"cmd": "dsh", "models": [], "prompt": "roles/builder.md"},
               "verify": {"cmd": "claude", "models": [], "prompt": "roles/verifier.md"},
@@ -1212,75 +1211,6 @@ def check_usage(s):
 
 
 # ---------- 第十七轮 · 老板决定③：每件上限（决策岗指导返工次数、派工次数、工人累计小时）----------
-CAP_KEYS = ("decider_reworks", "item_hard_runs", "item_hard_hours")
-CAP_LABELS = {"decider_reworks": "决策岗指导返工最多几次（之后转老板）", "item_hard_runs": "一件最多派工几次（之后暂停等老板）",
-              "item_hard_hours": "一件工人最多累计几小时（之后暂停等老板）"}
-
-
-def cap(key):
-    try:
-        return float(LIM.get(key, DEFAULTS["limits"][key]) or 0)
-    except (TypeError, ValueError):
-        return float(DEFAULTS["limits"][key])
-
-
-def open_budget_gate(s, k, it, why, rework=None):
-    """上限到了：这件不再派工，建「继续 / 不做」老板闸门并立刻推送。rework：决策岗想要的返工说明，老板点继续就照它返工。"""
-    if it.get("hold"):
-        return it["hold"]
-    c = coord(s)
-    t, _ = orca("orchestration", "task-create", "--from", c, "--task-title", f"{k} 上限到了", "--spec", why)
-    q = f"{k} {it['title']}：{why}，继续还是不做？"[:200]
-    g, _ = orca("orchestration", "gate-create", "--from", c, "--task", t["task"]["id"], "--question", q, "--options", json.dumps(["继续", "不做"]))
-    gid = g["gate"]["id"]
-    s.setdefault("budget_gates", {})[gid] = {"key": k, "task": t["task"]["id"], "why": why, "rework": rework, "at": TM.now()}
-    it["hold"] = gid
-    s.setdefault("gate_since", {})[gid] = TM.now(); s.setdefault("gate_pushed", []).append(gid)     # 已推过，5 分钟提醒不重复
-    tl(k, "gate_open", kind="budget", gate=gid, question=q)
-    log(s, f"{k} {why}：暂停，等老板定继续还是不做")
-    notify("gate_waiting", f"{k} {why}，继续还是不做？", it["title"], item=k, gate=gid, options=["继续", "不做"])
-    return gid
-
-
-def budget_answered(s, bud, choice, why):
-    """老板答了上限闸门：继续 → 从现在起重新计数（决策岗那条照它的说明返工）；不做 → 这件不做。"""
-    orca("orchestration", "task-update", "--from", coord(s), "--id", bud["task"], "--status", "completed", ok=False)
-    k = bud["key"]; it = s["items"].get(k)
-    if not it:
-        return
-    it.pop("hold", None)
-    if choice == "不做":
-        drop_item(s, k, it, "老板：上限到了，不做" + (f"（{why}）" if why else ""))
-        return gh_comment(it, "上限到了，老板决定不做。")
-    u = it.get("usage") or {}
-    it["budget_base"] = {"runs": u.get("runs", 0), "minutes": round(item_minutes(it), 1)}
-    if bud.get("rework") is not None:
-        it["decider_reworks"] = 0
-        decide_rework(s, k, it, (bud["rework"] or "换个方案再做") + (f"\n老板：{why}" if why else ""), force=True)
-    log(s, f"{k} 老板点了继续：上限从现在起重新计数")
-
-
-def check_budget(s):
-    """每轮：派工次数或工人累计小时到了上限（item_hard_runs / item_hard_hours，0 = 关）→ 暂停这件，推「继续还是不做」。"""
-    mr, mh = cap("item_hard_runs"), cap("item_hard_hours")
-    if not mr and not mh:
-        return
-    for k, it in s["items"].items():
-        if it.get("hold") and it["state"] in QUIET_STATES + ("pushing",):
-            # 在跑的那次已经把活干完了（或者不做了）：上限闸门作废
-            orca("orchestration", "gate-resolve", "--from", coord(s), "--id", it["hold"], "--resolution", "作废（已完成）", ok=False)
-            mark_evo_resolved(s, it["hold"]); (s.get("budget_gates") or {}).pop(it["hold"], None); it.pop("hold")
-            continue
-        if it["state"] in QUIET_STATES + ("pushing",) or it.get("hold"):
-            continue
-        base = it.get("budget_base") or {}
-        runs = (it.get("usage") or {}).get("runs", 0) - base.get("runs", 0)
-        mins = item_minutes(it) - base.get("minutes", 0)
-        if mr and runs >= mr:
-            open_budget_gate(s, k, it, f"已派工 {runs} 次还没完")
-        elif mh and mins >= mh * 60:
-            h = mins / 60
-            open_budget_gate(s, k, it, f"已烧 {h:.0f} 小时还没完" if h >= 1 else f"已烧 {mins:.0f} 分钟还没完")
 
 
 def magpie_tokens():
@@ -2162,7 +2092,7 @@ def cmd_tick(a=None):
     do_push(s); save(s)
     check_stalls(s)                # 3) 停滞
     check_usage(s)
-    check_budget(s)                # 第十七轮：每件上限
+    emit("tick.after_dispatch", live={"s": s}, record=False)     # 第十八轮：功能包的每轮检查（每件上限…）
     team_tick(s)
     gl, j = orca("orchestration", "gate-list", "--from", c, ok=False)
     if j.get("ok"):
@@ -2561,9 +2491,8 @@ def retire_worker(s, it):
 def decide_rework(s, k, it, note, d=None, force=False):
     """决策岗明确要求带说明返工：轮次清零（决策岗换了方案，不算老方案的返工上限），记一笔。
     第十七轮（老板决定③）：决策岗已指导返工 decider_reworks 次（默认 2）→ 不再返工，转老板「继续 / 不做」。"""
-    lim = cap("decider_reworks")
-    if not force and lim and it.get("decider_reworks", 0) >= lim:
-        open_budget_gate(s, k, it, f"决策岗已指导返工 {it.get('decider_reworks', 0)} 次还没好", rework=note or "换个方案再做")
+    caps = svc("caps")                                  # 第十八轮：每件上限是功能包 item-caps
+    if not force and caps and caps.over_decider(s, k, it, note):
         return
     retire_worker(s, it)
     it.pop("resume", None); it.pop("stalled", None)
@@ -3656,7 +3585,7 @@ def cmd_panel(a):
                 g = str(body.get("goal") or "").strip()
                 args = ["-p", code, "goal", "set", g] if g else ["-p", code, "goal", "clear"]
             elif self.path == "/api/limits":                    # 第十七轮：每件上限（本项目）；子命令里拒绝外部 Agent、校验数字
-                kv = [f"{k}={body[k]}" for k in CAP_KEYS if body.get(k) is not None and str(body.get(k)).strip() != ""]
+                kv = [f"{k}={body[k]}" for k in ("decider_reworks", "item_hard_runs", "item_hard_hours") if body.get(k) is not None and str(body.get(k)).strip() != ""]
                 if not kv:
                     return self.send(400, json.dumps({"ok": False, "error": "没有要改的"}, ensure_ascii=False))
                 args = ["-p", code, "limits", "set", *kv]
@@ -3871,7 +3800,6 @@ def status_doc(s, pend):
         "tick_running": (s.get("_ro") or {}).get("tick_running"),
         "gates_stale": bool((s.get("_ro") or {}).get("gates_stale")),
         "main_red": bool(s.get("main_red")),
-        "limits": {k: LIM.get(k, DEFAULTS["limits"].get(k)) for k in CAP_KEYS},
         "usage": {"roles": s.get("usage") or {}, "tokens": magpie_tokens()},
         "decider": {"last_woken": TM.iso(dec["last"]) if dec.get("last") else None, "running": bool(dec.get("task") and not dec.get("done")),
                     "items": dec.get("items") or []},
@@ -3963,8 +3891,8 @@ def apply_gate(s, gid, choice, why=None, source="evo"):
     if ask:                                             # 决策岗转来的事：老板定了，交回决策岗（下一批标【新】）
         owner_answered(s, ask, choice, why)
     bud = (s.get("budget_gates") or {}).pop(gid, None)
-    if bud:                                             # 第十七轮：每件上限到了，老板定继续还是不做
-        budget_answered(s, bud, choice, why)
+    if bud and svc("caps"):                             # 第十七轮：每件上限到了，老板定继续还是不做（功能包 item-caps）
+        svc("caps").answered(s, bud, choice, why)
     for k, it in s["items"].items():
         if gid == it["gates"].get("do") and choice == "不做":
             orca("orchestration", "task-update", "--from", coord(s), "--id", it["build"], "--status", "failed", ok=False)
@@ -4336,46 +4264,6 @@ def cmd_relocate(a):
     print(f"好了。以后 evo 只在 {CFG['repo']} 合并、推送；你在 {CFG['owner_repo']} 里 git pull 就能看到。")
 
 
-def cmd_limits(a):
-    """每件上限（老板决定③）：evo [-p 代号] limits [show | set 键=值 …] [--json]。没 -p 改全局；-p 改本项目（overrides.limits）。
-    键：decider_reworks（决策岗指导返工最多几次）、item_hard_runs（一件最多派工几次）、item_hard_hours（一件工人最多累计几小时）；0 = 关。"""
-    if a.action == "set":
-        refuse_agents("改上限")
-        kv = {}
-        for t in a.text or []:
-            k, _, v = t.partition("=")
-            if k not in CAP_KEYS:
-                sys.exit(f"只能改：{', '.join(CAP_KEYS)}")
-            try:
-                n = float(v)
-            except ValueError:
-                sys.exit(f"{k} 要写数字（0 = 关）")
-            if n < 0 or n > 1000:
-                sys.exit(f"{k} 要在 0–1000 之间")
-            kv[k] = int(n) if n == int(n) else n
-        if not kv:
-            sys.exit("用法：evo [-p 代号] limits set decider_reworks=2 item_hard_runs=12 item_hard_hours=6")
-        if HAS_PROJECT and _cfgp:
-            raw = _read_json(_cfgp); ov = raw.setdefault("overrides", {}); ov.setdefault("limits", {}).update(kv)
-            json.dump(raw, open(_cfgp, "w", encoding="utf-8"), ensure_ascii=False, indent=2)
-        else:
-            gp = _global_path(); raw = _read_json(gp); raw.setdefault("limits", {}).update(kv)
-            os.makedirs(os.path.dirname(gp), exist_ok=True)
-            json.dump(raw, open(gp, "w", encoding="utf-8"), ensure_ascii=False, indent=2)
-        LIM.update(kv) if HAS_PROJECT else None
-        cur = dict(LIM) if HAS_PROJECT else dict((global_config().get("limits") or {}))
-        cur.update(kv)
-    else:
-        cur = LIM if HAS_PROJECT else (global_config().get("limits") or {})
-    doc = {"schema_version": APP_SCHEMA_VERSION, "project": CODE if HAS_PROJECT else None,
-           "limits": {k: cur.get(k, DEFAULTS["limits"][k]) for k in CAP_KEYS}, "labels": CAP_LABELS}
-    if a.json:
-        print(json.dumps(doc, ensure_ascii=False)); return
-    print(f"每件上限（{'项目 ' + CODE if HAS_PROJECT else '全局'}；0 = 关）")
-    for k in CAP_KEYS:
-        print(f"  {k} = {doc['limits'][k]}   {CAP_LABELS[k]}")
-
-
 def cmd_watchdog(a):
     """给 launchd 定时跑：查一遍所有项目的心跳，停了就推送（同一次停只推一次）。"""
     for code in watchdog_check():
@@ -4520,8 +4408,6 @@ if __name__ == "__main__":
     x = sp.add_parser("retry"); x.add_argument("key"); sp.add_parser("resume")
     x = sp.add_parser("relocate", help="改用 evo 专用克隆 ~/.evoloop/repos/<代号>（老板的工作副本以后不碰）")
     x.add_argument("--force", action="store_true")
-    x = sp.add_parser("limits", help="每件上限：show | set decider_reworks=2 item_hard_runs=12 item_hard_hours=6")
-    x.add_argument("action", nargs="?", choices=["show", "set"]); x.add_argument("text", nargs="*"); x.add_argument("--json", action="store_true")
     x = sp.add_parser("digest"); x.add_argument("--post", action="store_true")
     x = sp.add_parser("plugin", help="插件：list | enable <名> | disable <名> | run <名> <类型> <id> | validate [名|目录] | install <目录>")   # 第十六轮
     x.add_argument("action", choices=["list", "enable", "disable", "run", "validate", "install"])
@@ -4559,10 +4445,10 @@ if __name__ == "__main__":
         cmd_team(a); sys.exit(0)
     if a.cmd == "plugin":                                  # 第十六轮：插件和项目无关
         sys.exit(cmd_plugin(a) or 0)
-    if not HAS_PROJECT and a.cmd not in ("new", "import", "projects", "status", "run", "suite", "panel", "notify-test", "bot", "watchdog", "models", "limits"):
+    if not HAS_PROJECT and a.cmd not in ("new", "import", "projects", "status", "run", "suite", "panel", "notify-test", "bot", "watchdog", "models"):
         sys.exit(f"有多个项目，请加 -p <代号>：{', '.join(list_projects()) or '（还没有项目）'}")
     if a.cmd in FEATURE_CMDS:
         sys.exit(FEATURE_CMDS[a.cmd][0](a) or 0)
     {"panel": cmd_panel, "new": cmd_new, "import": cmd_import, "projects": cmd_projects, "once": cmd_once, "add": cmd_add, "tick": cmd_tick, "run": cmd_run, "status": cmd_status, "approve": cmd_approve, "ship": cmd_ship, "pull": cmd_pull, "digest": cmd_digest, "retry": cmd_retry, "resume": cmd_resume, "feedback": cmd_feedback, "suite": cmd_suite, "retro": cmd_retro,
      "notify-test": cmd_notify_test, "watchdog": cmd_watchdog, "models": cmd_models, "log": cmd_log,
-     "goal": cmd_goal, "relocate": cmd_relocate, "limits": cmd_limits}[a.cmd](a)
+     "goal": cmd_goal, "relocate": cmd_relocate}[a.cmd](a)
