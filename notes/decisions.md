@@ -55,3 +55,4 @@
 - Pi 实测：Orca 用 `dsh-tui .` 启动 dsh，但 @deepseek-ai/dsh 只提供 `dsh` 这一个命令，所以 cc1b2a4 的假设是错的。Orca 的 worker-start --model 不支持 dsh。gate 能建出来，但手机上没看到。decide 岗用的是 claude auto/gpt-6.1-sol；有 4 个 claude 窗口卡在全屏渲染器的引导页；夜间错题本 EV-DOC-001 自动登记后也卡住了。
 - 老板觉得 Orca 一般，提议再看 Multica。我的结论：Multica 更合适。它原生支持 dsh（`dsh --profile multica --stdio`，可用 MULTICA_DSH_MODEL 指定模型）；每个 agent 可单独设模型；有审核关、收件箱、失败自动重试、Squads 组长分派、Autopilots（cron 和 webhook）、issue metadata。弱点：iOS App 要自己编译；需要服务端（官方云或 Docker 自建）；协议是 Apache 2.0 加额外条款。
 - 建议：关掉那 4 个窗口；EV-DOC-001 作废；先暂停 evo 常驻进程，等平台定了再开；决策岗模型不换。已提议：给 Multica 也画一版关系图（等老板回复）。
+- 00:51 mini 上的新 Multica 工作目录定为 ~/Projects/multica。发现 10-17/18 的旧影子试点 ~/Desktop/项目/Multica-shadow-pilot-20261017：官方 selfhost compose，项目名 multica，只绑 127.0.0.1；卡在 I04（自己加的 internal 网络和端口发布冲突）和 I05（邮件验证码登记，开到第六窗口也没收口），流程太重。这次给 A 段加了三条：新实例改名 multica2、不复用旧卷；用 Tailscale 反代（不覆盖 /mcp 的 443）；ALLOWED_EMAILS 只放老板一人，验证码从 backend 日志里取。
