@@ -83,17 +83,17 @@ jobs:
           path: |
             app/build/mac-demo
           if-no-files-found: warn
-          retention-days: 30
+          retention-days: 2  # 公开仓库：构件含第三方角色形象，只短期留
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: snapshots
           path: app/build/snapshots
           if-no-files-found: error
-          retention-days: 30
+          retention-days: 2  # 公开仓库：构件含第三方角色形象，只短期留
       - uses: actions/upload-artifact@v4
         with:
           name: Evo.dmg
           path: app/build/Evo.dmg
           if-no-files-found: error
-          retention-days: 30
+          retention-days: 2  # 公开仓库：构件含第三方角色形象，只短期留
