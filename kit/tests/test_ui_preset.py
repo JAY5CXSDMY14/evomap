@@ -9,7 +9,7 @@ sys.path.insert(0, os.path.join(KIT, "bin"))
 import evo_ui as UI  # noqa: E402
 
 K = "AB-FIX-001"
-PRINCIPLES = ["优先复用成熟库", "组件源代码可控", "统一设计语言", "严格限制重复依赖"]
+PRINCIPLES = ["优先复用成熟库", "组件源代码可控", "统一设计语言", "严格限制重复依赖", "不重复造轮子"]
 
 
 def events(loop, key=K):
@@ -239,3 +239,10 @@ def test_ui_show_preview_does_not_change_config(loop):
     commit(loop, repo, "web/package.json", pkg(antd=1))
     out = loop.ok("-p", "AB", "ui", "show", "web-react").stdout
     assert "沿用仓库现有的 antd" in out and "ui_preset" not in json.load(open(loop.cfg_path("AB")))
+
+
+def test_red_line_no_self_built_components_in_both_blocks():
+    import evo_ui
+    for name in ("web-react", "swiftui"):
+        pre = json.load(open(os.path.join(KIT, "presets", "ui", name + ".json"), encoding="utf-8"))
+        assert "不重复造轮子" in pre["principles"] and any(r.startswith("红线") and "严禁" in r for r in pre["rules"])
