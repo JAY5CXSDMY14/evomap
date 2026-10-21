@@ -33,6 +33,7 @@
   evo -p AB log <件号> [--json|--diff]   这件的时间线（派工、交卷、闸门、返工、合并、推送、上线……）
   evo -p AB feedback --item <件号> "原话"  对某件补反馈：它等你的看效果/做不做闸门作废，改完重开
   evo -p AB goal [set "一两句" | clear]   项目目标：写进每份任务书开头「项目目标：…」
+  evo -p AB ui [show | set web-react|swiftui|none | set 类别=包名[,包名] | set 类别= | check]   UI 栈预设（见 kit/presets/ui/README.md）
 """
 import argparse, datetime, fcntl, hashlib, hmac, json, os, re, secrets, subprocess, sys, time, shlex
 
@@ -42,6 +43,7 @@ KIT = os.path.dirname(os.path.dirname(SELF))
 sys.path.insert(0, os.path.dirname(SELF))
 import evo_time as TM       # noqa: E402
 import evo_notify as NT     # noqa: E402
+import evo_ui as UI         # noqa: E402
 # 多项目：每个项目一个目录 ~/.evoloop/projects/（旧 ~/.tubu 自动沿用）<代号>/{config.json, state/}；命令用 -p <代号> 指定
 _old = os.path.expanduser("~/.tubu/projects")
 HOME_DIR = os.environ.get("EVO_HOME") or os.environ.get("TUBU_HOME") or (
@@ -79,7 +81,7 @@ DEFAULTS = {
     "standards_file": "docs/code-standards.md",
 }
 PROJECT_KEYS = ("code", "name", "repo", "main_branch", "github_repo", "trusted_authors", "trusted_labelers", "test_cmd", "push_cmd", "deploy_cmd",
-                "policy_terms", "lessons_file", "standards_file", "digest_issue", "goal")
+                "policy_terms", "lessons_file", "standards_file", "digest_issue", "goal", "ui_preset", "ui_overrides", "ui_paths")
 # 旧环境变量名照认（先认新名，没有再认旧名）
 ENV_ALIASES = {"EVO_TG_TOKEN": "TUBU_TG_TOKEN", "EVO_TG_CHAT": "TUBU_TG_CHAT", "TUBU_TG_TOKEN": "EVO_TG_TOKEN",
                "TUBU_TG_CHAT": "EVO_TG_CHAT", "EVO_PROJECT": "TUBU_PROJECT", "EVO_CONFIG": "TUBU_CONFIG",
@@ -298,6 +300,63 @@ def goal_head(cfg=None):
     return f"项目目标：{g}\n\n" if g else ""
 
 
+_UI = {}
+
+
+def ui_eff():
+    """本项目实际生效的 UI 规范（ui_preset=none 时 None）。一个进程算一次；预设文件坏了只提示、不拦接棒。"""
+    if "eff" not in _UI:
+        try:
+            _UI["eff"] = UI.effective(CFG)
+        except (ValueError, OSError) as e:
+            print(f"UI 预设读不出：{e}", file=sys.stderr)
+            _UI["eff"] = None
+    return _UI["eff"]
+
+
+def ui_conflicts_once(s):
+    """仓库某一类已经在用别的库（现有的赢）：日志 + 提醒各一次；冲突内容变了再报。"""
+    eff = ui_eff()
+    sig = UI.conflict_sig(eff) if eff and eff["conflicts"] else ""
+    if sig and s.get("ui_reported") != sig:
+        txt = "；".join(UI.conflict_text(eff))
+        log(s, f"UI 预设 {eff['name']} 与仓库现有栈有冲突，现有的赢、不迁移：{txt}")
+        notify("ui_conflict", "UI 预设：仓库现有栈优先", txt)
+    if sig or s.get("ui_reported"):
+        s["ui_reported"] = sig
+
+
+def ui_delivery_check(s, k, it):
+    """施工交卷后、送验收前：对比本件改动前后的依赖清单。新加禁用库/同类第二个库 → 返回打回原因；
+    lockfile 里才有的、手写了预设已有的组件、新依赖没在交卷里说明 → 只记提示（时间线 ui_advisory），不拦。"""
+    eff = ui_eff(); wt = it.get("worktree")
+    if not eff or not wt:
+        return None
+    base = git(wt, "merge-base", CFG["main_branch"], "HEAD", check=False)
+    if not base:
+        return None
+    eff = UI.effective(CFG, present=UI.git_deps(wt, base)["manifest"])   # 「现有」按改动前的主线算
+    r = UI.check(wt, base, "HEAD", eff)
+    rep = json.dumps(it.get("report") or {}, ensure_ascii=False)
+    unexplained = [p for p in r["new_deps"] if p not in rep]
+    notes = [f"lockfile 新出现禁用库 {x['package']}（{x['label']}，可能是传递依赖）" for x in r["lock_only"]] + \
+            [f"新文件 {x['path']} 像是手写的 {x['component']}，预设里已有（{eff['component_dir'] or '系统组件'}）" for x in r["handrolled"]] + \
+            [f"新依赖 {p} 不在 UI 规范里，交卷没写理由" for p in unexplained]
+    if notes:
+        it["ui_notes"] = notes
+        tl(k, "ui_advisory", notes=notes)
+        log(s, f"{k} UI 规范提示：" + "；".join(notes)[:200])
+    if r["violations"]:
+        return ("新加了 UI 规范不允许的依赖：" + UI.violation_text(r["violations"]) +
+                "。改用规范里的库并删掉这个依赖；确实要换，先 ask 决策岗，老板批准后写进项目 ui_overrides")
+    return None
+
+
+def spec_head(role, it):
+    """任务书开头：项目目标一行，接着（只对碰界面的件：look 或 scope 落在 ui 路径）「UI 规范」块。"""
+    return goal_head() + UI.head(role, it, ui_eff(), CODE)
+
+
 def notify(kind, title, body="", item=None, gate=None, **data):
     """所有提醒走这里：先成一条事件进 outbox，再按规则决定推不推（见 evo_notify.py）。
     要推的 kind：gate_waiting / stalled / state_corrupt / push_failed / rate_limited / usage_abnormal / deploy_failed；其余只进 outbox。"""
@@ -408,7 +467,8 @@ def add_item(s, a):
     deps = [it["merge"] for it in s["items"].values() if it["state"] not in ("merged", "shipped", "dropped") and overlap(scope, it["scope"])]
     spec = f"任务：{a.title}\nscope: {','.join(scope)}\n看效果: {'是（用户能感知）' if a.ui else '否'}\n" + \
         (f"时间窗: {win}（只在窗内开工）\n" if win else "") + (a.spec or "")
-    bspec, vspec = goal_head() + role_prompt("build") + spec, goal_head() + role_prompt("verify") + spec
+    probe = {"ui": a.ui, "scope": scope}
+    bspec, vspec = spec_head("build", probe) + role_prompt("build") + spec, spec_head("verify", probe) + role_prompt("verify") + spec
     b, _ = orca("orchestration", "task-create", "--from", c, "--task-title", f"{key} 施工", "--spec", bspec,
                 *(["--deps", json.dumps(deps)] if deps else []))
     v, _ = orca("orchestration", "task-create", "--from", c, "--task-title", f"{key} 验收", "--spec", vspec,
@@ -612,8 +672,8 @@ def gh_comment(it, text):
 def rework(s, k, it, why):
     """开一轮返工：新施工 + 新验收，把原因（含老板原话）写进任务说明。"""
     c = coord(s)
-    it["build_spec"] = goal_head() + role_prompt("build") + it["spec"] + f"\n返工原因：{why}\n提交信息里原样带上这句原因。"
-    it["verify_spec"] = goal_head() + role_prompt("verify") + it["spec"] + f"\n本轮返工原因：{why}"
+    it["build_spec"] = spec_head("build", it) + role_prompt("build") + it["spec"] + f"\n返工原因：{why}\n提交信息里原样带上这句原因。"
+    it["verify_spec"] = spec_head("verify", it) + role_prompt("verify") + it["spec"] + f"\n本轮返工原因：{why}"
     nb, _ = orca("orchestration", "task-create", "--from", c, "--task-title", f"{k} 返工{it['round']}", "--spec", it["build_spec"])
     nv, _ = orca("orchestration", "task-create", "--from", c, "--task-title", f"{k} 复验{it['round']}",
                  "--spec", it["verify_spec"], "--deps", json.dumps([nb["task"]["id"]]))
@@ -732,6 +792,10 @@ def check_delivery(s, k, it, body):
         red = [t["command"] for t in rep["tests"] if t["result"] == "failed"]
         if red:
             build_reject(s, k, it, "报告里有没通过的测试：" + "；".join(red)); return False
+    why = ui_delivery_check(s, k, it)
+    if why:
+        build_reject(s, k, it, why)
+        return False
     bad = out_of_scope(it)
     if bad:
         build_reject(s, k, it, f"改到了范围（{','.join(it.get('scope') or [])}）以外：{', '.join(bad[:8])}。"
@@ -851,13 +915,13 @@ def requeue_rate_limited(s, k, it, role, line):
     note = "\n（上一次因订阅额度用完中断；工作区里已有的改动接着做，不要从头来）"
     if role == "build":
         nb, _ = orca("orchestration", "task-create", "--from", c, "--task-title", f"{k} 施工（额度恢复后续做）",
-                     "--spec", it.get("build_spec", goal_head() + role_prompt("build") + it["spec"]) + note)
+                     "--spec", it.get("build_spec", spec_head("build", it) + role_prompt("build") + it["spec"]) + note)
         nv, _ = orca("orchestration", "task-create", "--from", c, "--task-title", f"{k} 验收",
-                     "--spec", it.get("verify_spec", goal_head() + role_prompt("verify") + it["spec"]), "--deps", json.dumps([nb["task"]["id"]]))
+                     "--spec", it.get("verify_spec", spec_head("verify", it) + role_prompt("verify") + it["spec"]), "--deps", json.dumps([nb["task"]["id"]]))
         it["build"], it["verify"] = nb["task"]["id"], nv["task"]["id"]; it["state"] = "queued"
     else:
         nv, _ = orca("orchestration", "task-create", "--from", c, "--task-title", f"{k} 验收（额度恢复后重验）",
-                     "--spec", it.get("verify_spec", goal_head() + role_prompt("verify") + it["spec"]), "--deps", json.dumps([it["build"]]))
+                     "--spec", it.get("verify_spec", spec_head("verify", it) + role_prompt("verify") + it["spec"]), "--deps", json.dumps([it["build"]]))
         it["verify"] = nv["task"]["id"]; it["state"] = "built"
     it.pop("stalled", None); it.pop("rl_probe", None)
     it["rate_waits"] = it.get("rate_waits", 0) + 1
@@ -1240,6 +1304,7 @@ def cmd_tick(a=None):
         print("check keys:", list(res.keys()))
     T = tasks(s)
 
+    ui_conflicts_once(s)
     dispatch_all(s, c, T)          # 2) 派工、合并
     do_push(s); save(s)
     check_stalls(s)                # 3) 停滞
@@ -1504,13 +1569,13 @@ def restart_worker(s, k, it, role):
     note = "\n（上一个工人进程意外退出，接棒器已自动重启一次；工作区里已有的改动接着做，不要从头来）"
     if role == "build":
         nb, _ = orca("orchestration", "task-create", "--from", c, "--task-title", f"{k} 施工（工人重启）",
-                     "--spec", it.get("build_spec", goal_head() + role_prompt("build") + it["spec"]) + note)
+                     "--spec", it.get("build_spec", spec_head("build", it) + role_prompt("build") + it["spec"]) + note)
         nv, _ = orca("orchestration", "task-create", "--from", c, "--task-title", f"{k} 验收",
-                     "--spec", it.get("verify_spec", goal_head() + role_prompt("verify") + it["spec"]), "--deps", json.dumps([nb["task"]["id"]]))
+                     "--spec", it.get("verify_spec", spec_head("verify", it) + role_prompt("verify") + it["spec"]), "--deps", json.dumps([nb["task"]["id"]]))
         it["build"], it["verify"] = nb["task"]["id"], nv["task"]["id"]; tid = it["build"]
     else:
         nv, _ = orca("orchestration", "task-create", "--from", c, "--task-title", f"{k} 验收（工人重启）",
-                     "--spec", it.get("verify_spec", goal_head() + role_prompt("verify") + it["spec"]) + note, "--deps", json.dumps([it["build"]]))
+                     "--spec", it.get("verify_spec", spec_head("verify", it) + role_prompt("verify") + it["spec"]) + note, "--deps", json.dumps([it["build"]]))
         it["verify"] = nv["task"]["id"]; tid = it["verify"]
     model = d.get("model")
     h, did = launch(c, it["worktree"], f"{k}-{role}", rc, model, tid)
@@ -1718,8 +1783,8 @@ def feedback_item(s, k, it, words, source):
     elif kind == "do":
         close_gate(s, k, it, gid, "do", words)
         orca("orchestration", "task-update", "--from", c, "--id", it["build"], "--status", "completed", "--result", "superseded by feedback", ok=False)
-        it["build_spec"] = goal_head() + role_prompt("build") + it["spec"]
-        it["verify_spec"] = goal_head() + role_prompt("verify") + it["spec"]
+        it["build_spec"] = spec_head("build", it) + role_prompt("build") + it["spec"]
+        it["verify_spec"] = spec_head("verify", it) + role_prompt("verify") + it["spec"]
         nb, _ = orca("orchestration", "task-create", "--from", c, "--task-title", f"{k} 施工", "--spec", it["build_spec"],
                      *(["--deps", json.dumps(it["after"])] if it.get("after") else []))
         nv, _ = orca("orchestration", "task-create", "--from", c, "--task-title", f"{k} 验收", "--spec", it["verify_spec"],
@@ -1939,6 +2004,86 @@ def cmd_goal(a):
     tmp = p + ".tmp"
     json.dump(c, open(tmp, "w", encoding="utf-8"), ensure_ascii=False, indent=2); os.replace(tmp, p)
     print(f"{CODE} 项目目标：" + (g or "（已清掉）") + "。下一份任务书起生效")
+
+
+# ---------- UI 栈预设（第十三轮，见 kit/presets/ui/README.md）----------
+def _write_project_cfg(c):
+    p = _project_cfg_path(CODE); tmp = p + ".tmp"
+    json.dump(c, open(tmp, "w", encoding="utf-8"), ensure_ascii=False, indent=2); os.replace(tmp, p)
+
+
+def cmd_ui(a):
+    """evo -p AB ui [show]：看本项目生效的 UI 规范；ui set <预设> / set 类别=包名 / set 类别=：改（外部 Agent 不能改）；
+    ui check [--path 目录] [--base 提交]：在工作区对比依赖，有禁用库退出码 1（验收岗用）。"""
+    act = a.action or "show"
+    if act == "show":
+        pv = (a.text or [None])[0]               # ui show web-react：不改配置，先看这个预设套到本仓库会怎样
+        if pv and pv not in UI.NAMES:
+            sys.exit(f"UI 预设只能是：{' | '.join(UI.NAMES)}")
+        eff = UI.effective({**CFG, "ui_preset": pv}) if pv else ui_eff()
+        if a.json:
+            print(json.dumps({"ui_preset": CFG.get("ui_preset") or "none", "effective": eff}, ensure_ascii=False, indent=1)); return
+        print(UI.table(eff) if eff else "UI 预设：none（没开；evo -p " + CODE + " ui set web-react | swiftui）"); return
+    if act == "check":
+        path = a.path or (os.getcwd() if git(os.getcwd(), "rev-parse", "--git-dir", check=False) else CFG["repo"])
+        if not ui_eff():
+            print("UI 预设：none，不查"); return
+        base = a.base or git(path, "merge-base", CFG["main_branch"], "HEAD", check=False) or "HEAD"
+        eff = UI.effective(CFG, present=UI.git_deps(path, base)["manifest"])   # 「现有」按改动前算，新加的不算现有
+        r = UI.check(path, base, "HEAD", eff)
+        if a.json:
+            print(json.dumps(r, ensure_ascii=False, indent=1))
+        else:
+            print(f"UI 依赖检查（预设 {eff['name']}，对比 {base[:10]}..HEAD）")
+            for x in r["violations"]:
+                print(f"  ✗ 不合规：{x['label']}已定「{x['choice']}」，新加了 {x['package']}")
+            for x in r["lock_only"]:
+                print(f"  ! 提示：lockfile 新出现禁用库 {x['package']}（{x['label']}，可能是传递依赖，核对一下）")
+            for p in r["new_deps"]:
+                print(f"  ? 新依赖 {p} 不在规范里：交卷 changes 里要写明为什么")
+            for x in r["handrolled"]:
+                print(f"  ! 建议：{x['path']} 像是手写的 {x['component']}，预设里已有，优先用现成组件")
+            for t in UI.conflict_text(eff):
+                print("  · 现有栈优先：" + t)
+            if not any(r.values()):
+                print("  ✓ 没有问题")
+        sys.exit(1 if r["violations"] else 0)
+    refuse_agents("改 UI 预设")
+    arg = " ".join(a.text or []).strip()
+    if not arg:
+        sys.exit("用法：evo ui set web-react | swiftui | none，或 evo ui set 类别=包名[,包名]（类别= 清掉）")
+    c = _read_json(_project_cfg_path(CODE))
+    if "=" in arg:
+        cat, _, val = arg.partition("=")
+        cat = cat.strip()
+        if not re.fullmatch(r"[a-z][a-z0-9_-]{0,23}", cat):
+            sys.exit("类别名只许小写字母、数字、- _（例 icons）")
+        pk = [x.strip() for x in val.split(",") if x.strip()]
+        if any(not re.fullmatch(r"[@A-Za-z0-9._/*+-]{1,80}", x) for x in pk):
+            sys.exit("包名只许字母数字和 @ . _ / * + -")
+        ov = dict(c.get("ui_overrides") or {})
+        if pk:
+            ov[cat] = pk
+        else:
+            ov.pop(cat, None)
+        if ov:
+            c["ui_overrides"] = ov
+        else:
+            c.pop("ui_overrides", None)
+        _write_project_cfg(c)
+        print(f"{CODE} UI 覆盖：{cat} = {'、'.join(pk) if pk else '（已清掉，回到预设）'}。下一份任务书起生效")
+        return
+    if arg not in UI.NAMES:
+        sys.exit(f"UI 预设只能是：{' | '.join(UI.NAMES)}")
+    if arg == "none":
+        c.pop("ui_preset", None)
+    else:
+        c["ui_preset"] = arg
+    _write_project_cfg(c)
+    print(f"{CODE} UI 预设：{arg}。下一份任务书起生效（只管新代码，旧栈不迁移）")
+    eff = UI.effective({**CFG, **c})
+    for t in UI.conflict_text(eff) if eff else []:
+        print("  · 现有栈优先：" + t)
 
 
 # ---------- evo log <件号> ----------
@@ -2244,7 +2389,7 @@ LABELS = [("autopilot:ready", "0e8a16", "决策岗分拣完，接棒器可登记
          [(f"type:{k}", "c5def5", v) for k, v in KINDS.items()]
 
 
-def _setup_project(code, name, path, github, test_cmd, notes, goal=None):
+def _setup_project(code, name, path, github, test_cmd, notes, goal=None, ui_preset=None):
     """只写项目自己的 config.json；岗位、模型、上限、提醒都在全局 ~/.evoloop/config.json。"""
     code = code.upper()
     if not re.fullmatch(r"[A-Z]{2,4}", code):
@@ -2260,6 +2405,12 @@ def _setup_project(code, name, path, github, test_cmd, notes, goal=None):
             "lessons_file": DEFAULTS["lessons_file"], "standards_file": DEFAULTS["standards_file"], "digest_issue": None}
     if goal:
         base["goal"] = goal
+    if ui_preset and ui_preset != "none":
+        base["ui_preset"] = ui_preset
+        eff = UI.effective(base)
+        notes.append(f"UI 预设 {ui_preset}：碰界面的件任务书里会带「UI 规范」，验收查依赖（evo -p {code} ui 看全表）")
+        for t in UI.conflict_text(eff):
+            notes.append("UI 预设与现有栈冲突，现有的赢、不迁移：" + t)
     if not has_origin:
         notes.append("没有 origin 远端：push_cmd 留空，合并后只在本地（之后在 config.json 补 push_cmd）")
     d = os.path.join(HOME_DIR, code); os.makedirs(os.path.join(d, "state"), exist_ok=True)
@@ -2283,9 +2434,17 @@ def _goal_arg(a):
     return g or None
 
 
+def _ui_arg(a):
+    v = getattr(a, "ui_preset", None)
+    if v and v not in UI.NAMES:
+        raise SystemExit(f"--ui-preset 只能是：{' | '.join(UI.NAMES)}")
+    return v
+
+
 def cmd_new(a):
     """开新项目：建仓库骨架（AGENTS / 错题本 / 规范），可选在 GitHub 建私有仓库。"""
     goal = _goal_arg(a)                   # 先校验，免得建了仓库才发现目标写得不对
+    _ui_arg(a)
     path = os.path.abspath(a.path); os.makedirs(path, exist_ok=True)
     notes = []
     if not os.path.isdir(os.path.join(path, ".git")):
@@ -2301,12 +2460,13 @@ def cmd_new(a):
     if a.github and a.create:
         r = subprocess.run(["gh", "repo", "create", a.github, "--private", "--source", path, "--push"], capture_output=True, text=True)
         notes.append("GitHub 私有仓库已建并推送" if r.returncode == 0 else "GitHub 建仓没成功：" + r.stderr.strip()[:120])
-    _setup_project(a.code, a.name, path, a.github, a.test, notes, goal)
+    _setup_project(a.code, a.name, path, a.github, a.test, notes, goal, _ui_arg(a))
 
 
 def cmd_import(a):
     """导入旧项目：不动它的代码和历史，只补登记、标签和缺的文档。"""
     goal = _goal_arg(a)
+    _ui_arg(a)
     path = os.path.abspath(a.path)
     if not os.path.isdir(os.path.join(path, ".git")):
         raise SystemExit("这个目录不是 git 仓库")
@@ -2338,7 +2498,7 @@ def cmd_import(a):
     if not os.path.exists(ai):     # 只放文件不提交（导入不动历史），要不要提交你定
         open(ai, "w", encoding="utf-8").write(open(os.path.join(KIT, "templates", "project", "AGENT_INTERFACE.md"), encoding="utf-8").read())
         notes.append("放了 AGENT_INTERFACE.md（外部 Agent 怎么读、怎么报；未提交，要用就自己提交）")
-    _setup_project(a.code, a.name, path, gh, t, notes, goal)
+    _setup_project(a.code, a.name, path, gh, t, notes, goal, _ui_arg(a))
 
 
 def cmd_projects(a):
@@ -2756,6 +2916,7 @@ def status_doc(s, pend):
         "count": cnt,
         "stuck": sum(1 for it in s["items"].values() if it.get("stalled") or it["state"] in ("escalated", "asking")),
         "goal": CFG.get("goal") or None,
+        "ui_preset": CFG.get("ui_preset") or "none",
         "roles": roles_doc(s),
         "stale": stale_list(s),
         "no_live_path": no_live_list(s),
@@ -3010,6 +3171,7 @@ if __name__ == "__main__":
     for nm in ("new", "import"):
         x = sp.add_parser(nm); x.add_argument("code"); x.add_argument("--name", required=True); x.add_argument("--path", required=True)
         x.add_argument("--github"); x.add_argument("--test"); x.add_argument("--goal", help="项目目标（一两句），写进每份任务书开头")
+        x.add_argument("--ui-preset", dest="ui_preset", help="UI 栈预设：web-react | swiftui | none（默认 none）")
         if nm == "new":
             x.add_argument("--create", action="store_true", help="在 GitHub 建私有仓库并推送")
     sp.add_parser("projects"); sp.add_parser("once")
@@ -3023,6 +3185,9 @@ if __name__ == "__main__":
     x.add_argument("--source", help=argparse.SUPPRESS)
     x = sp.add_parser("log"); x.add_argument("key"); x.add_argument("--json", action="store_true"); x.add_argument("--diff", action="store_true")
     x = sp.add_parser("goal"); x.add_argument("action", nargs="?", choices=["show", "set", "clear"]); x.add_argument("text", nargs="*")
+    x = sp.add_parser("ui", help="UI 栈预设：show | set <预设|类别=包名> | check")
+    x.add_argument("action", nargs="?", choices=["show", "set", "check"]); x.add_argument("text", nargs="*")
+    x.add_argument("--json", action="store_true"); x.add_argument("--path"); x.add_argument("--base")
     x = sp.add_parser("suite"); x.add_argument("command", nargs=argparse.REMAINDER)
     sp.add_parser("retro")
     x = sp.add_parser("models", help="核对施工/验收模型；-p 代号 models set|clear build|verify [模型] 改单项目覆盖")
@@ -3035,4 +3200,4 @@ if __name__ == "__main__":
         sys.exit(f"有多个项目，请加 -p <代号>：{', '.join(list_projects()) or '（还没有项目）'}")
     {"panel": cmd_panel, "new": cmd_new, "import": cmd_import, "projects": cmd_projects, "once": cmd_once, "add": cmd_add, "tick": cmd_tick, "run": cmd_run, "status": cmd_status, "approve": cmd_approve, "ship": cmd_ship, "pull": cmd_pull, "digest": cmd_digest, "retry": cmd_retry, "resume": cmd_resume, "feedback": cmd_feedback, "suite": cmd_suite, "retro": cmd_retro,
      "notify-test": cmd_notify_test, "bot": cmd_bot, "watchdog": cmd_watchdog, "models": cmd_models, "log": cmd_log,
-     "goal": cmd_goal}[a.cmd](a)
+     "goal": cmd_goal, "ui": cmd_ui}[a.cmd](a)

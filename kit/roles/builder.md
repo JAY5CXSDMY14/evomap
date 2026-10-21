@@ -20,3 +20,8 @@
 14. 任务书的验收标准压过「最少代码」：两者冲突时按任务书做完，宁可多写。上面 1–12 条和契约红线同样优先。
 15. ponytail 要求的收尾「跳过了什么 / 没查什么 / 有什么风险」不另写在聊天里，而是写进 JSON 交卷：没做的、没查的进 `unfinished`，风险进 `risks`。
 16. 有已知上限的取巧写法允许，但要在代码里留一行注释：`shortcut: <上限>, <什么时候该升级>`。夜审会把这些收成欠账清单。
+
+## UI 规范（项目开了 ui_preset 时）
+17. 任务书开头有「UI 规范」一段，就按它选库：每一类只用规范里选定的那个（web：shadcn/ui Nova + Tailwind、Lucide、Motion、react-resizable-panels、dnd-kit、Zustand…；SwiftUI：系统组件、SF Symbols、原生弹簧动画）。老板的原则：优先复用成熟库、组件源代码可控、统一设计语言、严格限制重复依赖。
+18. 规范覆盖不了才加新依赖，并在交卷 `changes` 里写明为什么。新加禁用库或同类第二个库，接棒器直接打回；确实要换库，先 `ask` 决策岗，老板批准写进 `ui_overrides` 才算数。
+19. 界面组件先用现成的（`npx shadcn@latest add <组件>`，源码进 `components/ui/` 再改；SwiftUI 用系统控件），不另写同名组件。旧代码里已有的库照旧用，不顺手迁移；交卷前可自己跑 `evo -p <代号> ui check`。

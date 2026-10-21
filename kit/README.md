@@ -156,7 +156,17 @@ Telegram 环境变量改名 `EVO_TG_TOKEN` / `EVO_TG_CHAT`，旧名 `TUBU_TG_TOK
 - **新反馈作废旧闸门**：老板对某件补新话——`evo feedback --item <件号> "原话"`、件页「补充反馈」（`POST /api/note`）、或可信作者在它的 issue 下写的新评论（`evo pull` 时读；只认闸门开之后写的、不带 `<!-- evo -->` 标记的，接棒器自己留的评论都带这个标记）。原话先写进件的任务说明；它等你的看效果闸门（验收已通过）→ 旧闸门在 Orca 结成「作废（有新反馈）」，带着原话返工，新开「看效果（补充反馈后重看）」，验收通过才轮到你；做不做闸门 → 作废，补进任务书重建施工/验收任务，新开「做不做（补充反馈后）」；没开闸门 → 只记下，下一轮返工带上。作废的闸门记在 `superseded_gates`，之后从命令行、面板、Telegram 点它都拒绝执行。看效果闸门在验收通过那一刻绑定这一版的改动指纹（`look_bound`），版本变了照旧由合并前的指纹检查拦。外部 Agent 不能对件补反馈。
 - **项目目标进任务书**：项目配置 `goal`（一两句，最多 200 字、两行，过脱敏词表）；`evo new/import --goal "…"`、`evo -p TB goal set "…" | clear`、面板项目页「项目目标」（要口令；设了 `EVO_AGENT` 一律拒绝）。施工、验收、返工、重启、决策岗的每份任务书第一行都是「项目目标：…」，下一份任务书起生效。
 
+## 第十三轮：UI 栈预设（均有自动测试，`kit/tests/test_ui_preset.py` 16 个，全套 170 个）
+老板的原则：优先复用成熟库、组件源代码可控、统一设计语言、严格限制重复依赖。预设在 `kit/presets/ui/`（`web-react.json`、`swiftui.json`、中文 `README.md`），逻辑在 `kit/bin/evo_ui.py`。
+- **项目配置**：`ui_preset`（`web-react` | `swiftui` | `none`，默认 none = 什么都不加）、可选 `ui_overrides`（类别 → 包名 / 列表 / `{choice, packages}`，老板批准的换库）、可选 `ui_paths`（覆盖预设里「算界面」的目录）。`evo new/import --ui-preset …`；`evo -p AB ui [show [预设]] | set web-react|swiftui|none | set 类别=包名[,包名] | set 类别= | check [--path --base --json]`。`set` 设了 `EVO_AGENT` 一律拒绝（和 goal 一样）；`show 预设名` 只预览不改配置。`status --json` 加 `ui_preset`（schema 仍是 1）。
+- **web-react**：UI shadcn/ui（Nova，组件源码进仓库）+ Tailwind、图标 Lucide、动画 Motion、分栏 react-resizable-panels、拖放 dnd-kit、状态 Zustand（老板定）；表单 react-hook-form + zod、请求 TanStack Query、表格 TanStack Table、提示 sonner、图表 Recharts（shadcn Chart）、日期 date-fns（建议）。每类有「同类不另加」清单（例：图标不加 heroicons / react-icons / fontawesome；动画不加 react-spring / gsap；状态不加 redux / jotai / mobx；UI 不加 MUI / antd / chakra）。**swiftui**：系统组件优先、SF Symbols、原生弹簧动画、Swift Charts、Observation，第三方 UI 库要老板批准。
+- **现有栈优先**：只管新代码，不整体迁移。某一类仓库（`package.json` / `Package.swift` / Xcode 包引用）已经在用禁用库 → 那一类沿用现有的，预设选的反倒算重复；接棒时日志 + 提醒（`ui_conflict`，只进 outbox）各报一次，冲突变了再报；`import --ui-preset` 当场列出。
+- **任务书**：碰界面的件（look，或 scope 落在 `ui_paths`）施工任务书在「项目目标」行后加「UI 规范」块（每类一行：选定｜不另加…，外加加依赖的规矩），验收任务书加「UI 规范检查」（跑 `evo ui check`、手写组件只建议）。返工、额度重排、工人重启、补充反馈重建的任务书都带。
+- **交卷时自动查**（所有件，开了预设才查）：施工交卷后、送验收前对比 merge-base 和 HEAD 的清单，新加禁用库 / 同类第二个库 → 直接打回返工（算一轮，原因写哪一类、已定什么、加了什么、怎么申请换库）；lockfile 里才有的禁用库、手写了预设已有的组件（新文件名撞 shadcn 组件且不在 `components/ui/`）、交卷没提到的新依赖 → 只记提示（时间线 `ui_advisory`）。
+- **档案**：ST `ui_preset: swiftui`（REASTOCK 原生 SwiftUI）；TB 不动，土布 web 先 `evo -p TB ui show web-react` 看现有栈冲突再决定开不开。`roles/builder.md` 第 17–19 条、`roles/verifier.md` 第 19–20 条。
+
 ## 只能在 Mac mini 上验的
+- 真施工模型会不会按「UI 规范」块选库、交卷写清新依赖理由；`npx shadcn@latest create --preset nova` / `add` 在本机网络（代理）下能不能跑通。
 - 真 Orca 的消息有没有 `id` 字段（evo 依次认 `id` / `message_id` / `messageId`；都没有就不去重）、没确认的消息会不会重投。
 - 真决策岗模型能否稳定按 decisions JSON 交决定；Orca 将来若有「回复工人」的命令，换掉 `deliver_answer()`。
 - 真 `deploy_cmd` 的退出码是否可靠（失败必须非 0）；`gh issue close` 用的账号有没有权限。

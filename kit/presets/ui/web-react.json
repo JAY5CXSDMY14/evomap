@@ -1,0 +1,403 @@
+{
+ "_说明": "Web（React）默认 UI 栈。老板定的四条原则原样保留；source=owner 是老板点名的，source=suggested 是按同样原则补的建议，老板可在项目 ui_overrides 里换。banned 只拦「新加」，仓库原来就有的不拦、不迁移。包名支持 @scope/* 通配。",
+ "name": "web-react",
+ "title": "Web（React）",
+ "principles": [
+  "优先复用成熟库",
+  "组件源代码可控",
+  "统一设计语言",
+  "严格限制重复依赖"
+ ],
+ "ui_paths": [
+  "web/",
+  "frontend/",
+  "client/",
+  "apps/web/",
+  "src/components/",
+  "src/app/",
+  "src/pages/",
+  "src/views/",
+  "components/",
+  "pages/",
+  "views/",
+  "ui/"
+ ],
+ "component_dir": "components/ui/",
+ "categories": {
+  "ui": {
+   "label": "UI 组件",
+   "source": "owner",
+   "choice": "shadcn/ui（Nova 风格）——组件源码复制进仓库 components/ui/，可改可控",
+   "setup": "npx shadcn@latest create --preset nova（已有项目：npx shadcn@latest init，components.json 的 style 用 radix-nova），加组件用 npx shadcn@latest add <组件>",
+   "packages": [
+    "radix-ui",
+    "@radix-ui/*",
+    "class-variance-authority",
+    "clsx",
+    "tailwind-merge",
+    "shadcn"
+   ],
+   "core": [
+    "radix-ui",
+    "@radix-ui/*",
+    "shadcn"
+   ],
+   "banned": [
+    "@mui/*",
+    "@material-ui/*",
+    "antd",
+    "@ant-design/*",
+    "@chakra-ui/*",
+    "@mantine/*",
+    "@nextui-org/*",
+    "@heroui/*",
+    "react-bootstrap",
+    "bootstrap",
+    "semantic-ui-react",
+    "primereact",
+    "@headlessui/react",
+    "@arco-design/*",
+    "tdesign-react",
+    "@fluentui/*",
+    "@blueprintjs/*",
+    "evergreen-ui",
+    "rsuite",
+    "daisyui",
+    "flowbite-react"
+   ]
+  },
+  "styling": {
+   "label": "样式",
+   "source": "owner",
+   "choice": "Tailwind CSS（shadcn 的设计令牌走 CSS 变量）",
+   "packages": [
+    "tailwindcss",
+    "@tailwindcss/*",
+    "tw-animate-css"
+   ],
+   "banned": [
+    "styled-components",
+    "@emotion/react",
+    "@emotion/styled",
+    "@stitches/react",
+    "@vanilla-extract/css",
+    "styled-jsx",
+    "windicss",
+    "unocss",
+    "sass"
+   ]
+  },
+  "icons": {
+   "label": "图标",
+   "source": "owner",
+   "choice": "Lucide（lucide-react）",
+   "packages": [
+    "lucide-react"
+   ],
+   "banned": [
+    "@heroicons/react",
+    "react-icons",
+    "@fortawesome/*",
+    "@tabler/icons-react",
+    "@phosphor-icons/react",
+    "phosphor-react",
+    "@mui/icons-material",
+    "@ant-design/icons",
+    "react-feather",
+    "@iconify/react",
+    "@hugeicons/*",
+    "@radix-ui/react-icons",
+    "@remixicon/react"
+   ]
+  },
+  "animation": {
+   "label": "动画",
+   "source": "owner",
+   "choice": "Motion（motion.dev，原 framer-motion；新代码 import from \"motion/react\"）",
+   "packages": [
+    "motion",
+    "framer-motion"
+   ],
+   "core": [
+    "motion",
+    "framer-motion"
+   ],
+   "banned": [
+    "react-spring",
+    "@react-spring/*",
+    "gsap",
+    "@gsap/react",
+    "animejs",
+    "react-transition-group",
+    "@formkit/auto-animate",
+    "react-motion",
+    "popmotion",
+    "velocity-animate"
+   ]
+  },
+  "layout": {
+   "label": "可拖拽分栏布局",
+   "source": "owner",
+   "choice": "react-resizable-panels（shadcn Resizable 就是它）",
+   "packages": [
+    "react-resizable-panels"
+   ],
+   "banned": [
+    "react-split-pane",
+    "react-resizable",
+    "allotment",
+    "split.js",
+    "react-split",
+    "react-mosaic-component",
+    "react-reflex"
+   ]
+  },
+  "dnd": {
+   "label": "拖放",
+   "source": "owner",
+   "choice": "dnd-kit（@dnd-kit/core + sortable）",
+   "packages": [
+    "@dnd-kit/*"
+   ],
+   "banned": [
+    "react-dnd",
+    "react-dnd-html5-backend",
+    "react-beautiful-dnd",
+    "@hello-pangea/dnd",
+    "sortablejs",
+    "react-sortablejs",
+    "@atlaskit/pragmatic-drag-and-drop",
+    "@atlaskit/pragmatic-drag-and-drop-*",
+    "react-draggable"
+   ]
+  },
+  "state": {
+   "label": "状态管理",
+   "source": "owner",
+   "choice": "Zustand（服务端数据交给 TanStack Query，不进 store）",
+   "packages": [
+    "zustand"
+   ],
+   "banned": [
+    "redux",
+    "@reduxjs/toolkit",
+    "react-redux",
+    "jotai",
+    "mobx",
+    "mobx-react",
+    "mobx-react-lite",
+    "recoil",
+    "valtio",
+    "@xstate/store",
+    "effector",
+    "nanostores",
+    "@legendapp/state"
+   ]
+  },
+  "forms": {
+   "label": "表单与校验",
+   "source": "suggested",
+   "choice": "react-hook-form + zod（@hookform/resolvers 接起来；shadcn Form 就是这一套）",
+   "packages": [
+    "react-hook-form",
+    "@hookform/resolvers",
+    "zod"
+   ],
+   "core": [
+    "react-hook-form",
+    "zod"
+   ],
+   "banned": [
+    "formik",
+    "react-final-form",
+    "final-form",
+    "@tanstack/react-form",
+    "yup",
+    "valibot",
+    "joi",
+    "superstruct",
+    "vest"
+   ]
+  },
+  "data": {
+   "label": "数据请求与缓存",
+   "source": "suggested",
+   "choice": "TanStack Query（@tanstack/react-query）",
+   "packages": [
+    "@tanstack/react-query",
+    "@tanstack/react-query-devtools"
+   ],
+   "core": [
+    "@tanstack/react-query"
+   ],
+   "banned": [
+    "swr",
+    "react-query",
+    "@rtk-query/*",
+    "react-fetching-library",
+    "use-http"
+   ]
+  },
+  "tables": {
+   "label": "表格",
+   "source": "suggested",
+   "choice": "TanStack Table + shadcn Table / Data Table",
+   "packages": [
+    "@tanstack/react-table"
+   ],
+   "banned": [
+    "ag-grid-react",
+    "ag-grid-community",
+    "ag-grid-enterprise",
+    "react-table",
+    "material-react-table",
+    "mantine-react-table",
+    "react-data-grid",
+    "@mui/x-data-grid",
+    "handsontable",
+    "@handsontable/react"
+   ]
+  },
+  "toasts": {
+   "label": "轻提示",
+   "source": "suggested",
+   "choice": "sonner（shadcn Sonner）",
+   "packages": [
+    "sonner"
+   ],
+   "banned": [
+    "react-hot-toast",
+    "react-toastify",
+    "notistack",
+    "@radix-ui/react-toast",
+    "react-notifications-component"
+   ]
+  },
+  "charts": {
+   "label": "图表",
+   "source": "suggested",
+   "choice": "Recharts（shadcn Chart 封装）",
+   "packages": [
+    "recharts"
+   ],
+   "banned": [
+    "chart.js",
+    "react-chartjs-2",
+    "echarts",
+    "echarts-for-react",
+    "@nivo/*",
+    "victory",
+    "apexcharts",
+    "react-apexcharts",
+    "highcharts",
+    "highcharts-react-official",
+    "@visx/*",
+    "plotly.js",
+    "react-plotly.js",
+    "@ant-design/charts",
+    "@tremor/react"
+   ]
+  },
+  "dates": {
+   "label": "日期",
+   "source": "suggested",
+   "choice": "date-fns（日期选择用 shadcn Calendar，底下是 react-day-picker）",
+   "packages": [
+    "date-fns",
+    "@date-fns/*",
+    "react-day-picker"
+   ],
+   "core": [
+    "date-fns"
+   ],
+   "banned": [
+    "moment",
+    "moment-timezone",
+    "dayjs",
+    "luxon",
+    "js-joda",
+    "@js-joda/*"
+   ]
+  }
+ },
+ "components": [
+  "accordion",
+  "alert",
+  "alert-dialog",
+  "aspect-ratio",
+  "avatar",
+  "badge",
+  "breadcrumb",
+  "button",
+  "calendar",
+  "card",
+  "carousel",
+  "chart",
+  "checkbox",
+  "collapsible",
+  "combobox",
+  "command",
+  "context-menu",
+  "data-table",
+  "date-picker",
+  "dialog",
+  "drawer",
+  "dropdown-menu",
+  "form",
+  "hover-card",
+  "input",
+  "input-otp",
+  "label",
+  "menubar",
+  "navigation-menu",
+  "pagination",
+  "popover",
+  "progress",
+  "radio-group",
+  "resizable",
+  "scroll-area",
+  "select",
+  "separator",
+  "sheet",
+  "sidebar",
+  "skeleton",
+  "slider",
+  "sonner",
+  "spinner",
+  "switch",
+  "table",
+  "tabs",
+  "textarea",
+  "toggle",
+  "toggle-group",
+  "tooltip"
+ ],
+ "component_aliases": {
+  "modal": "dialog",
+  "dropdown": "dropdown-menu",
+  "toast": "sonner",
+  "toaster": "sonner",
+  "datepicker": "date-picker",
+  "tab": "tabs",
+  "loader": "spinner",
+  "loading-spinner": "spinner",
+  "splitter": "resizable",
+  "split-pane": "resizable",
+  "confirm-dialog": "alert-dialog",
+  "menu": "dropdown-menu",
+  "drawer": "drawer",
+  "grid-table": "data-table",
+  "datagrid": "data-table",
+  "data-grid": "data-table",
+  "autocomplete": "combobox",
+  "chip": "badge",
+  "tag": "badge"
+ },
+ "rules": [
+  "预设只管新写的代码；仓库原来用的库照旧，不整体迁移。某一类仓库已经在用别的库时，那一类沿用现有的，evo 只报一次。",
+  "加新依赖之前先看上面各类已选的库能不能做；覆盖不了才加，并在交卷 changes 里写明为什么（哪一类都不归、或已选库缺什么）。",
+  "同一类只留一个库：新加禁用库或同类第二个库，接棒器直接打回返工；确实要换，先 ask 决策岗，老板批准后写进项目 ui_overrides。",
+  "界面组件先用 shadcn 已有的（npx shadcn@latest add <组件>），源码进 components/ui/ 后按需改；不另外手写同名组件。",
+  "图标只用 Lucide，动画只用 Motion，颜色、圆角、间距只用设计令牌（CSS 变量 / Tailwind 类），不写死十六进制颜色。"
+ ]
+}

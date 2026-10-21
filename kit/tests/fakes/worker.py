@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """假工人：由假 Orca 在派工时同步启动，工作目录是本件工作区。
 按 $FAKE_ORCA_DIR/plan.json 里的剧本依次出招（每个角色一个队列，用完默认 ok/pass）：
-  build:  ok（在 scope 目录写文件并提交，按格式交卷） | dirty（提交后再改一个已跟踪文件不提交） | fail（回报失败）
+  build:  ok（在 scope 目录写文件并提交，按格式交卷） | dep:<包名>（另在 scope 目录 package.json 加依赖） | file:<路径> | dirty（提交后再改一个已跟踪文件不提交） | fail（回报失败）
           noreport（不交 JSON） | oos（另外改了范围外的文件） | blocked / unfinished / redtest（交卷内容不合格）
   verify: pass | fail
           same（不改任何东西，照常交卷：返工后指纹不变）
@@ -63,6 +63,17 @@ elif role == "build":
             subprocess.run(["git", "commit", "-qm", "chore: 顺手改别处"], check=True)
         if move == "dirty":
             open(fn, "a").write("没提交的改动\n")
+        if isinstance(move, str) and move.startswith(("dep:", "file:")):   # dep:<包名> 往 scope 目录的 package.json 加依赖；file:<路径> 新建文件
+            kind, _, arg = move.partition(":")
+            if kind == "dep":
+                pj = os.path.join(d, "package.json")
+                j = json.load(open(pj)) if os.path.exists(pj) else {"name": "web", "dependencies": {}}
+                j.setdefault("dependencies", {})[arg] = "^1.0.0"
+                json.dump(j, open(pj, "w"), indent=2); target = pj
+            else:
+                target = arg; os.makedirs(os.path.dirname(arg) or ".", exist_ok=True); open(arg, "w").write("export {}\n")
+            subprocess.run(["git", "add", target], check=True)
+            subprocess.run(["git", "commit", "-qm", f"feat: {move}"], check=True)
 else:
     outcome = "succeeded" if move == "pass" else "failed"
 body = f"假{role}：{move}"

@@ -25,6 +25,8 @@
   "_lessons_standards": "两个文件 REASTOCK 里原来没有，ST-OPS-001 建仓时放空壳（一行标题），之后由 evo 的工人往里写。",
   "digest_issue": null,
   "scope_allow": ["artifacts/"],
+  "ui_preset": "swiftui",
+  "_ui_preset": "REASTOCK 是原生 SwiftUI：系统组件优先、SF Symbols、原生弹簧动画，第三方 UI 库要老板批准（写进 ui_overrides）。只管新代码；仓库已有的库照旧，冲突时现有的赢（evo -p ST ui 查看）。见 kit/presets/ui/README.md。",
   "report_required": true,
   "git_guard": true,
   "overrides": {

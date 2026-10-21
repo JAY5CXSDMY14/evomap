@@ -49,7 +49,7 @@ lang: zh
 项目可用 `overrides` 覆盖全局；整机并行上限只认全局。老配置照旧能用。
 
 ## E3 自动化测试
-`kit/tests/` 用假 Orca、假工人、假通知（不联网）、临时仓库和裸远端跑整条流水线。各种岔路都有测试，时间用 `EVO_NOW` 固定。GitHub Actions 每次改 kit 自动跑。现在共 154 个测试。
+`kit/tests/` 用假 Orca、假工人、假通知（不联网）、临时仓库和裸远端跑整条流水线。各种岔路都有测试，时间用 `EVO_NOW` 固定。GitHub Actions 每次改 kit 自动跑。现在共 170 个测试。
 
 ## E4 提醒：只在该叫你的时候叫你
 | 通道 | 干什么 |
@@ -119,6 +119,20 @@ lang: zh
 | 新反馈作废旧闸门 | 你对某件补了新话（`evo feedback --item`、件页「补充反馈」、或在它的 issue 下评论），它等你的看效果 / 做不做闸门立刻作废；看效果的带着原话返工，验收过了再开新闸门；旧闸门上点什么都不执行 |
 | 项目目标 | 项目配置一行 `goal`；`evo new/import --goal`、`evo goal set`、面板项目页都能改（要口令，外部 Agent 不行）；每份任务书第一行「项目目标：…」 |
 
+## E11 第十三轮：UI 栈预设
+老板的原则：优先复用成熟库、组件源代码可控、统一设计语言、严格限制重复依赖。
+
+| 项 | 现在怎么走 |
+|---|---|
+| 开关 | 项目配置 `ui_preset`：`web-react` / `swiftui` / `none`（默认，不加任何东西）。`evo new/import --ui-preset`、`evo -p AB ui set …`；外部 Agent 只能看不能改 |
+| Web 默认栈 | shadcn/ui（Nova，组件源码进仓库）+ Tailwind、Lucide、Motion、react-resizable-panels、dnd-kit、Zustand；建议补齐 react-hook-form + zod、TanStack Query、TanStack Table、sonner、Recharts、date-fns。每类有「不另加」清单 |
+| 原生 Mac / iOS | 系统组件优先、SF Symbols、原生弹簧动画、Swift Charts、Observation；第三方 UI 库要你批准 |
+| 换库 | 你批准后 `evo -p AB ui set icons=react-icons` 写进 `ui_overrides`；`icons=` 清掉 |
+| 旧项目 | 只管新代码，不迁移。仓库某一类已在用别的库，现有的赢，日志和提醒只报一次；`evo -p AB ui show web-react` 可以先预览 |
+| 任务书 | 碰界面的件：施工任务书在项目目标后带「UI 规范」，验收任务书带「UI 规范检查」 |
+| 自动把关 | 交卷后送验收前比依赖清单：新加禁用库 / 同类第二个库直接打回；lockfile 里才有的、手写已有组件、没写理由的新依赖只提示（时间线可见）。验收岗可跑 `evo -p AB ui check` |
+| 现有项目 | ST 用 `swiftui`；TB 不动，土布 web 先预览现有栈冲突再决定 |
+
 ## F 只能在 Mac mini 上验
 | 项 | 为什么 |
 |---|---|
@@ -134,3 +148,4 @@ lang: zh
 | 真浏览器里沙盒 iframe 预览 HTML 产出物、图片显示 | 沙箱只测了接口和页面源码 |
 | 真 Orca 闸门「作废」写法 | evo 用 gate-resolve 写结果「作废（有新反馈）」，要看真 Orca 和手机端怎么显示 |
 | GitHub 评论时间和 `<!-- evo -->` 标记 | 新反馈只认闸门开之后、可信作者、不带标记的评论 |
+| 真模型按「UI 规范」选库、shadcn CLI 在本机代理下能否跑 | 沙箱里是假工人 |
