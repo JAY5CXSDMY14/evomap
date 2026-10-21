@@ -57,3 +57,4 @@
 - 建议：关掉那 4 个窗口；EV-DOC-001 作废；先暂停 evo 常驻进程，等平台定了再开；决策岗模型不换。已提议：给 Multica 也画一版关系图（等老板回复）。
 - 00:51 mini 上的新 Multica 工作目录定为 ~/Projects/multica。发现 10-17/18 的旧影子试点 ~/Desktop/项目/Multica-shadow-pilot-20261017：官方 selfhost compose，项目名 multica，只绑 127.0.0.1；卡在 I04（自己加的 internal 网络和端口发布冲突）和 I05（邮件验证码登记，开到第六窗口也没收口），流程太重。这次给 A 段加了三条：新实例改名 multica2、不复用旧卷；用 Tailscale 反代（不覆盖 /mcp 的 443）；ALLOWED_EMAILS 只放老板一人，验证码从 backend 日志里取。
 - 01:23 mini 上的 Multica v0.6.5 已搭好：compose 项目名 multica2，目录 ~/Projects/multica，用 docker compose -p multica2 手动部署（官方脚本写死了 INSTALL_DIR，用不了）。网页走 tailscale serve https://mac-mini.taila6de43.ts.net:8443，API 走 :9443，都只在 tailnet 内可达；443 根路径（Funnel→8010）没动。没有 Redis，mini 上没跑 daemon，土布容器状态没变。下一步：老板注册并建工作区 evo，然后给 Air 发 B 段（地址已填好）。
+- 02:43 老板 已注册 Multica 并建好工作区 evo（mini 本机 Chrome 打不开 ts.net:8443，判断是 Chrome 的安全 DNS 绕过了 MagicDNS，解析到了 Funnel 中转；建议关掉安全 DNS）。下一步：把 B 段 prompt 发给 Air 的 Pi。
