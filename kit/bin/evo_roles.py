@@ -8,18 +8,19 @@ import os, re, shlex
 # 各工具的命令模板（向导用；{model} 为空时连同前面的参数一起去掉）。真机参数名见 docs/model-coordination.md「只能在 Mac mini 上验」。
 TOOL_CMDS = {"claude": "claude --model {model}",
              "codex": "codex --model {model} -c model_reasoning_effort={thinking}",
-             "dsh": "dsh --profile headless -",        # Air 试跑 10-21：dsh 没有 --model、没有交互界面；headless 一次性跑完，任务书从 stdin 读，模型用 DSH 里设的默认
+             "dsh": "dsh-tui .",                       # Air 试跑 10-21：和 Orca 自带的 DeepSeek Harness 一样走 dsh-tui（交互式，Orca 认得、能监管）；dsh 本身没有 --model
              "pi": "pi --model {model} --thinking {thinking}"}
 
-# 一次性工具：没有交互界面，不能事后把任务书打进去 → 接棒器把任务书写成文件，用「命令 < 文件」启动
-ONESHOT_TOOLS = {"dsh"}
+# 一次性写法（例如 dsh --profile headless -）：没有交互界面，不能事后把任务书打进去 → 接棒器把任务书写成文件，用「命令 < 文件」启动
 # 这些工具不认 per-run 模型参数，模型在工具自己的设置里选（团队页显示「工具默认」）
 NO_MODEL_FLAG = {"dsh"}
 
 
 def is_oneshot(rc):
     rc = rc or {}
-    return bool(rc.get("oneshot")) if "oneshot" in rc else tool_of(rc) in ONESHOT_TOOLS
+    if "oneshot" in rc:
+        return bool(rc["oneshot"])
+    return tool_of(rc) == "dsh" and "headless" in (rc.get("cmd") or "")
 
 
 _FAIL_PAT = re.compile(r"command not found|no such file or directory|error: --|unknown option|unrecognized (option|argument)|"

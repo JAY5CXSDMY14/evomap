@@ -3,8 +3,9 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "bin"))
 import evo_roles as R
 
 
-def test_dsh_template_is_headless_oneshot():
-    assert R.TOOL_CMDS["dsh"].startswith("dsh --profile headless")
+def test_dsh_template_is_tui_headless_optional():
+    assert R.TOOL_CMDS["dsh"].startswith("dsh-tui")
+    assert not R.is_oneshot({"cmd": R.TOOL_CMDS["dsh"]})
     assert R.is_oneshot({"cmd": "dsh --profile headless -"})
     assert not R.is_oneshot({"cmd": "claude --model x"})
 

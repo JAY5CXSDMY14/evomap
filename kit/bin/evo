@@ -1128,9 +1128,9 @@ def launch(c, path, title, rc, model, tid):
     res, _ = orca("terminal", "create", "--worktree", f"path:{path}", "--title", title)
     h = res["terminal"]["handle"]
     base = rc["cmd"]
-    if R.tool_of(rc) == "dsh" and "--profile" not in base and " headless" not in base:
-        base = R.TOOL_CMDS["dsh"]              # 旧配置里的「dsh --model {model}」跑不起来，按新写法改
-        print(f"岗位命令 {rc['cmd']} 是旧写法，改用 {base}（模型以 DSH 自己设置的默认为准）")
+    if R.tool_of(rc) == "dsh" and re.match(r"^dsh\s+--model\b", base):
+        base = R.TOOL_CMDS["dsh"]              # 旧配置里的「dsh --model {model}」跑不起来（dsh 没有 --model），按新写法改
+        print(f"岗位命令 {rc['cmd']} 是旧写法，改用 {base}（模型以 DSH 里设置的为准）")
     cmd = R.render_cmd(base, model_alias(model), rc.get("thinking"))      # {model} / {thinking}；空值连参数一起去掉；第十八轮：按本机前缀改名
     print(f"开工人终端 {title} → {h}：{cmd}")
     if R.tool_of(rc) == "claude":
