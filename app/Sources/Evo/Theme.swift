@@ -254,20 +254,23 @@ struct ThemedField: View {
 }
 
 /// 自画的小转圈（离屏截图也能画）。
+/// 转圈：用系统的 ProgressView（第十九轮起不再自己写 repeatForever 旋转——那种动画会顺着事务漏到同层布局上）。
+/// 截图（静态渲染）时 ProgressView 画不出来，画一段静止的弧。
 struct Spinner: View {
     var size: CGFloat = 12
-    @State private var spin = false
     @Environment(\.evoStatic) private var isStatic
     var body: some View {
-        Circle().trim(from: 0.1, to: 0.8)
-            .stroke(Theme.accent, style: StrokeStyle(lineWidth: 2, lineCap: .round))
-            .frame(width: size, height: size)
-            .rotationEffect(.degrees(spin ? 360 : 0))
-            .onAppear {
-                guard !isStatic else { return }
-                withAnimation(.linear(duration: 0.9).repeatForever(autoreverses: false)) { spin = true }
+        Group {
+            if isStatic {
+                Circle().trim(from: 0.1, to: 0.8)
+                    .stroke(Theme.accent, style: StrokeStyle(lineWidth: 2, lineCap: .round))
+            } else {
+                ProgressView().progressViewStyle(.circular).controlSize(.small)
+                    .scaleEffect(size / 16)
             }
-            .accessibilityLabel("进行中")
+        }
+        .frame(width: size, height: size)
+        .accessibilityLabel("进行中")
     }
 }
 #endif

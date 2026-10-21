@@ -323,18 +323,28 @@ struct FeatureRowView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 5) {
-            Toggle(isOn: Binding(get: { feature.enabled }, set: { on in state.setFeatureEnabled(feature.id, on) })) {
+            // 第十九轮：转圈不放进开关按钮的 label 里（按下途中 label 换内容），点击也不再在按钮动作里同步改状态：
+            // 先让这次点击收尾，下一拍主队列再去开关；忙的时候不禁用按钮（换 disabled 会重建按钮），只挡点击、变淡。
+            let busy = state.featureBusy.contains(feature.id)
+            Toggle(isOn: Binding(get: { feature.enabled }, set: { on in
+                let id = feature.id
+                DispatchQueue.main.async { AppState.shared.setFeatureEnabled(id, on) }
+            })) {
                 HStack(spacing: 7) {
                     Text(feature.name).font(.system(size: 13, weight: .medium)).foregroundStyle(Theme.textPrimary).lineLimit(1)
                     FeatureBadge(text: feature.badge.text, tone: feature.badge.tone)
                     if feature.essential {
                         Text("精简也开").font(.system(size: 10.5)).foregroundStyle(Theme.textSecondary)
                     }
-                    if state.featureBusy.contains(feature.id) { Spinner(size: 11) }
                 }
             }
             .toggleStyle(PillToggleStyle())
-            .disabled(feature.locked || state.featureBusy.contains(feature.id))
+            .disabled(feature.locked)
+            .allowsHitTesting(!busy)
+            .opacity(busy ? 0.6 : 1)
+            .overlay(alignment: .trailing) {
+                if busy { Spinner(size: 12).padding(.trailing, 44).transition(.opacity) }
+            }
             .uiProbe("settings-feature-\(feature.id)")
             .accessibilityHint(feature.note)
             if !feature.note.isEmpty {

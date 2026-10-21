@@ -65,40 +65,15 @@ enum EvoEnv {
     }
 }
 
-private final class DataBox: @unchecked Sendable { var data = Data() }
-
 enum Shell {
-    /// 跑一个命令，收齐 stdout/stderr。超时就 terminate。不阻塞主线程。
+    /// 跑一个命令，收齐 stdout/stderr。第十九轮起全走 EvoCore.ProcessRunner：不 waitUntilExit、不占 GCD 线程，
+    /// 两条专用读线程边出边读（输出再大管道也不会塞住），超时 SIGTERM → 2 秒后 SIGKILL。
     static func run(_ exe: String, _ args: [String], timeout: TimeInterval = 120) async -> RunResult {
-        await withCheckedContinuation { cont in
-            DispatchQueue.global(qos: .userInitiated).async {
-                cont.resume(returning: runSync(exe, args, timeout: timeout))
-            }
-        }
-    }
-
-    static func runSync(_ exe: String, _ args: [String], timeout: TimeInterval) -> RunResult {
-        let p = Process()
-        p.executableURL = URL(fileURLWithPath: exe)
-        p.arguments = args
-        p.environment = EvoEnv.environment
-        p.currentDirectoryURL = URL(fileURLWithPath: EvoEnv.home)
-        let o = Pipe(), e = Pipe()
-        p.standardOutput = o; p.standardError = e; p.standardInput = FileHandle.nullDevice
-        do { try p.run() } catch {
-            return RunResult(code: -1, out: "", err: "启动失败：\(exe) \(error.localizedDescription)")
-        }
-        let ob = DataBox(), eb = DataBox(), g = DispatchGroup()
-        g.enter(); DispatchQueue.global().async { ob.data = o.fileHandleForReading.readDataToEndOfFile(); g.leave() }
-        g.enter(); DispatchQueue.global().async { eb.data = e.fileHandleForReading.readDataToEndOfFile(); g.leave() }
-        let killer = DispatchWorkItem { if p.isRunning { p.terminate() } }
-        DispatchQueue.global().asyncAfter(deadline: .now() + timeout, execute: killer)
-        p.waitUntilExit()
-        killer.cancel()
-        // 子进程可能留下继承了管道的后台进程（比如 orca），退出后最多再等 2 秒收尾
-        _ = g.wait(timeout: .now() + 2)
-        return RunResult(code: p.terminationStatus, out: String(decoding: ob.data, as: UTF8.self),
-                         err: String(decoding: eb.data, as: UTF8.self))
+        let r = await ProcessRunner.run(exe, args, environment: EvoEnv.environment, cwd: EvoEnv.home, timeout: timeout)
+        if r.seconds > 5 { DemoLog.note("慢命令 \(String(format: "%.1f", r.seconds))s：\(([URL(fileURLWithPath: exe).lastPathComponent] + args.prefix(4)).joined(separator: " "))") }
+        var err = r.err
+        if r.timedOut { err += (err.isEmpty ? "" : "\n") + "超过 \(Int(timeout)) 秒没跑完，已停掉" }
+        return RunResult(code: r.code, out: r.out, err: err)
     }
 
     /// 用找到的 python3 跑 evo。

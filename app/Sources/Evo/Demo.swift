@@ -24,9 +24,12 @@ enum UIProbe {
 
     static func start() {
         guard enabled, timer == nil else { return }
-        timer = Timer.scheduledTimer(withTimeInterval: 0.3, repeats: true) { _ in
+        let t = Timer(timeInterval: 0.3, repeats: true) { _ in
             Task { @MainActor in UIProbe.write() }
         }
+        RunLoop.main.add(t, forMode: .common)      // 第十九轮：.common——鼠标按住 / 滚动（事件跟踪模式）时也照写
+        timer = t
+        StallWatch.start()
     }
 
     static func cgRect(_ r: NSRect) -> [String: Double] {
@@ -75,6 +78,54 @@ enum UIProbe {
         if let data = try? JSONSerialization.data(withJSONObject: out, options: [.sortedKeys, .prettyPrinted]) {
             try? data.write(to: URL(fileURLWithPath: path), options: .atomic)
         }
+    }
+}
+
+/// 第十九轮：CI 演示时的主线程卡顿探针（EVO_UITEST_GEOMETRY 设了才开）。
+/// 后台每 0.5 秒看两拍：GCD 主队列一拍、MainActor 一拍。任何一拍超过 3 秒没跳 → 记「主线程卡」并跑一次
+/// `/usr/bin/sample <pid> 3`，把主线程的调用栈写到 $EVO_STALL_DIR/stall-N.txt（mac-demo 收进构件）；恢复时记卡了多久。
+enum StallWatch {
+    private final class Beats: @unchecked Sendable {
+        let lock = NSLock()
+        var main = Date(), actor = Date()
+        var stalled = false, since = Date(), count = 0
+    }
+    private static var source: DispatchSourceTimer?
+    private static let beats = Beats()
+
+    static func start() {
+        guard UIProbe.enabled, source == nil else { return }
+        let b = beats
+        let q = DispatchQueue(label: "evo.stallwatch", qos: .utility)
+        let t = DispatchSource.makeTimerSource(queue: q)
+        t.schedule(deadline: .now() + 1, repeating: 0.5)
+        t.setEventHandler {
+            DispatchQueue.main.async { b.lock.lock(); b.main = Date(); b.lock.unlock() }
+            Task { @MainActor in b.lock.lock(); b.actor = Date(); b.lock.unlock() }
+            b.lock.lock()
+            let now = Date()
+            let lagMain = now.timeIntervalSince(b.main), lagActor = now.timeIntervalSince(b.actor)
+            let lag = max(lagMain, lagActor)
+            var sampleN: Int?
+            var recovered: Double?
+            if lag > 3, !b.stalled {
+                b.stalled = true; b.since = now.addingTimeInterval(-lag); b.count += 1; sampleN = b.count
+            } else if lag < 1, b.stalled {
+                b.stalled = false; recovered = now.timeIntervalSince(b.since)
+            }
+            b.lock.unlock()
+            if let n = sampleN {
+                DemoLog.note(String(format: "主线程卡 #%d：主队列 %.1fs、MainActor %.1fs 没跳", n, lagMain, lagActor))
+                if let dir = ProcessInfo.processInfo.environment["EVO_STALL_DIR"], FileManager.default.isExecutableFile(atPath: "/usr/bin/sample") {
+                    ProcessRunner.start("/usr/bin/sample", [String(getpid()), "3", "-file", "\(dir)/stall-\(n).txt"], timeout: 30) { r in
+                        DemoLog.note("sample #\(n) 写好 code=\(r.code)")
+                    }
+                }
+            }
+            if let s = recovered { DemoLog.note(String(format: "主线程恢复，卡了约 %.1fs", s)) }
+        }
+        t.resume()
+        source = t
     }
 }
 
