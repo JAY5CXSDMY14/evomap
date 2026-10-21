@@ -110,7 +110,49 @@ click() {
 paste_text() { printf '%s' "$1" | pbcopy; "$CLICLICK" kd:cmd t:v ku:cmd >/dev/null; }
 key() { "$CLICLICK" "$@" >/dev/null; }
 
-can_drive() {
+can_drive() {   # 鼠标真的能被挪动、点开弹窗吗（点开的弹窗留着，drive 接着用）
+  [ -n "$CLICLICK" ] || { note "没有 cliclick"; return 1; }
+  "$CLICLICK" m:400,400 >/dev/null 2>&1; sleep 0.3
+  local p; p=$("$CLICLICK" p 2>/dev/null | tail -1)
+  note "  鼠标挪到 400,400 后读回：$p"
+  open_popover && return 0
+  note "  点了菜单栏图标，弹窗没出来"
+  return 1
+}
+
+popover_open() { [ -n "$(pt pop-open-window)" ]; }
+open_popover() {   # 弹窗是开关式的：先看是不是已经开着，没开再点，最多点两次
+  local _i _j
+  for _i in 1 2; do
+    popover_open && return 0
+    click status-item || return 1
+    for _j in $(seq 1 16); do popover_open && return 0; sleep 0.25; done
+  done
+  return 1
+}
+window_open() { [ -n "$(pt win-sidebar-inbox)" ]; }
+evo_front() {     # 键盘事件只在 Evo 在最前面时发，免得打进 Finder（应用自己报 NSApp.isActive）
+  sleep 0.35; [ "$(geo active)" = "1" ]
+}
+
+tcc_grant() {
+  note "写 TCC.db 授权（辅助功能 / 发事件 / 录屏）…"
+  local now; now=$(date +%s)
+  for db in "$HOME/Library/Application Support/com.apple.TCC/TCC.db" "/Library/Application Support/com.apple.TCC/TCC.db"; do
+    [ -f "$db" ] || continue
+    for client in "$CLICLICK" /bin/bash /bin/sh /usr/bin/osascript "$(command -v ffmpeg || echo /usr/bin/true)" /usr/sbin/screencapture "$APP/Contents/MacOS/Evo"; do
+      for svc in kTCCServiceAccessibility kTCCServicePostEvent kTCCServiceScreenCapture; do
+        sudo sqlite3 "$db" "INSERT OR REPLACE INTO access (service, client, client_type, auth_value, auth_reason, auth_version, indirect_object_identifier, flags, last_modified) VALUES ('$svc', '$client', 1, 2, 4, 1, 'UNUSED', 0, $now);" 2>>"$WORK/tcc.log" || true
+      done
+    done
+  done
+  sudo killall tccd 2>/dev/null || true
+  tail -3 "$WORK/tcc.log" 2>/dev/null | sed 's/^/  tcc: /' | tee -a "$HOW"
+  sleep 2
+}
+
+# ---------- 驱动（真鼠标） ----------
+drive() {
   local fails=0
   sleep 1.2; shot 02-popover
   click pop-open-window || fails=$((fails+1))

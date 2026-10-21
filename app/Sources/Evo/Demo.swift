@@ -54,6 +54,7 @@ enum UIProbe {
         if let s = NSScreen.screens.first { out["screen"] = ["w": Double(s.frame.width), "h": Double(s.frame.height)] }
         out["selection"] = String(describing: AppState.shared.windowSelection ?? .inbox)
         out["cards"] = AppState.shared.allCards.count
+        out["active"] = NSApp.isActive ? 1 : 0
         out["dark"] = NSApp.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua ? 1 : 0
         if let data = try? JSONSerialization.data(withJSONObject: out, options: [.sortedKeys, .prettyPrinted]) {
             try? data.write(to: URL(fileURLWithPath: path), options: .atomic)
