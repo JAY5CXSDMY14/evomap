@@ -54,7 +54,7 @@ def test_default_none_adds_nothing_and_ui_set_show(loop):
     assert "none" in loop.ok("-p", "AB", "ui").stdout and loop.status_json("AB")["ui_preset"] == "none"
     loop.add("AB", "改版注册页按钮", "web/", ["--look"])
     loop.tick("AB")
-    assert all("UI 规范" not in w["spec"] for w in loop.workers())
+    assert all("（预设" not in w["spec"] for w in loop.workers())   # 岗位说明里本来就有「UI 规范」小节，认块的开头
     loop.ok("-p", "AB", "ui", "set", "web-react")
     assert json.load(open(loop.cfg_path("AB")))["ui_preset"] == "web-react"
     out = loop.ok("-p", "AB", "ui", "show").stdout
@@ -101,10 +101,10 @@ def test_ui_block_only_for_items_touching_ui_and_after_goal(loop):
     st = loop.state("AB")["items"]
     b = st[K]["build_spec"]
     assert b.startswith("项目目标：让布艺店主十分钟上架一款新品\n\nUI 规范（预设 web-react")
-    assert b.index("UI 规范") < b.index("施工岗") and "lucide-react" in b.split("施工岗")[0] and "shadcn" in b
+    assert b.index("UI 规范（预设") < b.index("施工岗") and "lucide-react" in b.split("施工岗")[0] and "shadcn" in b
     v = st[K]["verify_spec"]
-    assert "UI 规范检查" in v and "evo -p AB ui check" in v and "建议另开 issue" in v and v.index("UI 规范检查") < v.index("验收岗")
-    assert "UI 规范" not in st["AB-OPS-001"]["build_spec"] and "UI 规范" not in st["AB-OPS-001"]["verify_spec"]
+    assert "UI 规范检查（预设 web-react" in v and "evo -p AB ui check" in v and "建议另开 issue" in v and v.index("UI 规范检查（预设") < v.index("验收岗")
+    assert "（预设" not in st["AB-OPS-001"]["build_spec"] and "（预设" not in st["AB-OPS-001"]["verify_spec"]
     assert "UI 规范（预设 web-react" in st["AB-FEAT-001"]["build_spec"]
     loop.plan(verify=["fail"])                                                 # 返工的任务书也带
     loop.run_until("AB", lambda s: s["items"][K]["round"] >= 1)
