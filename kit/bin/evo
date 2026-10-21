@@ -49,7 +49,6 @@ KIT = os.path.dirname(os.path.dirname(SELF))
 sys.path.insert(0, os.path.dirname(SELF))
 import evo_time as TM       # noqa: E402
 import evo_notify as NT     # noqa: E402
-import evo_arch as ARCH     # noqa: E402  第十五轮：后端/架构预设
 import evo_plugin as PLUG   # noqa: E402  第十六轮：插件
 # 多项目：每个项目一个目录 ~/.evoloop/projects/（旧 ~/.tubu 自动沿用）<代号>/{config.json, state/}；命令用 -p <代号> 指定
 _old = os.path.expanduser("~/.tubu/projects")
@@ -233,6 +232,7 @@ class _Kernel:
 K = _Kernel()
 BUS = BUSMOD.Bus(EVENTS_PATH, CODE if HAS_PROJECT else None)
 RT = RTMOD.Runtime(FEATURES_DIR, EVO_ROOT, K, BUS)
+NOTE.channel_list = lambda: [v for _, _, v in hook("notify.channel")]     # 推送渠道是功能包（Telegram / 邮件 / webhook）
 _RT_READY = []
 
 
@@ -462,59 +462,10 @@ def goal_head(cfg=None):
     return f"项目目标：{g}\n\n" if g else ""
 
 
-_ARCH = {}
-
-
-def arch_eff():
-    """本项目实际生效的架构规范（arch_preset=none 时 None）。一个进程算一次；预设文件坏了只提示、不拦接棒。"""
-    if "eff" not in _ARCH:
-        try:
-            _ARCH["eff"] = ARCH.effective(CFG)
-        except (ValueError, OSError, KeyError) as e:
-            print(f"架构预设读不出：{e}", file=sys.stderr)
-            _ARCH["eff"] = None
-    return _ARCH["eff"]
-
-
-def arch_conflicts_once(s):
-    """仓库已有自己的结构（源码根、按类型平铺、迁移目录、某类库）：沿用现有，日志 + 提醒各一次；内容变了再报。"""
-    eff = arch_eff()
-    sig = ARCH.conflict_sig(eff) if eff and eff["conflicts"] else ""
-    if sig and s.get("arch_reported") != sig:
-        txt = "；".join(ARCH.conflict_text(eff))
-        log(s, f"架构预设 {eff['name']} 与仓库现有结构不同，沿用现有、不迁移：{txt}")
-        notify("arch_conflict", "架构预设：沿用仓库现有结构", txt)
-    if sig or s.get("arch_reported"):
-        s["arch_reported"] = sig
-
-
-def arch_delivery_check(s, k, it):
-    """施工交卷后、送验收前：只看本件新增的目录、文件、行（evo 内置检查，不跑外部工具）。
-    约定外的新目录 / 向上依赖 / 下层用了 Web 框架 / 禁用库 / 迁移命名或编号 / 写死口令 → 打回原因；其余记提示（时间线 arch_advisory）。"""
-    eff = arch_eff(); wt = it.get("worktree")
-    if not eff or not wt:
-        return None
-    base = git(wt, "merge-base", CFG["main_branch"], "HEAD", check=False)
-    if not base:
-        return None
-    eff = ARCH.effective_at(CFG, wt, base)          # 「现有」按改动前的主线算
-    r = ARCH.check(wt, base, "HEAD", eff)
-    rep = json.dumps(it.get("report") or {}, ensure_ascii=False)
-    notes = [a for a in r["advisories"] if not (a.startswith("新依赖") and all(p in rep for p in r["new_deps"]))] + \
-            [f"lockfile 新出现禁用库 {x['package']}（{x['label']}，可能是传递依赖）" for x in r["lock_only"]]
-    if notes:
-        it["arch_notes"] = notes
-        tl(k, "arch_advisory", notes=notes)
-        log(s, f"{k} 架构规范提示：" + "；".join(notes)[:200])
-    if r["violations"]:
-        return "不符合架构规范：" + ARCH.violation_text(r["violations"])[:900]
-    return None
-
-
 def spec_head(role, it):
     """任务书开头：项目目标一行，接着（只对碰界面的件）「UI 规范」块，（只对碰后端路径的件）「架构规范」块。"""
     # 第十八轮：UI / 架构规范块来自功能包（prompt.head 槽位，按 key 排序：10-ui、20-arch）；功能关着就没有
-    return goal_head() + "".join(fn(role, it) or "" for _, _, fn in hook("prompt.head")) + ARCH.head(role, it, arch_eff(), CODE)
+    return goal_head() + "".join(fn(role, it) or "" for _, _, fn in hook("prompt.head"))
 
 
 def notify(kind, title, body="", item=None, gate=None, **data):
@@ -1081,7 +1032,7 @@ def check_delivery(s, k, it, body):
         red = [t["command"] for t in rep["tests"] if t["result"] == "failed"]
         if red:
             build_reject(s, k, it, "报告里有没通过的测试：" + "；".join(red)); return False
-    why = next((r for r in (fn(s, k, it) for _, _, fn in hook("delivery.check")) if r), None) or arch_delivery_check(s, k, it)   # 第十八轮：功能包的交卷检查
+    why = next((r for r in (fn(s, k, it) for _, _, fn in hook("delivery.check")) if r), None)   # 第十八轮：功能包的交卷检查
     if why:
         build_reject(s, k, it, why)
         return False
@@ -2207,7 +2158,6 @@ def cmd_tick(a=None):
     T = tasks(s)
 
     emit("tick.before_dispatch", live={"s": s}, record=False)    # 第十八轮：功能包在派工前的事（UI / 架构冲突提示…）
-    arch_conflicts_once(s)
     dispatch_all(s, c, T)          # 2) 派工、合并
     do_push(s); save(s)
     check_stalls(s)                # 3) 停滞
@@ -2980,94 +2930,6 @@ def _write_project_cfg(c):
 
 
 # ---------- 后端/架构预设（第十五轮，见 kit/presets/arch/README.md）----------
-ARCH_SET_RE = re.compile(r"(root|layout|allow_dirs|migrations_dir|migrations_pattern|arch_paths|config_modules|layers\.[a-z][a-z0-9_-]{0,23}|deps\.[a-z][a-z0-9_-]{0,23}|checks\.[a-z][a-z0-9_-]{0,31})")
-
-
-def cmd_arch(a):
-    """evo -p AB arch [show [预设]]：看本项目生效的架构规范（带预设名 = 只预览）；arch set <预设> / set 键=值 / set 键=：改（外部 Agent 不能改）；
-    arch check [--path 目录] [--base 提交] [--no-tools] [--json]：只看新增，有不合规退出码 1（验收岗用）。"""
-    act = a.action or "show"
-    if act == "show":
-        pv = (a.text or [None])[0]
-        if pv and pv not in ARCH.NAMES:
-            sys.exit(f"架构预设只能是：{' | '.join(ARCH.NAMES)}")
-        eff = ARCH.effective({**CFG, "arch_preset": pv}) if pv else arch_eff()
-        if a.json:
-            print(json.dumps({"schema_version": APP_SCHEMA_VERSION, "arch_preset": CFG.get("arch_preset") or "none", "effective": eff}, ensure_ascii=False, indent=1, default=list)); return
-        print(ARCH.table(eff) if eff else "架构预设：none（没开；evo -p " + CODE + " arch set python-fastapi | node-ts | swift-app）"); return
-    if act == "check":
-        path = a.path or (os.getcwd() if git(os.getcwd(), "rev-parse", "--git-dir", check=False) else CFG["repo"])
-        if not arch_eff():
-            print("架构预设：none，不查"); return
-        base = a.base or git(path, "merge-base", CFG["main_branch"], "HEAD", check=False) or "HEAD"
-        eff = ARCH.effective_at(CFG, path, base)
-        r = ARCH.check(path, base, "HEAD", eff)
-        tools = [] if a.no_tools else ARCH.run_tools(path, base, "HEAD", eff, r["changed"])
-        bad = bool(r["violations"]) or any(t["status"] == "fail" for t in tools)
-        if a.json:
-            print(json.dumps({"schema_version": APP_SCHEMA_VERSION, **r, "tools": tools, "ok": not bad}, ensure_ascii=False, indent=1))
-        else:
-            print(f"架构检查（预设 {eff['name']}，源码根 {eff['root']}/，对比 {base[:10]}..HEAD，只看新增）")
-            for x in r["violations"]:
-                print("  ✗ 不合规：" + x["text"])
-            for x in r["lock_only"]:
-                print(f"  ! 提示：lockfile 新出现禁用库 {x['package']}（{x['label']}，可能是传递依赖，核对一下）")
-            for t in r["advisories"]:
-                print("  ! 提示：" + t)
-            for t in tools:
-                mark = {"pass": "✓", "fail": "✗", "missing": "!", "error": "!", "skip": "·"}[t["status"]]
-                head_ = {"pass": "通过", "fail": "不合规（新出现）", "missing": "没装，只警告", "error": "工具报错，只警告", "skip": "没有要查的文件"}[t["status"]]
-                print(f"  {mark} {t['label']}：{head_}")
-                for n in t["notes"][:12]:
-                    print("      " + n)
-            for t in ARCH.conflict_text(eff):
-                print("  · 沿用现有：" + t)
-            if not bad and not r["advisories"] and not r["lock_only"]:
-                print("  ✓ 没有问题")
-        sys.exit(1 if bad else 0)
-    refuse_agents("改架构预设")
-    arg = " ".join(a.text or []).strip()
-    if not arg:
-        sys.exit("用法：evo arch set python-fastapi | node-ts | swift-app | none，或 evo arch set 键=值（root、layout、allow_dirs、migrations_dir、"
-                 "migrations_pattern、arch_paths、config_modules、layers.<层>、deps.<类别>、checks.<检查>=off；值留空 = 清掉）")
-    c = _read_json(_project_cfg_path(CODE))
-    if "=" in arg:
-        key, _, val = arg.partition("=")
-        key, val = key.strip(), val.strip()
-        if not ARCH_SET_RE.fullmatch(key):
-            sys.exit("键只能是 root、layout、allow_dirs、migrations_dir、migrations_pattern、arch_paths、config_modules、layers.<层>、deps.<类别>、checks.<检查>")
-        if key == "layout" and val and val not in ("domain", "by-type"):
-            sys.exit("layout 只能是 domain 或 by-type")
-        if key == "migrations_pattern" and val:
-            try:
-                re.compile(val)
-            except re.error as e:
-                sys.exit(f"migrations_pattern 不是合法正则：{e}")
-        elif val and not re.fullmatch(r"[@A-Za-z0-9._/*+, -]{1,200}", val):
-            sys.exit("值只许字母数字和 @ . _ / * + - , 空格")
-        ov = dict(c.get("arch_overrides") or {})
-        if val:
-            ov[key] = [x.strip() for x in val.split(",") if x.strip()] if key in ("allow_dirs", "arch_paths", "config_modules") or key.startswith(("layers.", "deps.")) else val
-        else:
-            ov.pop(key, None)
-        if ov:
-            c["arch_overrides"] = ov
-        else:
-            c.pop("arch_overrides", None)
-        _write_project_cfg(c)
-        print(f"{CODE} 架构覆盖：{key} = {val or '（已清掉，回到预设）'}。下一份任务书起生效")
-        return
-    if arg not in ARCH.NAMES:
-        sys.exit(f"架构预设只能是：{' | '.join(ARCH.NAMES)}")
-    if arg == "none":
-        c.pop("arch_preset", None)
-    else:
-        c["arch_preset"] = arg
-    _write_project_cfg(c)
-    print(f"{CODE} 架构预设：{arg}。下一份任务书起生效（只管新代码，老结构沿用、不迁移）")
-    eff = ARCH.effective({**CFG, **c}) if arg != "none" else None
-    for t in ARCH.conflict_text(eff) if eff else []:
-        print("  · 沿用现有：" + t)
 
 
 # ---------- evo log <件号> ----------
@@ -3293,8 +3155,8 @@ def cmd_digest(a):
         gh_run("issue", "comment", str(CFG["digest_issue"]), "-R", CFG["github_repo"], "-b", text)
     if stuck or ready:
         notify("digest_nightly", "今晚汇总", text, ready=len(ready), stuck=len(stuck))
-        if CFG.get("notify", {}).get("email", {}).get("nightly", True) and "email" in NOTE.channels():
-            NT.send_mail(f"[evo] {CODE} 今晚汇总：可收菜 {len(ready)}，卡住 {len(stuck)}", text)
+        if CFG.get("notify", {}).get("email", {}).get("nightly", True) and "email" in NOTE.channels() and svc("mail.send"):
+            svc("mail.send")(f"[evo] {CODE} 今晚汇总：可收菜 {len(ready)}，卡住 {len(stuck)}", text)
 
 
 def cmd_retro(a):
@@ -3435,10 +3297,7 @@ def _setup_project(code, name, path, github, test_cmd, notes, goal=None, ui_pres
         notes += preset_svc("ui").setup_notes(base, code, ui_preset)
     if arch_preset and arch_preset != "none":
         base["arch_preset"] = arch_preset
-        eff = ARCH.effective(base)
-        notes.append(f"架构预设 {arch_preset}：碰后端路径的件任务书里会带「架构规范」，交卷查结构（evo -p {code} arch 看全表）")
-        for t in ARCH.conflict_text(eff):
-            notes.append("架构预设与现有结构不同，沿用现有、不迁移：" + t)
+        notes += preset_svc("arch").setup_notes(base, code, arch_preset)
     if not has_origin:
         notes.append("没有 origin 远端：push_cmd 留空，合并后只在本地（之后在 config.json 补 push_cmd）")
     work = path
@@ -3486,8 +3345,8 @@ def _ui_arg(a):
 
 def _arch_arg(a):
     v = getattr(a, "arch_preset", None)
-    if v and v not in ARCH.NAMES:
-        raise SystemExit(f"--arch-preset 只能是：{' | '.join(ARCH.NAMES)}")
+    if v and v != "none" and v not in preset_svc("arch").NAMES:
+        raise SystemExit(f"--arch-preset 只能是：{' | '.join(preset_svc('arch').NAMES)}")
     return v
 
 
@@ -3825,31 +3684,6 @@ def cmd_notify_test(a):
     sys.exit(0 if all(r is not False for r in res.values()) else 1)
 
 
-def cmd_bot(a):
-    """Telegram 按钮机器人：长轮询 getUpdates，收「通过 / 打回」按钮和打回后的那句原话。只认老板本人。"""
-    refuse_agents("Telegram 机器人")
-    tok, chat, owner, _ = NOTE.tg()
-    if not tok or not chat:
-        sys.exit("没配 Telegram：设 EVO_TG_TOKEN 和 EVO_TG_CHAT（可选 EVO_TG_OWNER = 你的用户 id）")
-
-    def run_evo(args):
-        try:
-            r = subprocess.run([sys.executable, SELF] + args, capture_output=True, text=True, timeout=180)
-        except subprocess.TimeoutExpired:                # 第十七轮 L-24：不让 bot 进程因为一次超时退出
-            return 124, "evo 正忙（3 分钟没回），稍后再点一次"
-        return r.returncode, (r.stdout + r.stderr).strip()
-    bot = NT.Bot(NOTE, run_evo)
-    print(f"evo bot 在听（chat {chat}" + (f"，只认用户 {owner}" if owner else "，只认私聊本人") + "）")
-    while True:
-        n = bot.poll_once(timeout=0 if a.once else 30)
-        flush_digest()
-        watchdog_check()
-        if a.once:
-            return
-        if n < 0:
-            time.sleep(10)
-
-
 # ---------- 老板视角 ----------
 def cmd_suite(a):
     """给施工/验收岗用：evo suite -- <命令>，排队跑全量测试，日志整份留下。"""
@@ -4019,7 +3853,6 @@ def status_doc(s, pend):
         "count": cnt,
         "stuck": sum(1 for it in s["items"].values() if it.get("stalled") or it["state"] in ("escalated", "asking")),
         "goal": CFG.get("goal") or None,
-        "arch_preset": CFG.get("arch_preset") or "none",
         "roles": roles_doc(s),
         "stale": stale_list(s),
         "no_live_path": no_live_list(s),
@@ -4664,7 +4497,7 @@ if __name__ == "__main__":
     x = sp.add_parser("projects"); x.add_argument("--json", action="store_true"); sp.add_parser("once")
     x = sp.add_parser("panel"); x.add_argument("--host", default="127.0.0.1"); x.add_argument("--port", type=int, default=8765)
     x.add_argument("--show-token", action="store_true", help="只显示面板口令（没有就生成）")
-    sp.add_parser("notify-test"); x = sp.add_parser("bot"); x.add_argument("--once", action="store_true")
+    sp.add_parser("notify-test")
     sp.add_parser("tick"); x = sp.add_parser("run"); x.add_argument("--every", type=int, default=30)
     x.add_argument("--max-rounds", dest="max_rounds", type=int, default=0, help=argparse.SUPPRESS)
     x = sp.add_parser("status"); x.add_argument("--json", action="store_true"); x = sp.add_parser("approve"); x.add_argument("gate"); x.add_argument("choice"); x.add_argument("why", nargs="?")
@@ -4673,10 +4506,6 @@ if __name__ == "__main__":
     x.add_argument("--source", help=argparse.SUPPRESS)
     x = sp.add_parser("log"); x.add_argument("key"); x.add_argument("--json", action="store_true"); x.add_argument("--diff", action="store_true")
     x = sp.add_parser("goal"); x.add_argument("action", nargs="?", choices=["show", "set", "clear"]); x.add_argument("text", nargs="*")
-    x = sp.add_parser("arch", help="后端/架构预设：show | set <预设|键=值> | check")      # 第十五轮
-    x.add_argument("action", nargs="?", choices=["show", "set", "check"]); x.add_argument("text", nargs="*")
-    x.add_argument("--json", action="store_true"); x.add_argument("--path"); x.add_argument("--base")
-    x.add_argument("--no-tools", dest="no_tools", action="store_true", help="只跑 evo 内置检查，不跑 import-linter / ruff 等外部工具")
     x = sp.add_parser("suite"); x.add_argument("command", nargs=argparse.REMAINDER)
     sp.add_parser("retro")
     x = sp.add_parser("models", help="核对施工/验收模型；-p 代号 models set|clear build|verify [模型] 改单项目覆盖")
@@ -4735,5 +4564,5 @@ if __name__ == "__main__":
     if a.cmd in FEATURE_CMDS:
         sys.exit(FEATURE_CMDS[a.cmd][0](a) or 0)
     {"panel": cmd_panel, "new": cmd_new, "import": cmd_import, "projects": cmd_projects, "once": cmd_once, "add": cmd_add, "tick": cmd_tick, "run": cmd_run, "status": cmd_status, "approve": cmd_approve, "ship": cmd_ship, "pull": cmd_pull, "digest": cmd_digest, "retry": cmd_retry, "resume": cmd_resume, "feedback": cmd_feedback, "suite": cmd_suite, "retro": cmd_retro,
-     "notify-test": cmd_notify_test, "bot": cmd_bot, "watchdog": cmd_watchdog, "models": cmd_models, "log": cmd_log,
-     "goal": cmd_goal, "arch": cmd_arch, "relocate": cmd_relocate, "limits": cmd_limits}[a.cmd](a)
+     "notify-test": cmd_notify_test, "watchdog": cmd_watchdog, "models": cmd_models, "log": cmd_log,
+     "goal": cmd_goal, "relocate": cmd_relocate, "limits": cmd_limits}[a.cmd](a)

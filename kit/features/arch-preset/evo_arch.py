@@ -19,7 +19,7 @@ try:
 except ImportError:          # Python < 3.11：pyproject 只用正则粗读
     tomllib = None
 
-KIT = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
+KIT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.realpath(__file__))))   # 第十八轮：搬到 kit/features/arch-preset/
 PRESET_DIR = os.path.join(KIT, "presets", "arch")
 NAMES = ("python-fastapi", "node-ts", "swift-app", "none")
 EXT = {"python": (".py",), "ts": (".ts", ".tsx", ".mts", ".cts", ".js", ".mjs", ".cjs"), "swift": (".swift",)}

@@ -8,6 +8,7 @@ import pytest
 from conftest import KIT, state_is
 
 sys.path.insert(0, os.path.join(KIT, "bin"))
+sys.path.insert(0, os.path.join(KIT, "features", "arch-preset"))   # 第十八轮：架构预设搬成功能包
 import evo_arch as A  # noqa: E402
 
 K = "AB-FIX-001"

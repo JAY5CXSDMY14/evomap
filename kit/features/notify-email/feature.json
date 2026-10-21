@@ -1,0 +1,22 @@
+{
+  "id": "notify-email",
+  "api": "^1",
+  "version": "1.0.0",
+  "name": "邮件推送",
+  "sub": "SMTP：Telegram 没配或发失败时兜底，另外收早间汇总和每晚汇总",
+  "essential": false,
+  "requires": ["notify"],
+  "provides": ["mail.send"],
+  "parts": [
+    {"slot": "notify.channel", "key": "20-email"},
+    {"slot": "settings", "key": "notify-email"}
+  ],
+  "settings": {
+    "type": "object",
+    "x-order": ["mode"],
+    "properties": {
+      "mode": {"type": "string", "title": "什么时候发邮件", "description": "fallback：Telegram 没配或发失败才发；always：要推的事都发（全局配置 notify.email.mode 写了以它为准）",
+               "enum": ["fallback", "always"], "default": "fallback"}
+    }
+  }
+}

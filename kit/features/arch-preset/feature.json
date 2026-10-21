@@ -1,0 +1,18 @@
+{
+  "id": "arch-preset",
+  "api": "^1",
+  "version": "1.0.0",
+  "name": "架构预设",
+  "sub": "碰后端路径的件任务书带「架构规范」，交卷查结构（python-fastapi / node-ts / swift-app）",
+  "essential": false,
+  "requires": ["config", "git"],
+  "provides": ["preset.arch"],
+  "parts": [
+    {"slot": "cli", "key": "arch"},
+    {"slot": "prompt.head", "key": "20-arch"},
+    {"slot": "delivery.check", "key": "20-arch"},
+    {"slot": "status", "key": "arch_preset"}
+  ],
+  "one": "1 个项目开着架构预设",
+  "many": "{n} 个项目开着架构预设"
+}

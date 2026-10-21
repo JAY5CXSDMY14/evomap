@@ -1,4 +1,13 @@
-"""evo 的提醒通道（可插拔，几个可以同时发）。
+"""evo 内核：提醒（outbox、免打扰攒着、早间汇总、第三方插件渠道）。
+
+第十八轮：Telegram / 邮件 / webhook 三个推送渠道搬成功能包（kit/features/notify-telegram、notify-email、notify-webhook），
+走 notify.channel 槽位；这里只留内核那部分（事件格式、outbox、免打扰、汇总的攒和发、macOS 本机通知、第三方插件渠道）。
+渠道对象（功能包贡献的）可以有这几个方法，都可选，出错只影响它自己：
+  name                      渠道名（telegram / email / webhook…）
+  on_event(n, ev)           每个事件都给（免打扰之前；webhook 用）
+  push(n, ev, text, res)    要推的事（不在免打扰里）；res 是前面渠道的结果（邮件兜底看 telegram 成没成）；返回 True/False/None
+  digest(n, text, evs, ev)  早间汇总
+  test(n, ev)               evo notify-test，返回 {名字: True/False/None}
 
 每件事先变成一条「事件」（JSON），然后：
   outbox   永远写：~/.evoloop/outbox.jsonl 一行一条，外部 Agent 读这里（见 docs/agent-interface.md）
@@ -14,9 +23,8 @@
 免打扰时段（默认 0:00–8:00 上海时间）里要推的事先攒着，到早上 8:30 一次发汇总到 telegram + email。
 测试替身：设 EVO_FAKE_NET=<目录> 时不联网，HTTP 请求记到 http.log、邮件记到 mail.log，HTTP 回应取自 http_responses.json。
 """
-import fcntl, hashlib, hmac, json, os, smtplib, ssl, subprocess, sys, uuid
+import fcntl, json, os, subprocess, sys, uuid
 import urllib.request
-from email.message import EmailMessage
 
 import evo_time as T
 
@@ -85,33 +93,6 @@ def http(url, data=None, headers=None, timeout=15, raw=None):
         return 0, str(e)
 
 
-def send_mail(subject, text):
-    """SMTP 发信，配置全在环境变量：EVO_SMTP_HOST、EVO_SMTP_PORT（默认 465）、EVO_SMTP_USER、EVO_SMTP_PASS、
-    EVO_SMTP_TLS（ssl 默认 / starttls / none）、EVO_MAIL_FROM（默认同 USER）、EVO_MAIL_TO（逗号分隔）。没配返回 None。"""
-    host, to = env("EVO_SMTP_HOST"), env("EVO_MAIL_TO")
-    if not host or not to:
-        return None
-    frm = env("EVO_MAIL_FROM") or env("EVO_SMTP_USER") or "evo@localhost"
-    fd = _fake_dir()
-    if fd:
-        _append(os.path.join(fd, "mail.log"), {"to": to, "from": frm, "subject": subject, "text": text})
-        return True
-    msg = EmailMessage(); msg["Subject"] = subject; msg["From"] = frm; msg["To"] = to; msg.set_content(text)
-    mode = (env("EVO_SMTP_TLS") or "ssl").lower(); port = int(env("EVO_SMTP_PORT") or (465 if mode == "ssl" else 587))
-    try:
-        s = smtplib.SMTP_SSL(host, port, timeout=20, context=ssl.create_default_context()) if mode == "ssl" else smtplib.SMTP(host, port, timeout=20)
-        with s:
-            if mode == "starttls":
-                s.starttls(context=ssl.create_default_context())
-            if env("EVO_SMTP_USER"):
-                s.login(env("EVO_SMTP_USER"), env("EVO_SMTP_PASS") or "")
-            s.send_message(msg)
-        return True
-    except Exception as e:
-        print(f"邮件没发出去：{e}", file=sys.stderr)
-        return False
-
-
 # ---------- 配置 ----------
 class Notifier:
     def __init__(self, cfg, root, project=None):
@@ -121,24 +102,12 @@ class Notifier:
         self.project = project
         self.outbox = os.path.join(root, "outbox.jsonl")
         self.held = os.path.join(root, "held.jsonl")
+        self.channel_list = lambda: []        # 第十八轮：内核接上功能包的 notify.channel 槽位
 
     # -- 通道配置 --
     def channels(self):
         ch = self.n.get("channels")
         return list(ch) if ch is not None else ["telegram", "email"]
-
-    def tg(self):
-        t = self.n.get("telegram") or {}
-        # 老配置键（telegram_bot_token_env / telegram_chat_id_env）写了就优先
-        tok = env(self.n.get("telegram_bot_token_env") or t.get("token_env") or "EVO_TG_TOKEN")
-        chat = env(self.n.get("telegram_chat_id_env") or t.get("chat_env") or "EVO_TG_CHAT")
-        owner = env(t.get("owner_user_env") or "EVO_TG_OWNER")
-        api = (t.get("api") or env("EVO_TG_API") or "https://api.telegram.org").rstrip("/")
-        return tok, chat, owner, api
-
-    def webhooks(self):
-        w = self.n.get("webhook") or self.n.get("webhooks") or []
-        return [w] if isinstance(w, dict) else list(w)
 
     def quiet_cfg(self):
         q = self.n.get("quiet_hours", {"start": "00:00", "end": "08:00"})
@@ -164,9 +133,7 @@ class Notifier:
     def emit(self, kind, title, body="", item=None, gate=None, data=None, project=None):
         ev = self.event(kind, title, body, item, gate, data, project)
         _append(self.outbox, ev)                          # 永远写 outbox
-        for w in self.webhooks():
-            if (w.get("events") or "push") == "all" or ev["level"] == "push":
-                self.post_webhook(w, ev)
+        self._each("on_event", ev)                        # 第十八轮：webhook 等渠道（功能包）
         if ev["level"] != "push":
             self.plugins(ev, push=False)                  # 第十六轮：events=all 的插件渠道
             return ev
@@ -177,21 +144,38 @@ class Notifier:
         return ev
 
     def deliver(self, ev):
-        """把一条要推的事发到老板那：macOS、Telegram；Telegram 没配/失败 → 邮件兜底（email.mode=always 则都发）。"""
+        """把一条要推的事发到老板那：macOS（内核）、各渠道功能包（按槽位 key 排序：Telegram 先，邮件兜底看它的结果）、第三方插件。"""
         res = {}
         text = f"{self._prefix(ev)}{ev['title']}\n{ev['body']}".strip()
         if self.n.get("macos") and sys.platform == "darwin":
             subprocess.run(["osascript", "-e", f'display notification {json.dumps(ev["body"] or ev["title"])} with title {json.dumps(ev["title"])}'],
                            capture_output=True)
-        ch = self.channels()
-        if "telegram" in ch:
-            res["telegram"] = self.telegram(text, self._buttons([ev]))
-        if "email" in ch:
-            mode = (self.n.get("email") or {}).get("mode", "fallback")
-            if mode == "always" or not res.get("telegram"):
-                res["email"] = send_mail(f"[evo] {ev['title']}", text)
+        for ch in self.channel_list():
+            if hasattr(ch, "push"):
+                try:
+                    r = ch.push(self, ev, text, res)
+                except Exception as e:
+                    print(f"推送渠道 {getattr(ch, 'name', ch)} 出错：{e}", file=sys.stderr)
+                    r = False
+                if r is not None or getattr(ch, "name", None) not in res:
+                    res[getattr(ch, "name", "channel")] = r
         res.update(self.plugins(ev, push=True))
         return res
+
+    def _each(self, method, *args):
+        out = {}
+        for ch in self.channel_list():
+            fn = getattr(ch, method, None)
+            if not fn:
+                continue
+            try:
+                r = fn(self, *args)
+            except Exception as e:
+                print(f"推送渠道 {getattr(ch, 'name', ch)} 出错：{e}", file=sys.stderr)
+                r = {getattr(ch, "name", "channel"): False} if method == "test" else None
+            if isinstance(r, dict):
+                out.update(r)
+        return out
 
     def plugins(self, ev, push):
         """第十六轮：插件通知渠道。插件出什么事都不能拖垮提醒（evo_plugin.invoke 不抛异常，这里再兜一层）。"""
@@ -206,46 +190,6 @@ class Notifier:
 
     def _prefix(self, ev):
         return f"[{ev['project']}] " if ev.get("project") else ""
-
-    def _buttons(self, evs):
-        """闸门消息带按钮：callback_data = g|<项目>|<闸门>|<选项序号>（≤64 字节）。"""
-        rows = []
-        for ev in evs:
-            if ev.get("kind") != "gate_waiting" or not ev.get("gate") or not ev.get("project"):
-                continue
-            opts = (ev.get("data") or {}).get("options") or ["通过", "打回"]
-            row = []
-            for i, o in enumerate(opts[:3]):
-                cb = f"g|{ev['project']}|{ev['gate']}|{i}"
-                if len(cb.encode()) <= 64:
-                    row.append({"text": (f"{ev.get('item') or ''} " if len(evs) > 1 else "") + o, "callback_data": cb})
-            if row:
-                rows.append(row)
-        return rows or None
-
-    # -- 通道 --
-    def telegram(self, text, buttons=None, chat=None):
-        tok, ch, _, api = self.tg()
-        chat = chat or ch
-        if not tok or not chat:
-            return None
-        data = {"chat_id": chat, "text": text[:4000], "disable_web_page_preview": True}
-        if buttons:
-            data["reply_markup"] = {"inline_keyboard": buttons}
-        code, r = http(f"{api}/bot{tok}/sendMessage", data)
-        return code == 200 and isinstance(r, dict) and r.get("ok") is not False
-
-    def post_webhook(self, w, ev):
-        url = w.get("url") or env(w.get("url_env") or "")
-        if not url:
-            return None
-        body = json.dumps(ev, ensure_ascii=False).encode("utf-8")
-        hd = {"X-Evo-Event": ev["kind"], "X-Evo-Schema": str(SCHEMA_VERSION)}
-        sec = env(w["secret_env"]) if w.get("secret_env") else None     # 每个 webhook 自己的密钥；没写就不签，不借别人的
-        if sec:
-            hd["X-Evo-Signature"] = "sha256=" + hmac.new(sec.encode("utf-8"), body, hashlib.sha256).hexdigest()
-        code, _ = http(url, raw=body, headers={"Content-Type": "application/json; charset=utf-8", **hd})
-        return 200 <= code < 300
 
     # -- 早间汇总 --
     def digest_due(self):
@@ -283,17 +227,11 @@ class Notifier:
             lines.append(f"· [{ev.get('project') or '-'}] {KIND_NAMES.get(ev['kind'], ev['kind'])}：{ev['title']}"
                          + (f" —— {ev['body']}" if ev.get("body") else ""))
         text = "\n".join(lines)
-        ch = self.channels()
-        if "telegram" in ch:
-            self.telegram("☀️ 早间汇总\n" + text, self._buttons(uniq))
-        if "email" in ch:
-            send_mail(f"[evo] 早间汇总：{len(uniq)} 件", text)
         ev = self.event("digest_morning", "早间汇总", text, data={"count": len(uniq), "events": [e["id"] for e in uniq]}, project="*")
+        self._each("digest", text, uniq, ev)              # Telegram（带按钮）、邮件……（功能包）
         _append(self.outbox, ev)
         self.plugins(ev, push=True)                       # 插件渠道和 telegram 一样收早间汇总
-        for w in self.webhooks():
-            if (w.get("events") or "push") == "all":
-                self.post_webhook(w, ev)
+        self._each("on_event", ev)                        # webhook events=all 也收
         return len(uniq)
 
     def test_all(self):
@@ -301,13 +239,7 @@ class Notifier:
         ev = self.event("test", "evo 通知测试", "收到这条说明这个通道通了。", project=self.project or "*")
         out = {"outbox": True}
         _append(self.outbox, ev)
-        for i, w in enumerate(self.webhooks()):
-            out[f"webhook{i + 1}"] = self.post_webhook(w, ev)
-        ch = self.channels()
-        if "telegram" in ch:
-            out["telegram"] = self.telegram(f"{ev['title']}\n{ev['body']}")
-        if "email" in ch:
-            out["email"] = send_mail(f"[evo] {ev['title']}", ev["body"])
+        out.update(self._each("test", ev))                # 各渠道功能包
         out.update(self.plugins(ev, push=True))
         if self.n.get("macos") and sys.platform == "darwin":
             r = subprocess.run(["osascript", "-e", f'display notification "{ev["body"]}" with title "{ev["title"]}"'], capture_output=True)
@@ -315,98 +247,3 @@ class Notifier:
         return out
 
 
-# ---------- Telegram 按钮机器人（evo bot）----------
-class Bot:
-    """长轮询 getUpdates。只认配置的老板：chat_id 必须等于 EVO_TG_CHAT；
-    配了 EVO_TG_OWNER（用户 id）时发消息/点按钮的人必须是他；没配时只认私聊且发信人 id == chat_id。其他人一律忽略。"""
-
-    def __init__(self, notifier, run_evo):
-        self.N = notifier
-        self.run_evo = run_evo                # run_evo(args) -> (rc, out)
-        self.state_path = os.path.join(notifier.root, "bot.json")
-        self.st = json.load(open(self.state_path, encoding="utf-8")) if os.path.exists(self.state_path) else {"offset": 0, "await": None}
-
-    def save(self):
-        tmp = self.state_path + ".tmp"
-        json.dump(self.st, open(tmp, "w", encoding="utf-8"), ensure_ascii=False); os.replace(tmp, self.state_path)
-
-    def allowed(self, frm, chat):
-        _, cid, owner, _ = self.N.tg()
-        if not cid or str((chat or {}).get("id")) != str(cid):
-            return False
-        if owner:
-            return str((frm or {}).get("id")) == str(owner)
-        return (chat or {}).get("type") == "private" and str((frm or {}).get("id")) == str(cid)
-
-    def api(self, method, data):
-        tok, _, _, api = self.N.tg()
-        return http(f"{api}/bot{tok}/{method}", data, timeout=60)
-
-    def poll_once(self, timeout=30):
-        code, r = self.api("getUpdates", {"offset": self.st.get("offset", 0), "timeout": timeout,
-                                          "allowed_updates": ["message", "callback_query"]})
-        if code != 200 or not isinstance(r, dict):
-            return -1
-        ups = r.get("result") or []
-        for u in ups:
-            self.st["offset"] = max(self.st.get("offset", 0), int(u.get("update_id", 0)) + 1)
-            try:
-                self.handle(u)
-            finally:
-                self.save()
-        return len(ups)
-
-    def handle(self, u):
-        if u.get("callback_query"):
-            q = u["callback_query"]; msg = q.get("message") or {}
-            if not self.allowed(q.get("from"), msg.get("chat")):
-                self.N.emit("bot_rejected", "Telegram：陌生人点按钮，已忽略", data={"from": (q.get("from") or {}).get("id")}, project="*")
-                return
-            self.api("answerCallbackQuery", {"callback_query_id": q.get("id")})
-            parts = (q.get("data") or "").split("|")
-            if len(parts) != 4 or parts[0] != "g":
-                return
-            _, code, gate, idx = parts
-            opts = self.gate_options(code, gate)
-            if opts is None:
-                return self.say(f"{code} 的闸门 {gate} 已经处理过或不存在。")
-            choice = opts[int(idx)] if idx.isdigit() and int(idx) < len(opts) else None
-            if not choice:
-                return
-            if choice == "打回":
-                self.st["await"] = {"code": code, "gate": gate, "since": T.now()}
-                return self.say(f"要打回 {code} 的这件：请直接回一句原因（原话会写进返工说明）。回「跳过」就不写原因。")
-            self.approve(code, gate, choice)
-        elif u.get("message"):
-            m = u["message"]
-            if not self.allowed(m.get("from"), m.get("chat")):
-                self.N.emit("bot_rejected", "Telegram：陌生人发消息，已忽略", data={"from": (m.get("from") or {}).get("id")}, project="*")
-                return
-            text = (m.get("text") or "").strip()
-            aw = self.st.get("await")
-            if text in ("/status", "状态"):
-                rc, out = self.run_evo(["status"])
-                return self.say(out[-3500:] or "（空）")
-            if aw and text and T.now() - float(aw.get("since") or 0) > 600:
-                self.st["await"] = None                  # 第十七轮 L-24：等原话超过 10 分钟作废，免得随手一句话被当成打回原话
-                return self.say(f"刚才那次打回（{aw.get('code')} 的 {aw.get('gate')}）等原话超过 10 分钟，已作废；要打回请再点一次按钮。")
-            if aw and text:
-                self.st["await"] = None
-                words = None if text in ("跳过", "/skip") else text
-                return self.approve(aw["code"], aw["gate"], "打回", words)
-
-    def gate_options(self, code, gate):
-        rc, out = self.run_evo(["-p", code, "status", "--json"])
-        try:
-            j = json.loads(out)
-        except ValueError:
-            return None
-        g = next((g for g in j.get("gates", []) if g["id"] == gate), None)
-        return (g.get("options") or ["通过", "打回"]) if g else None
-
-    def approve(self, code, gate, choice, words=None):
-        rc, out = self.run_evo(["-p", code, "approve", gate, choice] + ([words] if words else []))
-        self.say(f"已{choice}：{code} {gate}" + (f"（原话：{words}）" if words else "") if rc == 0 else f"没成功：{out[-300:]}")
-
-    def say(self, text):
-        self.N.telegram(text)

@@ -1,0 +1,14 @@
+{
+  "id": "notify-telegram",
+  "api": "^1",
+  "version": "1.0.0",
+  "name": "Telegram 推送",
+  "sub": "要推的事发 Telegram，闸门消息带「通过 / 打回」按钮；evo bot 收按钮",
+  "essential": false,
+  "requires": ["notify"],
+  "provides": [],
+  "parts": [
+    {"slot": "notify.channel", "key": "10-telegram"},
+    {"slot": "cli", "key": "bot"}
+  ]
+}
