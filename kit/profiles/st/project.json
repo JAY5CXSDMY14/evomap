@@ -1,110 +1,150 @@
 {
-  "_说明": "股票（ST）的项目配置实例。evo import 生成 ~/.evoloop/projects/ST/config.json 后，用本文件补齐（合并方法见同目录 README.md）。ST 是 evo 的第二个项目：以 ios-stock-app 为唯一主仓库，吸收 REASTOCK 的长处。下划线开头的键是给人和决策岗看的说明，evo 不解析；scope_labels / look_rules / window_rules / red_lines 目前也只是写给决策岗的分拣规矩，evo 本身不读。",
+  "_说明": "股票（ST）的项目配置实例。evo import 生成 ~/.evoloop/projects/ST/config.json 后，用本文件补齐（合并方法见同目录 README.md）。老板 2026-10-21 定：REASTOCK 为主力工作代码库（原生 SwiftUI、1.9.1 功能、提速、8 个页面），ios-stock-app 是严谨性的来源（score_engine 1.8.4 金标准、约 760 个测试里适用的部分、官方对账、版本化发布），按件移植进来。下划线开头的键是给人和决策岗看的说明，evo 不解析；scope_labels / look_rules / window_rules / red_lines 目前也只是写给决策岗的分拣规矩，evo 本身不读。",
   "code": "ST",
   "name": "股票",
-  "goal": "把股票项目做成 vea：先稳定出盘后复盘榜给次日方向，再做盘中协助；吸收 REASTOCK 的 1.9.1 评分、选股提速和日常页面。只观察和模拟，不做真实交易。",
-  "repo": "~/Desktop/项目/ios-stock-app",
+  "goal": "以 REASTOCK 为主力，做老板自用的 A 股复盘与盘中协助 Mac 应用：先把评分钉死在可回归的金标准上、数据来源逐项标清，再把 ios-stock-app 的对账、测试和版本化发布纪律移植进来，最后打磨 REASTOCK 现有功能。只观察和模拟，不做真实交易。",
+  "repo": "~/Desktop/项目/reastock",
+  "_repo": "建议路径，由 ST-OPS-001（老板在场）新建的干净工作仓库；路径和私有仓库名是 Q5，老板到时再定，定了以实际为准改这里。旧仓库 ~/Desktop/项目/jailbreaks/reastock 原样保留做档案，evo 不在那里工作。",
   "main_branch": "main",
   "github_repo": "",
-  "_github_repo": "目前没有远端（.git 残缺，见 backlog ST-OPS-001）。老板定了私有仓库名再填，建议 JAY5CXSDMY14/ios-stock-app（私有）。",
+  "_github_repo": "OPS-001 建好私有远端后再填，建议 JAY5CXSDMY14/reastock（私有）。名字属 Q5，未定。",
   "trusted_authors": ["JAY5CXSDMY14"],
   "trusted_labelers": ["JAY5CXSDMY14"],
   "test_cmd": "bash scripts/test-all.sh",
-  "_test_cmd": "scripts/test-all.sh 由 ST-OPS-002 新建。建好之前临时用 _test_cmd_interim。Backend 测试原先依赖 replica/MacApp/.local/mac012a/test-env 里的 venv，OPS-002 要把它改成脚本自建、可重复的环境。",
-  "_test_cmd_interim": "cd replica/MarketData && python3 -B -m unittest discover -s tests && cd ../Simulation && python3 -B -m unittest discover -s tests && cd ../.. && node --test replica/WebChart/tests/strategy-core.test.js replica/WebChart/tests/ui-runtime.test.js replica/WebChart/tests/mac011-workspace.test.js replica/WebChart/tests/mac011a-comfort.test.js && python3 -B -m unittest discover -s replica/MacApp/scripts/tests && (cd replica/MacApp && swift test --disable-sandbox)",
+  "_test_cmd": "scripts/test-all.sh 由 ST-OPS-002 新建（swift build + swift test + 冻结数据回归 + 搬进来的 Python 流水线测试）。建好之前临时用 _test_cmd_interim。",
+  "_test_cmd_interim": "swift build --disable-sandbox && bash verify/regression.sh | tee /dev/stderr | grep -q '失败 0'",
+  "_test_cmd_interim_注意": "regression.sh 末尾调 cross-check.sh，它依赖 verify/engine-extracted.js（抽出的第三方代码，干净仓库不收），那一段会报错但不影响上面的 grep；3 只真值现在是否全过没在 Mac 上跑过，未核实（中远海发在脚本里注明「已知偏差」）。",
   "push_cmd": "",
   "_push_cmd": "有远端后填 HTTPS_PROXY=socks5h://127.0.0.1:1082 git push origin main（和土布一样走本机代理）。",
   "deploy_cmd": "",
-  "_deploy_cmd": "故意留空。正式安装（install_app.py --apply、覆盖 /Applications 里的正式包、装完第一次真实启动）是红线，必须老板在场亲自做。evo 的「上线」只标记已上线，不替老板装。",
+  "_deploy_cmd": "故意留空。scripts/build-app.sh 打出的 .app 覆盖 /Applications 里的正式包、装完第一次真实启动，是红线，必须老板在场亲自做。evo 的「上线」只标记已上线，不替老板装。",
   "policy_terms": "~/.evoloop/projects/ST/policy-terms.txt",
-  "_policy_terms": "放在仓库外，不入库。由 ST-OPS-003 建：券商/资金账号、持仓明细、API 密钥前缀、手机号、真实姓名等。",
+  "_policy_terms": "放在仓库外，不入库。由 ST-OPS-006 建：券商/资金账号、持仓明细、API 密钥前缀、手机号、真实姓名等。",
   "lessons_file": "docs/LESSONS.md",
   "standards_file": "docs/code-standards.md",
+  "_lessons_standards": "两个文件 REASTOCK 里原来没有，ST-OPS-001 建仓时放空壳（一行标题），之后由 evo 的工人往里写。",
   "digest_issue": null,
   "scope_allow": ["artifacts/"],
   "report_required": true,
   "git_guard": true,
   "overrides": {
-    "_说明": "workspace-ui.js、chart-runtime.js、cli.py 都是大文件，几件常同时碰同一文件；先只开一路施工，跑稳后再放到 2。",
+    "_说明": "AppStore.swift、ScreeningEngine.swift、MarketDataService.swift 是多件都会碰的中枢文件；先只开一路施工，跑稳后再放到 2。",
     "limits": {"builders": 1}
   },
 
   "scope_labels": {
-    "_说明": "issue 的 scope:<目录> 只能从这里选（可以多选）。frozen 里的目录没有老板任务书不许动。",
+    "_说明": "issue 的 scope:<目录> 只能从这里选（可以多选）。路径相对干净工作仓库根。frozen 里的目录没有老板任务书不许动。",
     "allowed": {
-      "replica/MarketData/": "盘后数据流水线、官方对账、执行分引擎 score_engine.py、榜单发布（Python）",
-      "replica/Backend/": "本地 FastAPI：/desktop/v1、榜单接口、个人记录 SQLite（Python）",
-      "replica/WebChart/": "唯一手工维护的界面源（JS/CSS）；Mac 壳里的同名资源是生成物",
-      "replica/MacApp/": "Mac 原生壳、打包/校验/安装脚本（Swift + Python）。Resources/WebChart 只能用 sync_web_resources.py 生成，不能手改",
-      "replica/Simulation/": "AI 模拟账户服务（只出意图，确定性撮合，事件哈希链）",
-      "reference/reastock/": "REASTOCK 参考快照（只读；只有 ST-CHORE-001 能写）",
-      "scripts/": "仓库级脚本（统一测试入口等）",
-      "docs/": "文档（docs/reference/stockstation 按其 AGENT-INDEX.md 只读）"
+      "REASTOCK/Sources/REASTOCK/Engine/": "评分与策略引擎：NativeScoreEngine（执行分）、PerfectScore、Breakout、PatternFilter、TripleCycle、RiskRules、Backtest、ETFScanner 等 26 个模块",
+      "REASTOCK/Sources/REASTOCK/Data/": "行情获取：MarketDataService（腾讯报价、日 K 腾讯→新浪→东财降级）、IPv4URLProtocol；来源标注和联网规则都在这一层",
+      "REASTOCK/Sources/REASTOCK/Core/": "AppStore、AutoScheduler、CLI（--verify-dump 等）、Picks、WatchStore、ScanBench",
+      "REASTOCK/Sources/REASTOCK/Views/": "8 个页面与组件（SwiftUI 三栏）；改这里一律打 look",
+      "REASTOCK/Sources/REASTOCK/Models/": "数据模型",
+      "REASTOCK/Sources/REASTOCK/Resources/": "CaseFingerprints.json、StructureRAG.json；改了等于改分数，打 look",
+      "Tests/": "Swift 测试目标（ST-OPS-002 新建）",
+      "verify/": "冻结数据回归脚本与金标准夹具（verify/fixtures/）",
+      "pipeline/": "从 ios-stock-app 搬来的 Python 对账与发布流水线（ST-CHORE-001 新建）",
+      "tools/": "校准与采集脚本（Python/Shell）",
+      "scripts/": "构建、打包、统一测试入口",
+      "docs/": "文档",
+      "reference/ios-stock-app/": "ios-stock-app 的只读参考快照（只有 ST-OPS-003、ST-CHORE-001 能写，且只能按 PROVENANCE 收文件）"
     },
     "frozen": {
-      "ios/": "旧 iOS 基础，没有任务书不改",
-      "backend/": "根目录旧 Mock 后端（含 .env），没有任务书不改",
-      "协作/": "老板的人工循环与契约（状态、任务书、交付、验收、证据），evo 一律不写；有意见只写一句给老板",
-      "docs/reference/stockstation/": "原始取证资料，只读",
-      "replica/MacApp/Resources/WebChart/": "生成物，只能由 sync_web_resources.py 从 replica/WebChart 生成"
+      "assets/": "应用图标；品牌未定（Q2），没有任务书不改",
+      "docs/ui-ref/": "从旧仓库挑的界面截图，只读"
+    },
+    "outside_repo_readonly": {
+      "~/Desktop/项目/jailbreaks/reastock": "旧 REASTOCK 仓库，档案，只读",
+      "~/Desktop/项目/ios-stock-app": "严谨性来源，只读（.git 残缺，任何 git 操作都不做）",
+      "~/Library/Application Support/StockStationReplica": "官方评分板与个人记录，只读"
     }
   },
 
   "look_rules": {
     "_说明": "决策岗按这里决定打不打 look（看效果闸门）。拿不准就打。",
     "look": [
-      "改了 replica/WebChart/ 下的任何界面、文案（ui-text.js）、样式",
-      "改了 replica/MacApp/Sources 里能看到的东西：窗口、菜单、Dock、通知、启动/退出行为",
-      "改了用户看到的数字：执行分、榜单排序、选股结果、止损位、提示文案（附前后对比）",
-      "速度变化用户能感到：选股、榜单加载、启动时间",
-      "数据来源 / 新鲜度标注的显示方式"
+      "改了 REASTOCK/Sources/REASTOCK/Views/ 下任何页面、文案、布局、颜色",
+      "改了窗口、菜单、Dock、通知、启动/退出行为（App.swift、DetailWindow.swift、AutoScheduler 的提示）",
+      "改了用户看到的数字：执行分、完美/突破评分、选股结果与排序、止损止盈位、回测结果（附前后对比）",
+      "速度变化用户能感到：选股、启动、详情页加载",
+      "数据来源 / 新鲜度 / 对账状态标注的显示方式"
     ],
     "no_look": [
       "只加测试、夹具、回归脚本，界面和数字都不变",
-      "纯后台重构，榜单 scoreboardHash 前后一致",
+      "纯引擎重构，金标准夹具上逐字段一致",
       "仓库运维：测试入口、.gitignore、脱敏词表、CI",
-      "只改 docs/ 或 reference/"
+      "只改 docs/ 或 reference/",
+      "pipeline/ 里的离线搬运，App 还没读它"
     ],
-    "manual_checks_hint": "要看效果的件，交卷 manual_checks 里写清：打开哪个页面、看哪只股票（例如 sh600519、sh600515）、和改动前比哪里不一样。"
+    "manual_checks_hint": "要看效果的件，交卷 manual_checks 里写清：打开哪个页面（今日、行情、自选、选股、持仓、形态、问答、设置等）、看哪只股票（例如 sh600968、sh600515、sh600519）、和改动前比哪里不一样，附前后截图。"
   },
 
   "window_rules": {
     "_说明": "evo add 时按这里加时间窗。trading:* 会跳过全局 windows.holidays 里的休市日，所以先在 ~/.evoloop/config.json 填好当年 A 股休市日。",
-    "trading:cn": "验收必须看真实盘中数据的件：盘中实时报价、盘中执行分校准、实时选股。写法：evo add ... --window trading:cn，或 issue 打标签 window:trading:cn",
-    "postclose:cn": "收盘后才有当天数据的件（盘后榜自动生成、收盘后真值采集）。建议在全局 windows.presets 加 \"postclose:cn\": \"mon-fri 15:35-23:30\"，并把它写进 holiday_presets；在那之前用 --window \"mon-fri 15:35-23:30\"（这种写法不会跳过休市日）",
-    "none": "其余件（离线夹具、移植、界面、文档）不加窗口"
+    "trading:cn": "验收必须看真实盘中数据的件：盘中实时报价、盘中执行分校准、实时选股、来源标注的盘中截图。写法：evo add ... --window trading:cn，或 issue 打标签 window:trading:cn",
+    "postclose:cn": "收盘后才有当天数据的件（官方收盘对账、收盘后选股发布）。建议在全局 windows.presets 加 \"postclose:cn\": \"mon-fri 15:35-23:30\"，并把它写进 holiday_presets；在那之前用 --window \"mon-fri 15:35-23:30\"（这种写法不会跳过休市日）",
+    "none": "其余件（离线夹具、移植、测试、界面、文档）不加窗口"
   },
 
   "red_lines": {
     "_说明": "决策岗的升级规则。碰到 ask_owner 的，用 decisions JSON 的 ask_owner 交老板（三行大白话：要定什么、推荐和理由、不批的影响）；标 forbid 的直接 drop 或 rework，不问老板也不做。",
     "rules": [
       {"id": "no-real-trading", "action": "forbid", "rule": "不接券商、不下真单、不登录交易账户、不碰真实资金。有人提，交老板看一眼，默认不做"},
-      {"id": "apply-needs-owner", "action": "ask_owner", "rule": "install_app.py --apply、覆盖 /Applications 正式包、装后第一次真实启动：一律等老板在场；自动链最远跑到 dry-run"},
-      {"id": "private-data", "action": "ask_owner", "rule": "删除或改写 .local 私有数据、封存的原文与证据、旧榜单、旧快照、~/Library/Application Support/StockStationReplica 里的个人记录"},
-      {"id": "contract-files", "action": "forbid", "rule": "evo 的工人不写 协作/ 下任何文件（项目循环、状态、任务书、交付、验收、证据）"},
-      {"id": "frozen-dirs", "action": "ask_owner", "rule": "要改 ios/、根目录 backend/ 或 docs/reference/stockstation/"},
-      {"id": "honest-sources", "action": "forbid", "rule": "把 Mock 或没核验过的来源标成真实、混用多个来源补行、用零价或旧收盘价填当前价、伪造时间点；验收碰到直接打回"},
-      {"id": "network-scope", "action": "ask_owner", "rule": "新增联网数据源、加大联网预算、对官方源加并发（netpolicy 的单线程和间隔 ≥2 秒照旧）、出口换 IP"},
+      {"id": "apply-needs-owner", "action": "ask_owner", "rule": "覆盖 /Applications 里的正式 .app、装后第一次真实启动、改登录项/开机自启：一律等老板在场；自动链最远跑到打包和 dry-run"},
+      {"id": "archives-readonly", "action": "forbid", "rule": "不写旧 REASTOCK 仓库（jailbreaks/reastock）和 ios-stock-app 的任何文件，不在它们上面跑任何 git 命令（ios-stock-app 的 .git 是残缺的）；需要的东西按 PROVENANCE 复制进工作仓库的 reference/"},
+      {"id": "no-re-materials", "action": "forbid", "rule": "不把逆向材料带进工作仓库：Ghidra 工程/脚本、analysis/、rea/、backup/、tools/ghidra*、tools/winutil/、verify/engine-extracted.js 及任何从第三方 App 抽出的代码或二进制"},
+      {"id": "new-re-work", "action": "ask_owner", "rule": "再对第三方 App 做反编译、运行时 dump、截屏 OCR 读数等逆向取证"},
+      {"id": "private-data", "action": "ask_owner", "rule": "删除或改写个人记录（自选、持仓、WatchStore 数据、~/Library/Application Support 下的数据）、旧选股快照、旧榜单、封存的原文与证据"},
+      {"id": "contract-files", "action": "forbid", "rule": "evo 的工人不写 ios-stock-app/协作/ 下任何文件（人工循环的状态、任务书、交付、验收、证据）"},
+      {"id": "honest-sources", "action": "forbid", "rule": "把 Mock 或没核验过的来源标成真实、在同一条序列里混用多个来源补行却不标、用零价或旧收盘价填当前价、伪造时间点；验收碰到直接打回"},
+      {"id": "network-scope", "action": "ask_owner", "rule": "新增联网数据源、加大联网预算或并发（现有默认：选股并发 8、列表缓存 60 秒、日 K 缓存 300 秒，只能调低不能调高）、对官方交易所源加并发（单线程、间隔 ≥2 秒照旧）、出口换 IP"},
       {"id": "spend-money", "action": "ask_owner", "rule": "任何付费数据源、付费 API、试用转付费"},
-      {"id": "broken-git", "action": "forbid", "rule": "不在残缺的 .git 上 reset、checkout 或清理（修复走 ST-OPS-001，老板在场）"},
-      {"id": "port-8765", "action": "forbid", "rule": "不碰 8765 端口上与本项目无关的既有服务；本项目桌面服务只用 8790–8799，静态页只用 8080–8089"},
       {"id": "publish", "action": "ask_owner", "rule": "仓库改公开、对外发帖或发邮件、对外开 issue"},
-      {"id": "owner-decisions", "action": "ask_owner", "rule": "推翻已拍板的决定：vea 名称和价格阶梯图标、MAC-012A 维持 2026-09-30 / N=600 的取舍、免费源优先原则"},
-      {"id": "no-advice-claims", "action": "forbid", "rule": "把执行分、回测、模拟账户结果写成投资建议或策略有效证明；提示类文案必须标「仅供参考、不构成投资建议」"}
+      {"id": "owner-decisions", "action": "ask_owner", "rule": "推翻已拍板的决定：REASTOCK 为主力（2026-10-21）、vea 名称和价格阶梯图标、MAC-012A 维持 2026-09-30 / N=600 的取舍、免费源优先原则"},
+      {"id": "open-questions", "action": "ask_owner", "rule": "任何件要替老板回答 Q1–Q7（评分版本、界面、盘中数据源、evo/人工分工、git 修复细节、每日自动出榜、建议措辞）：不替他定，挂起交老板；老板 10-21 说「到时候再说」"},
+      {"id": "no-advice-claims", "action": "forbid", "rule": "把执行分、回测、模拟结果写成投资建议或策略有效证明；提示类文案必须标「仅供参考、不构成投资建议」"},
+      {"id": "golden-guard", "action": "forbid", "rule": "为了让测试变绿去改金标准夹具或期望值；金标准只能由 ST-OPS-003 的生成脚本从 reference/ios-stock-app 的 score_engine.py 重新产出，并在交卷里说明为什么变"}
     ]
   },
 
   "manual_loop": {
-    "_说明": "原来的人工循环（Codex 写任务书 → DSH 施工 → Claude Code 验收官）照旧管 MAC-0xx。evo 只接 ST-<类别>-NNN 新件，旧件保留原名不迁移，除非老板另说。",
+    "_说明": "ios-stock-app 原来的人工循环（Codex 写任务书 → DSH 施工 → Claude Code 验收官）照旧管它自己的 MAC-0xx，evo 不碰。evo 只在 REASTOCK 工作仓库里接 ST-<类别>-NNN 新件。两边怎么分工是 Q4，未定。",
+    "repo": "~/Desktop/项目/ios-stock-app",
     "state_file": "协作/状态.md",
     "loop_file": "协作/项目循环.md",
     "open_items": ["MAC-012A（部分实施、受阻，维持 9-30/N=600 挂账）", "MAC-012B（vea 品牌与日常界面，排队等 A）"]
   },
 
   "reference": {
-    "_说明": "REASTOCK 原仓库保留在原处，做只读档案，不再在那里开发；ST-CHORE-001 按这个提交收一份精选快照进 reference/reastock/。",
-    "path": "~/Desktop/项目/jailbreaks/reastock",
-    "pinned_commit": "378d7eee1140a3cd497865d03859cfebed20ccda",
-    "never_import": ["ghidra-proj/", "ghidra-home/", "ghidra-scripts/", "analysis/", "rea/", "tools/ghidra*", "tools/winutil/", "backup/", "verify/engine-extracted.js", "verify/sb-klines/", "verify/gt-klines/", "verify/live-scores*/", "ui-shots/（只挑 ST-CHORE-001 列出的几张）", ".build/", "build/"]
+    "_说明": "两份只读来源。ios-stock-app 是要移植进来的严谨性；旧 REASTOCK 仓库是干净工作仓库的出处档案。",
+    "rigor_source": {
+      "path": "~/Desktop/项目/ios-stock-app",
+      "pin": "没有可用的 git 提交可钉（.git 残缺）。复制进 reference/ios-stock-app/ 的每个文件都在 PROVENANCE.md 里记原路径、复制日期、SHA-256。",
+      "port_in": {
+        "replica/MarketData/app/score_engine.py": "1.8.4 原生公式逐指令转写，执行分金标准（ST-OPS-003）",
+        "replica/MarketData/tests/test_mac010_score_engine.py": "score_engine 的现成测试，改成金标准生成器的自检（ST-OPS-003）",
+        "replica/MarketData/app/{official,official_evidence,verify,netpolicy,source,snapshots,canonical,dates,qfq_inputs,scoreboard,scoreboard_release,universe,providers,errors,history,batches}.py": "官方对账、联网规则、快照、版本化发布（ST-CHORE-001，原样搬进 pipeline/ 连同对应测试）",
+        "replica/MarketData/tests/": "约 355 个流水线测试里适用的部分（清单见 ST-DOC-001）",
+        "replica/WebChart/tests/strategy-core.test.js": "完美评分/指标的用例来源（ST-CHORE-002 改写成 Swift 测试）"
+      },
+      "not_port": ["replica/Backend/（FastAPI 桌面后端，REASTOCK 不需要）", "replica/WebChart/ 界面本体（界面归属是 Q2）", "replica/Simulation/（模拟账户，路线第 3 步，暂不排）", "replica/MacApp/ 的内嵌 CPython 打包（只借校验与 dry-run 思路，ST-OPS-005）", "mac012a_recovery.py、third_source_evidence.py、qualify_eastmoney.py（MAC-012A 人工循环专用）", "协作/、ios/、根目录 backend/"]
+    },
+    "archive": {
+      "path": "~/Desktop/项目/jailbreaks/reastock",
+      "pinned_commit": "378d7eee1140a3cd497865d03859cfebed20ccda",
+      "_核对": "2026-10-21 经 MCP 只读核对：HEAD 仍是 378d7ee（10-19 15:45 提交，之后没有新提交），源码目录最后修改 10-19 14:51，早于该提交；跟踪 2137 个文件约 201 MB：verify/ 99 MB（sb-klines 52、gt-klines 24、live-scores* 23）、ghidra-proj/ 76 MB、ui-shots/ 22 MB（64 张）、assets/ 3 MB、源码 0.64 MB（67 个文件，磁盘上没有未跟踪的源码）。注意 verify/klines-*.json、swift-*.json、js-*.json 被 .gitignore 的 verify/*.json 挡住，只在磁盘上、不在 git 里，OPS-001 要从磁盘复制。",
+      "never_import": ["ghidra-proj/", "ghidra-home/", "ghidra-scripts/", "analysis/", "rea/", "backup/", "tools/ghidra*", "tools/winutil/", "verify/engine-extracted.js", "verify/sb-klines/", "verify/gt-klines/", "verify/live-scores*/", "verify/live1015/", "ui-shots/（只挑 7 张进 docs/ui-ref/）", ".build/", ".build-probe/", "build/"]
+    }
+  },
+
+  "open_questions": {
+    "_说明": "老板 2026-10-21：先不定，到时候再说。backlog 里只有标了「等 Qn」的件依赖它们；答复前一律按「现状不动」处理。",
+    "Q1": "评分目标版本：1.8.4 还是追 1.9.1（列表分 = 执行分 + 案例叠分）",
+    "Q2": "界面：REASTOCK 原生 SwiftUI 就是最终界面吗？名字/图标用 vea 还是 REASTOCK？ios-stock-app 的 WebChart 何去何从",
+    "Q3": "盘中数据源口径：只用过了资格探针的源，还是允许标明来源、未经官方对账的腾讯等实时源",
+    "Q4": "evo 和 ios-stock-app 人工循环怎么分工",
+    "Q5": "git 修复细节：新仓库路径与私有远端名、旧仓库的大缓存放哪、ios-stock-app 的残缺 .git 怎么处理",
+    "Q6": "每个交易日收盘后自动出选股/榜单要不要默认开",
+    "Q7": "建议类文案边界：止盈止损分批比例、「今日关注/风险」怎么措辞"
   }
 }

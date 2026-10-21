@@ -1,97 +1,155 @@
 # ST · 股票项目（evo 第二个项目）
 
 ## ST 是什么
-老板自用的 A 股复盘与盘中协助工具，macOS 上的正式名字是 **vea**（价格阶梯图标，MAC-012B 已定）。路线三步：① 稳定出盘后复盘榜，给第二个交易日方向；② 盘中协助；③ AI 在模拟账户里按规矩交易。**全程只观察和模拟，不接券商、不下真单。**
+老板自用的 A 股复盘与盘中协助 Mac 应用。路线三步：① 稳定出盘后复盘和次日方向；② 盘中协助；③ AI 在模拟账户里按规矩交易。**全程只观察和模拟，不接券商、不下真单。**
 
-ST 把 Mac mini 上的两个项目合成一个：
+**老板 2026-10-21 定：REASTOCK 为主力。** 他现在推进的就是 REASTOCK，两边本质是同一类产品。所以：
 
-| | ios-stock-app（主仓库） | REASTOCK（参考） |
+| | REASTOCK（主力工作代码库） | ios-stock-app（严谨性来源，只读） |
 |---|---|---|
-| 位置 | `~/Desktop/项目/ios-stock-app` | `~/Desktop/项目/jailbreaks/reastock` |
-| 主线 | `replica/`：Mac 壳（Swift，约 74 KB）+ WebChart 界面（JS，约 300 KB）+ 本地后端（Python FastAPI）+ 盘后数据流水线 MarketData（Python，约 500 KB）+ 模拟服务 Simulation（Python，约 200 KB）；内嵌 CPython 打包成 App | 纯原生 SwiftUI，69 个 Swift 文件约 635 KB，26 个引擎模块，8 个页面三栏布局 |
-| 测试 | 约 760 个自动测试：MarketData 355、Backend 90、Simulation 150、WebChart 99、打包脚本 47、Swift 21 | 没有单元测试目标；靠脚本对冻结数据回归（3 只界面真值、588 只评分板、20 只 JS 交叉验证） |
-| 数据 | 官方交易所对账、封存原文、来源与新鲜度逐项标注；榜单版本化发布 | 腾讯实时报价 + 日 K 多源降级（腾讯 → 新浪 → 东财），没有官方对账 |
-| 长处 | 数据可信、红线和证据纪律、打包/校验/安装流水线、品牌已定 | 1.9.1 新功能（形态过滤、三周期、走坏清理、止盈止损、ETF、回测、完美/突破评分）、选股并发提速 7.9 倍、缓存 315 倍、收盘自动选股、页面更全 |
-| 短板 | `.git` 残缺（没有 HEAD/config/index）；流程很重；MAC-012A 等官方深市数据，从 10-04 起停着；界面除盘后榜外多是 Mock | git 里跟踪了约 200 MB 杂物，含对第三方 App 逆向的 Ghidra 工程；部分校准还没解开 |
-| git | 不可用 | 健康，`main` 约 60 个提交（10-14 至 10-19），没有远端，HEAD `378d7ee` |
+| 位置 | 旧仓库 `~/Desktop/项目/jailbreaks/reastock`（档案）→ 干净工作仓库建议 `~/Desktop/项目/reastock`（ST-OPS-001 建） | `~/Desktop/项目/ios-stock-app` |
+| 拿它的什么 | 全部：原生 SwiftUI 三栏界面、8 个页面、26 个引擎模块、1.9.1 功能（形态过滤、三周期、走坏清理、止盈止损、ETF、回测、完美/突破评分）、选股并发提速 7.9 倍、缓存 315 倍、收盘自动选股 | 只拿严谨性：`score_engine.py`（1.8.4 逐指令转写）当执行分金标准；约 760 个测试里适用的部分；官方交易所对账；版本化发布；联网规则（官方源单线程、间隔 ≥2 秒）；打包校验思路 |
+| 现状（10-21 经 MCP 只读核对） | git 健康，HEAD `378d7ee`（10-19 15:45），之后没有新提交；源码 67 个文件 0.64 MB；**没有单元测试目标**，只有脚本对冻结数据回归；git 里跟踪了约 201 MB 杂物 | `.git` 残缺（无 HEAD/config/index），任何 git 操作都不做；人工循环照旧管 MAC-0xx |
 
-## 合并方案（推荐）
-**一个主仓库 = ios-stock-app；REASTOCK 不并历史，只收一份精选快照做参考，它的长处按能力拆成待办，逐件移植进现有架构。**
-
-理由：
-1. **权威公式已经在 ST 里。** REASTOCK 说的「588/588 吻合」，是拿 ios-stock-app 的 `replica/MarketData/app/score_engine.py`（1.8.4 原生公式逐指令转写）当标准量出来的。真相本来就在主仓库，REASTOCK 证明的是它的 Swift 版和这份 Python 对得上。
-2. **测试和数据纪律搬不动，功能搬得动。** 约 760 个测试、官方对账、版本化发布、安装流水线都绑在 Python/JS 架构上，换成 REASTOCK 等于全部重来。REASTOCK 的功能大多是纯计算，用它的冻结 K 线和 Swift 输出当金标准，移植成 Python/JS 后可以逐字段对拍，风险可控。
-3. **合规和体积。** REASTOCK 的 git 历史带着 Ghidra 逆向工程和大量抓取数据，并进主仓库就永远去不掉。快照只收源码、文档、小体积冻结数据，按提交号钉住。
-4. **主仓库本来就是唯一主目录**（`PROJECT_ROOT.md`），vea 的名字、图标和 MAC-012B 界面计划都在这里。
-
-不推荐的做法：以 REASTOCK 为主（丢掉测试、数据纪律和打包）；`git subtree` 整个并进来（带进逆向材料和约 200 MB 杂物）；两边长期并行开发（同一套评分维护两份）。
-
-这次不做决定、交给老板的：界面最后用哪套（vea 的 WebChart，还是将来改原生 SwiftUI）。我的建议是 MAC-012B 做完前不换，REASTOCK 的页面先当交互参考，见 `backlog.md` 的 Q2。
+一句话：**在 REASTOCK 上开发，把 ios-stock-app 的纪律一件一件搬进来，不反过来。**
 
 ## 文件
-- `project.json`：项目配置，含 scope 标签、看效果规则、时间窗用法、红线（决策岗的升级规则）、人工循环和参考仓库说明。
-- `backlog.md`：22 件种子待办（ST-OPS / CHORE / DOC / FEAT / UX），每件写了 scope、前置、验收标准、要不要看效果，可以直接转成 GitHub issue；文末是 7 个要老板拍板的问题。
+- `project.json`：项目配置。`repo` 指向干净工作仓库；`scope_labels` 是工作仓库里的目录；`red_lines` 是决策岗的升级规则；`reference` 写清从 ios-stock-app 搬什么不搬什么、旧仓库的体积核对和不收清单；`open_questions` 是老板暂缓的 Q1–Q7。
+- `backlog.md`：26 件种子待办（第 0 段基线 → 第 1 段移植严谨性 → 第 2 段功能打磨 → 第 3 段等老板答问题），每件写了 scope、前置、验收、look、做不做、时间窗，可以直接转成 GitHub issue。
+
+## 给接手的 AI：先读这几条
+1. **只在干净工作仓库里写。** 旧 REASTOCK 仓库和 ios-stock-app 都只读，不在上面跑任何 git 命令（红线 `archives-readonly`）。要用里面的文件，复制进工作仓库的 `reference/ios-stock-app/` 并写 PROVENANCE（原路径、日期、SHA-256）。
+2. **逆向材料永远不进工作仓库**：Ghidra 工程/脚本、`analysis/`、`rea/`、`backup/`、`tools/ghidra*`、`tools/winutil/`、`verify/engine-extracted.js`（红线 `no-re-materials`）。
+3. **改分数先过金标准。** ST-OPS-003 之后，任何改执行分/完美分/选股结果的件都必须在金标准上逐字段一致；不许为了变绿改夹具（红线 `golden-guard`）。
+4. **Q1–Q7 不替老板定。** 老板 10-21 说「到时候再说」。只有 backlog 第 3 段依赖它们；碰到就挂起交老板（红线 `open-questions`），其余照现状做。
+5. **来源要诚实。** 不混源补行、不用旧收盘价顶当前价、取不到就说取不到（红线 `honest-sources`）。
+6. **不装正式包。** 覆盖 `/Applications` 和装后第一次启动等老板在场；`deploy_cmd` 故意留空。
 
 ## 在 Mac mini 上导入（按顺序）
-> evo 没有可用的 git 就跑不起来，所以第 1 步必须先做，而且要老板在场（红线：不在残缺 .git 上 reset/checkout/清理）。
 
-1. **修 git 基线（ST-OPS-001，手工）**
-   ```bash
-   cd ~/Desktop/项目/ios-stock-app
-   mv .git .git-broken-20261021          # 只改名，原样保留
-   # 按 backlog ST-OPS-001 补 .gitignore（**/.local/、**/.build/、.home/、**/__pycache__/、**/.venv/、.git-broken-*/、*.app/）
-   du -sh 协作/证据 outputs work docs   # 大文件先给老板过目
-   git init -b main && git add -A
-   git status --short | grep -E '\.local/|\.env$|\.venv/|\.app/' && echo "有不该入库的，先处理"   # 这行应该什么都不打印
-   git commit -m "建立仓库基线"
-   # 老板定了名字再建私有远端：
-   # gh repo create JAY5CXSDMY14/ios-stock-app --private --source . --push
-   ```
-2. **登记项目**
-   ```bash
-   evo import ST --name 股票 \
-     --path ~/Desktop/项目/ios-stock-app \
-     --goal "把股票项目做成 vea：先稳定出盘后复盘榜给次日方向，再做盘中协助；吸收 REASTOCK 的 1.9.1 评分、选股提速和日常页面。只观察和模拟，不做真实交易。" \
-     --test "bash scripts/test-all.sh"
-   # 建了 GitHub 私有仓库就再加 --github JAY5CXSDMY14/ios-stock-app
-   ```
-   `evo import` 不动代码和历史，只写 `~/.evoloop/projects/ST/config.json`，放一份未提交的 `AGENT_INTERFACE.md`，登记 Orca。
-3. **用本目录的配置补齐**（只补 import 不会写的键，import 生成的 repo/github 等以实际为准）
-   ```bash
-   KIT=<evoloop 仓库>/kit
-   python3 - "$KIT/profiles/st/project.json" ~/.evoloop/projects/ST/config.json <<'PY'
-   import json, sys
-   prof, cfg = json.load(open(sys.argv[1])), json.load(open(sys.argv[2]))
-   keep = {"code", "repo", "main_branch", "github_repo", "push_cmd"}   # 以 import 实际结果为准
-   for k, v in prof.items():
-       if k not in keep:
-           cfg[k] = v
-   json.dump(cfg, open(sys.argv[2], "w"), ensure_ascii=False, indent=2)
-   PY
-   ```
-   `scripts/test-all.sh` 要等 ST-OPS-002 做完才有；在那之前把 `test_cmd` 临时换成 `project.json` 里的 `_test_cmd_interim`。
-4. **时间窗**：在全局 `~/.evoloop/config.json` 的 `windows` 里填当年 A 股休市日（`holidays`），并加一个收盘后窗口：
-   ```json
-   "windows": {"tz": "Asia/Shanghai", "holidays": ["2027-01-01"],
-               "presets": {"postclose:cn": "mon-fri 15:35-23:30"}, "holiday_presets": ["postclose:cn"]}
-   ```
-   要看真实盘中数据的件用 `--window trading:cn`（周一到周五 09:30–11:30、13:00–15:00，跳过休市日），收盘后才有数据的件用 `--window postclose:cn`。具体哪几件见 `backlog.md`。
-5. **脱敏词表（ST-OPS-003）**：建 `~/.evoloop/projects/ST/policy-terms.txt`（仓库外，不入库），配置里 `policy_terms` 已指向它。
-6. **第一件**：`evo -p ST add --kind ops --title "建一键全量测试入口" --scope scripts/,replica/Backend/`。小、不碰界面，用来确认真工人、真验收在这个仓库里跑得通。
-7. **REASTOCK 原仓库**：留在原处只读归档，不再在那里开发；它的精选快照由 ST-CHORE-001 收进 `reference/reastock/`（钉住提交 `378d7eee1140a3cd497865d03859cfebed20ccda`）。
+### 第 1 步：建干净工作仓库（ST-OPS-001，手工，老板在场）
+为什么：旧仓库 git 跟踪约 201 MB，其中 `verify/` 抓取数据 99 MB（sb-klines 52、gt-klines 24、live-scores* 23）、Ghidra 逆向工程 76 MB、截图 22 MB，源码只有 0.64 MB。从当前树开新历史，旧仓库原样留作档案。路径和远端名是 Q5，下面用建议值，老板当场可改。
 
-## 和原来的人工循环怎么相处
-- 原循环（Codex 写任务书 → DSH 施工 → Claude Code 验收官，状态在 `协作/状态.md`）继续管 MAC-0xx：MAC-012A 受阻挂账（维持 2026-09-30 / N=600），MAC-012B 排队。
-- evo 只接新的 `ST-<类别>-NNN`；旧件保留原名，不迁移，除非老板另说（`backlog.md` Q4）。
-- evo 的工人一律不写 `协作/`。MAC-012B 开工期间，evo 不接碰 `replica/WebChart/` 的件，避免两边同时改同一个文件。
-- 正式安装（`install_app.py --apply`）永远等老板在场；`deploy_cmd` 故意留空。
+```bash
+OLD=~/Desktop/项目/jailbreaks/reastock
+NEW=~/Desktop/项目/reastock            # Q5：老板可改
+git -C "$OLD" status --short                            # 应为空；有改动先问老板
+git -C "$OLD" rev-parse HEAD                            # 记下，应为 378d7eee…
 
-## REASTOCK 里要留作参考的文件
-详见 `backlog.md` ST-CHORE-001。简单说：
-- **收**：`REASTOCK/Sources/REASTOCK/**`（全部 Swift 和两份 JSON 资源）、`docs/*.md`（22 份校准与审计）、`verify/` 的回归脚本、`baseline/`、`truth-2026-10-16/`、`picks/`、20 只 JS 交叉验证样本、24 只冻结日 K 和 Swift 输出、`tools/*.py` 和采集脚本、`README.md`、`Package.swift`、`scripts/build-app.sh`、7 张界面截图。
-- **不收**：Ghidra 工程和脚本、`analysis/`（原 App 二进制）、`rea/`、`tools/ghidra*`、`tools/winutil/`、`backup/`（原 App 的 plist）、`verify/engine-extracted.js`（抽出的第三方代码）、`verify/sb-klines/`、`verify/gt-klines/`、`verify/live-scores*/`、其余截图、构建产物。
+cat > /tmp/st-exclude.txt <<'EOF'
+.git/
+.build/
+.build-probe/
+build/
+ghidra-proj/
+ghidra-home/
+ghidra-scripts/
+analysis/
+rea/
+backup/
+tools/ghidra*
+tools/winutil/
+verify/engine-extracted.js
+verify/sb-klines/
+verify/gt-klines/
+verify/live-scores*/
+verify/live1015/
+ui-shots/
+.DS_Store
+*.log
+EOF
+mkdir -p "$NEW" && rsync -a --exclude-from=/tmp/st-exclude.txt "$OLD/" "$NEW/"
+# 注意：verify/klines-*.json、swift-*.json、js-*.json 只在磁盘上（旧 .gitignore 的 verify/*.json 挡住了），rsync 会带过来，git archive 不会
+
+mkdir -p "$NEW/docs/ui-ref"
+for f in final-detail3 final-screening final-holdings final-settings reastock-3col3 today-final v7-market; do
+  cp "$OLD/ui-shots/$f.png" "$NEW/docs/ui-ref/"
+done
+
+cd "$NEW"
+# 新 .gitignore：去掉一刀切的 verify/*.json，改挡缓存和逆向材料
+cat > .gitignore <<'EOF'
+.build/
+.build-probe/
+build/
+.DS_Store
+*.log
+verify/cache/
+verify/engine-extracted.js
+verify/sb-klines/
+verify/gt-klines/
+verify/live*/
+ghidra*/
+tools/ghidra*
+tools/winutil/
+analysis/
+rea/
+backup/
+EOF
+printf '# 教训\n' > docs/LESSONS.md
+printf '# 代码规范\n' > docs/code-standards.md
+printf '# 出处\n从 %s 提交 378d7eee1140a3cd497865d03859cfebed20ccda 的当前树复制，新开历史。\n排除：Ghidra 逆向工程与脚本、analysis/、rea/、backup/、抽出的第三方 JS、抓取缓存 sb-klines/gt-klines/live-scores、构建产物；截图只留 7 张在 docs/ui-ref/。旧仓库原样保留做档案。\n' "$OLD" > docs/ORIGIN.md
+
+du -sh . && find . -size +1M -not -path './.git/*'     # 大于 1 MB 的给老板过目（预期只有 assets/AppIcon.icns）
+swift build --disable-sandbox                           # 必须通过再提交
+git init -b main && git add -A
+git ls-files | grep -Ei 'ghidra|engine-extracted|StockStation-bin|sb-klines|gt-klines|live-scores|^analysis/|^backup/|^rea/' && echo "有不该入库的，先处理"   # 应什么都不打印
+git commit -m "从 REASTOCK 378d7ee 建立干净基线"
+du -sh .git                                             # 应 < 25 MB
+git -C "$OLD" rev-parse HEAD                            # 仍是 378d7eee…，旧仓库没动
+# 老板定了名字再建私有远端（Q5）：
+# gh repo create JAY5CXSDMY14/reastock --private --source . --push
+```
+
+### 第 2 步：登记项目
+```bash
+evo import ST --name 股票 \
+  --path ~/Desktop/项目/reastock \
+  --goal "以 REASTOCK 为主力，做老板自用的 A 股复盘与盘中协助 Mac 应用：先把评分钉死在可回归的金标准上、数据来源逐项标清，再把 ios-stock-app 的对账、测试和版本化发布纪律移植进来，最后打磨 REASTOCK 现有功能。只观察和模拟，不做真实交易。" \
+  --test "bash scripts/test-all.sh"
+# 建了私有远端就再加 --github JAY5CXSDMY14/reastock
+```
+`evo import` 不动代码和历史，只写 `~/.evoloop/projects/ST/config.json`，放一份未提交的 `AGENT_INTERFACE.md`，登记 Orca。
+
+### 第 3 步：用本目录的配置补齐
+只补 import 不会写的键，import 生成的 repo/github 等以实际为准：
+```bash
+KIT=<evoloop 仓库>/kit
+python3 - "$KIT/profiles/st/project.json" ~/.evoloop/projects/ST/config.json <<'PY'
+import json, sys
+prof, cfg = json.load(open(sys.argv[1])), json.load(open(sys.argv[2]))
+keep = {"code", "repo", "main_branch", "github_repo", "push_cmd"}   # 以 import 实际结果为准
+for k, v in prof.items():
+    if k not in keep:
+        cfg[k] = v
+json.dump(cfg, open(sys.argv[2], "w"), ensure_ascii=False, indent=2)
+PY
+```
+`scripts/test-all.sh` 要等 ST-OPS-002 做完才有；在那之前把 `test_cmd` 临时换成 `project.json` 里的 `_test_cmd_interim`（`swift build` + `verify/regression.sh`，看它的注意事项）。
+
+### 第 4 步：时间窗
+在全局 `~/.evoloop/config.json` 的 `windows` 里填当年 A 股休市日，并加收盘后窗口：
+```json
+"windows": {"tz": "Asia/Shanghai", "holidays": ["2027-01-01"],
+            "presets": {"postclose:cn": "mon-fri 15:35-23:30"}, "holiday_presets": ["postclose:cn"]}
+```
+要看真实盘中数据的件用 `--window trading:cn`，收盘后才有数据的件用 `--window postclose:cn`。哪几件见 `backlog.md` 一览表的「窗口」列。
+
+### 第 5 步：脱敏词表（ST-OPS-006）
+建 `~/.evoloop/projects/ST/policy-terms.txt`（仓库外，不入库），配置里 `policy_terms` 已指向它。
+
+### 第 6 步：第一件
+```bash
+evo -p ST add --kind ops --title "建一键全量测试入口" --scope scripts/,Tests/
+```
+小、不碰界面，用来确认真工人、真验收在这个仓库里跑得通。之后按 backlog 顺序：OPS-003 金标准 → FEAT-001 来源标注 → 第 1 段移植。
+
+## 和 ios-stock-app 人工循环怎么相处
+- ios-stock-app 的人工循环（Codex 写任务书 → DSH 施工 → Claude Code 验收官）照旧管它自己的 MAC-0xx：MAC-012A 受阻挂账（维持 2026-09-30 / N=600），MAC-012B 排队。evo 不碰那个仓库，也不写它的 `协作/`。
+- 两边以后怎么分工是 Q4，老板未定；在那之前 evo 只在 REASTOCK 工作仓库里接 `ST-<类别>-NNN` 新件。
 
 ## 盘点时看不到的（Mac mini 上要核）
-- 这次是通过 MCP 只读文件盘点的，不能在 Mac 上跑命令。ios-stock-app 的 git 状态是从 `.git` 目录结构判断的（缺 HEAD/config/index，`refs/heads` 为空）；REASTOCK 的跟踪文件和体积是解析它的 `.git/index` 得出的，没有跑 `git status`，所以 REASTOCK 有没有未提交改动没确认。
-- 测试数字取自 `协作/交付/MAC-012A.md` 最近一轮登记（10-02），这次没有重跑。
-- `协作/证据` 有多大、哪些该入库，要在 ST-OPS-001 的 `du` 那一步看。
+- 这次通过 MCP 只读文件核对，不能在 Mac 上跑命令。REASTOCK 的 HEAD、跟踪文件和体积是读 `.git/logs/HEAD`、解析 `.git/index` 得出的；没跑 `git status`，有没有未提交改动只按目录修改时间推断（源码早于 HEAD），OPS-001 第一条命令要确认。
+- `verify/regression.sh` 的 3 只真值现在是否全过、`swift build` 现在是否通过，没在 Mac 上跑过。
+- ios-stock-app 的测试数字取自 10-02 的登记，没有重跑。
+- `@testable import` 能不能直接测 REASTOCK 的可执行目标，要 OPS-002 实测；不行就拆库目标（件里写了）。
