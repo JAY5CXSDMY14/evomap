@@ -176,7 +176,8 @@ eyes_demo() {
     if [ "$a" = 270 ]; then sleep 0.9; shot 03d-eyes-circle-below; gaze_note; fi
   done
   # 贴近：惊喜（眼睛微放大、身体一缩）
-  key -e 300 "m:$((cx+18)),$((cy-12))"; sleep 0.9; shot 03e-eyes-very-near; gaze_note
+  # 进「很近」时会眨一下（约 0.5 秒），等眨完再拍，拍到的是放大的眼睛和缩一下的身体
+  key -e 300 "m:$((cx+18)),$((cy-12))"; sleep 1.8; shot 03e-eyes-very-near; gaze_note
   # 离开：眼睛弹回居中
   key -e 700 "m:$((cx+700)),$((cy+300))"; sleep 1.4; shot 03f-eyes-away; gaze_note
 }
