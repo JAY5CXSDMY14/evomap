@@ -1,0 +1,3129 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="paper" data-mode="auto" data-style="80">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-MNDSyo+BiDXa+nghPHzBma5gPvroA8nyg+UfPqMaXBo=' 'sha256-lPqFPx9oza8AmRj6iqQLqEVdDcwxhxzQ3yQnVhy8ZDM='; style-src 'unsafe-inline'; img-src data:; font-src data:; media-src data:; connect-src 'self'; form-action 'none'; base-uri 'none'">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="generator" content="Answer me with HTML 0.5.6">
+<title>evo 整套循环体检 · 2026-10</title>
+<style>
+html[data-theme="blueprint"], html[data-theme="blueprint"][data-mode="light"] {
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, "JetBrains Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  --radius: 0px;
+  --shadow: none;
+  --bw: 1.5px;
+  --head-font: var(--font-sans);
+  --bg: #f6f6f3;
+  --paper: #ffffff;
+  --ink: #16181d;
+  --ink-2: #4b5260;
+  --ink-3: #8b929e;
+  --line: #1d2026;
+  --line-2: #d6dae1;
+  --fill: #f3f5f8;
+  --accent: #1d5fbf;
+  --accent-bg: #e4ecf8;
+  --ok: #1d5fbf;
+  --ok-bg: #e4ecf8;
+  --err: #c62828;
+  --err-bg: #fbeaea;
+  --warn: #a8620a;
+  --warn-bg: #fdf3e2;
+  --head-bg: #16181d;
+  --head-fg: #ffffff;
+}
+html[data-theme="blueprint"][data-mode="dark"] {
+  --bg: #081322;
+  --paper: #0d1c31;
+  --ink: #e6edf7;
+  --ink-2: #a9b8cc;
+  --ink-3: #6b7f99;
+  --line: #c9d6e8;
+  --line-2: #23385a;
+  --fill: #12253f;
+  --accent: #6ea8ff;
+  --accent-bg: #16305a;
+  --ok: #6ea8ff;
+  --ok-bg: #16305a;
+  --err: #ff7070;
+  --err-bg: #3b1620;
+  --warn: #f0b14a;
+  --warn-bg: #3a2a10;
+  --head-bg: #e6edf7;
+  --head-fg: #081322;
+}
+@media (prefers-color-scheme: dark) {
+html[data-theme="blueprint"][data-mode="auto"] {
+  --bg: #081322;
+  --paper: #0d1c31;
+  --ink: #e6edf7;
+  --ink-2: #a9b8cc;
+  --ink-3: #6b7f99;
+  --line: #c9d6e8;
+  --line-2: #23385a;
+  --fill: #12253f;
+  --accent: #6ea8ff;
+  --accent-bg: #16305a;
+  --ok: #6ea8ff;
+  --ok-bg: #16305a;
+  --err: #ff7070;
+  --err-bg: #3b1620;
+  --warn: #f0b14a;
+  --warn-bg: #3a2a10;
+  --head-bg: #e6edf7;
+  --head-fg: #081322;
+}
+}
+
+html[data-theme="shadcn"], html[data-theme="shadcn"][data-mode="light"] {
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, "JetBrains Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  --radius: 8px;
+  --shadow: 0 1px 2px 0 rgba(0,0,0,0.05);
+  --bw: 1px;
+  --head-font: var(--font-sans);
+  --bg: #fafafa;
+  --paper: #ffffff;
+  --ink: #09090b;
+  --ink-2: #71717a;
+  --ink-3: #a1a1aa;
+  --line: #e4e4e7;
+  --line-2: #f0f0f2;
+  --fill: #f4f4f5;
+  --accent: #2563eb;
+  --accent-bg: #eff6ff;
+  --ok: #16a34a;
+  --ok-bg: #f0fdf4;
+  --err: #dc2626;
+  --err-bg: #fef2f2;
+  --warn: #d97706;
+  --warn-bg: #fffbeb;
+  --head-bg: #18181b;
+  --head-fg: #fafafa;
+}
+html[data-theme="shadcn"][data-mode="dark"] {
+  --bg: #09090b;
+  --paper: #121215;
+  --ink: #fafafa;
+  --ink-2: #a1a1aa;
+  --ink-3: #71717a;
+  --line: #27272a;
+  --line-2: #1c1c1f;
+  --fill: #18181b;
+  --accent: #60a5fa;
+  --accent-bg: #172554;
+  --ok: #4ade80;
+  --ok-bg: #052e16;
+  --err: #f87171;
+  --err-bg: #450a0a;
+  --warn: #fbbf24;
+  --warn-bg: #451a03;
+  --head-bg: #fafafa;
+  --head-fg: #18181b;
+}
+@media (prefers-color-scheme: dark) {
+html[data-theme="shadcn"][data-mode="auto"] {
+  --bg: #09090b;
+  --paper: #121215;
+  --ink: #fafafa;
+  --ink-2: #a1a1aa;
+  --ink-3: #71717a;
+  --line: #27272a;
+  --line-2: #1c1c1f;
+  --fill: #18181b;
+  --accent: #60a5fa;
+  --accent-bg: #172554;
+  --ok: #4ade80;
+  --ok-bg: #052e16;
+  --err: #f87171;
+  --err-bg: #450a0a;
+  --warn: #fbbf24;
+  --warn-bg: #451a03;
+  --head-bg: #fafafa;
+  --head-fg: #18181b;
+}
+}
+
+html[data-theme="paper"], html[data-theme="paper"][data-mode="light"] {
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, "JetBrains Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  --font-serif: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, "Songti SC", "STSong", "Noto Serif CJK SC", "Source Han Serif SC", serif;
+  --radius: 2px;
+  --shadow: none;
+  --bw: 1px;
+  --head-font: var(--font-serif);
+  --bg: #f5f2ea;
+  --paper: #fdfbf6;
+  --ink: #1f1c17;
+  --ink-2: #57514a;
+  --ink-3: #8c867b;
+  --line: #cbc3b4;
+  --line-2: #e5dfd3;
+  --fill: #f3eee4;
+  --accent: #8c2f1e;
+  --accent-bg: #f5e5df;
+  --ok: #2e6a3b;
+  --ok-bg: #e4efe5;
+  --err: #a3251b;
+  --err-bg: #f7e3e0;
+  --warn: #7f5300;
+  --warn-bg: #f6ecd6;
+  --head-bg: #1f1c17;
+  --head-fg: #fdfbf6;
+}
+html[data-theme="paper"][data-mode="dark"] {
+  --bg: #15130f;
+  --paper: #1c1a15;
+  --ink: #ebe5d8;
+  --ink-2: #b5ad9e;
+  --ink-3: #7b7467;
+  --line: #4a443a;
+  --line-2: #2d2a24;
+  --fill: #242119;
+  --accent: #e59a7d;
+  --accent-bg: #3a2219;
+  --ok: #8cc79a;
+  --ok-bg: #1c3122;
+  --err: #f0928a;
+  --err-bg: #3a1d1a;
+  --warn: #e3b866;
+  --warn-bg: #352a13;
+  --head-bg: #ebe5d8;
+  --head-fg: #15130f;
+}
+@media (prefers-color-scheme: dark) {
+html[data-theme="paper"][data-mode="auto"] {
+  --bg: #15130f;
+  --paper: #1c1a15;
+  --ink: #ebe5d8;
+  --ink-2: #b5ad9e;
+  --ink-3: #7b7467;
+  --line: #4a443a;
+  --line-2: #2d2a24;
+  --fill: #242119;
+  --accent: #e59a7d;
+  --accent-bg: #3a2219;
+  --ok: #8cc79a;
+  --ok-bg: #1c3122;
+  --err: #f0928a;
+  --err-bg: #3a1d1a;
+  --warn: #e3b866;
+  --warn-bg: #352a13;
+  --head-bg: #ebe5d8;
+  --head-fg: #15130f;
+}
+}
+
+html:lang(zh-Hant)[data-theme][data-mode], html:lang(zh-TW)[data-theme][data-mode], html:lang(zh-HK)[data-theme][data-mode], html:lang(zh-MO)[data-theme][data-mode] {
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang TC", "Heiti TC", "Microsoft JhengHei", "Noto Sans CJK TC", "Noto Sans TC", "PingFang SC", "Microsoft YaHei", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+
+html:lang(ja)[data-theme][data-mode] {
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic UI", "Yu Gothic", Meiryo, "Noto Sans CJK JP", "Noto Sans JP", "PingFang SC", "Microsoft YaHei", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+
+html:lang(he)[data-theme][data-mode] {
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans Hebrew", "Arial Hebrew", Arial, Roboto, "Helvetica Neue", sans-serif;
+}
+
+html {
+  --am-fs-title: calc(24px * var(--am-scale, 1));
+  --am-fs-stat: calc(17px * var(--am-scale, 1));
+  --am-fs-lead: calc(15.5px * var(--am-scale, 1));
+  --am-fs-heading: calc(15px * var(--am-scale, 1));
+  --am-fs-body: calc(14px * var(--am-scale, 1));
+  --am-fs-text: calc(13px * var(--am-scale, 1));
+  --am-fs-code: calc(12.5px * var(--am-scale, 1));
+  --am-fs-small: calc(12px * var(--am-scale, 1));
+  --am-fs-fine: calc(11.5px * var(--am-scale, 1));
+  --am-fs-label: calc(11px * var(--am-scale, 1));
+  --am-fs-tick: calc(10px * var(--am-scale, 1));
+  --am-fs-d-node: 13px;
+  --am-fs-d-field: 12px;
+  --am-fs-d-edge: 11.5px;
+  --am-fs-d-cluster: 11px;
+  --am-fs-d-step: 10px;
+  --am-fs-d-note: 12px;
+  --am-fs-d-badge: 11px;
+  --am-fs-d-chartCat: 12px;
+  --am-fs-d-chartTick: 11px;
+  --am-fs-d-chartVal: 11px;
+  --am-fs-d-chartLegend: 12px;
+  --am-fs-d-totalMin: 10px;
+  --am-fs-d-totalMax: 22px;
+  --am-fs-d-totalFit: 18px;
+  --am-fs-d-totalUnit: 12px;
+  --am-ln-annotPad: calc(14px * var(--am-scale, 1));
+  --am-ln-segLine: calc(16px * var(--am-scale, 1));
+  --am-ln-whenHeight: calc(24px * var(--am-scale, 1));
+  --am-ln-limitsTick: calc(16px * var(--am-scale, 1));
+  --am-ln-treeBadge: calc(15px * var(--am-scale, 1));
+}
+.am-toolbar, .am-lightbox-header {
+  --am-fs-title: 24px;
+  --am-fs-stat: 17px;
+  --am-fs-lead: 15.5px;
+  --am-fs-heading: 15px;
+  --am-fs-body: 14px;
+  --am-fs-text: 13px;
+  --am-fs-code: 12.5px;
+  --am-fs-small: 12px;
+  --am-fs-fine: 11.5px;
+  --am-fs-label: 11px;
+  --am-fs-tick: 10px;
+}
+
+/* Answer me with HTML base — uses theme variables only, never hard-coded colors (theme tokens and decorations: themes/<name>.js). Exception: the var() fallbacks of diagrams (flow / sequence) equal the blueprint light tokens, guarded by a test. */
+*, *::before, *::after { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body {
+  background: var(--bg); color: var(--ink);
+  font-family: var(--font-sans); font-size: var(--am-fs-body); line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+}
+code, pre, kbd { font-family: var(--font-mono); }
+
+/* ── Toolbar ─────────────────────────────── */
+.am-toolbar {
+  position: fixed; top: 12px; inset-inline-end: 12px; z-index: 10; display: flex; gap: 6px;
+}
+.am-btn {
+  font: var(--am-fs-small)/1 var(--font-sans); color: var(--ink); background: var(--paper);
+  border: 1px solid var(--line-2); border-radius: var(--radius); padding: 7px 10px; cursor: pointer;
+}
+.am-btn:hover { border-color: var(--ink-3); }
+.am-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.am-toolbar .am-btn[aria-disabled="true"] { opacity: .5; cursor: default; }
+.am-toolbar .am-btn[aria-disabled="true"]:hover { border-color: var(--line-2); }
+/* Theme and mode lists: a label and a native select inside one button-like box */
+.am-pick {
+  display: flex; align-items: center; gap: 6px; font: var(--am-fs-small)/1 var(--font-sans); color: var(--ink-2); background: var(--paper);
+  border: 1px solid var(--line-2); border-radius: var(--radius); padding-block: 0; padding-inline: 10px 4px;
+}
+.am-pick:hover { border-color: var(--ink-3); }
+.am-pick:focus-within { outline: 2px solid var(--accent); outline-offset: 2px; }
+.am-pick select {
+  font: inherit; color: var(--ink); background: transparent; border: 0; padding: 6px 2px; cursor: pointer; outline: none;
+}
+.am-pick option { color: var(--ink); background: var(--paper); }
+
+/* ── Header ───────────────────────────────── */
+.am-head { margin: 0 0 20px; padding-inline-end: 300px; }
+.am-head h1 { margin: 0; font-size: var(--am-fs-title); line-height: 1.25; letter-spacing: -0.01em; }
+.am-sub { margin: 4px 0 0; color: var(--ink-2); }
+.am-head-meta { display: flex; flex-wrap: wrap; gap: 6px 18px; margin-top: 10px; font-size: var(--am-fs-small); color: var(--ink-2); }
+.am-head-meta b { font-family: var(--font-mono); font-weight: 400; color: var(--ink-3); margin-inline-end: 6px; }
+.am-intro { margin-top: 12px; max-width: 80ch; }
+
+/* ── sheet template ────────────────────────── */
+.am-sheet { max-width: 1680px; margin: 0 auto; padding: 32px 28px 40px; }
+.am-frame { position: relative; }
+.am-grid {
+  display: grid; grid-template-columns: repeat(var(--cols, 3), minmax(0, 1fr));
+  gap: 20px; align-items: start;
+}
+.am-ruler { display: none; }
+.am-ruler span { flex: 1; display: flex; align-items: center; justify-content: center; }
+.am-ruler--top, .am-ruler--bottom { left: 18px; right: 18px; height: 18px; }
+.am-ruler--top { top: 0; }
+.am-ruler--bottom { bottom: 0; }
+.am-ruler--left, .am-ruler--right { top: 18px; bottom: 18px; width: 18px; flex-direction: column; }
+.am-ruler--left { left: 0; }
+.am-ruler--right { right: 0; }
+.am-ruler--top span + span, .am-ruler--bottom span + span { border-inline-start: 1px solid var(--line); }
+.am-ruler--left span + span, .am-ruler--right span + span { border-top: 1px solid var(--line); }
+
+/* ── Panels ───────────────────────────────── */
+.am-panel {
+  background: var(--paper); border: var(--bw) solid var(--line); border-radius: var(--radius);
+  box-shadow: var(--shadow); min-width: 0; overflow: hidden;
+}
+.am-panel-head {
+  display: flex; align-items: stretch; gap: 0; border-bottom: var(--bw) solid var(--line); min-height: 34px;
+}
+.am-panel-id {
+  display: flex; align-items: center; justify-content: center; min-width: 34px; padding: 0 8px;
+  background: var(--head-bg); color: var(--head-fg); font-weight: 600; font-size: var(--am-fs-body);
+}
+.am-panel-head h2 { margin: 0; padding: 7px 12px; font-size: var(--am-fs-heading); font-weight: 600; flex: 1; display: flex; align-items: center; }
+.am-panel-meta { align-self: center; padding: 0 12px; font: var(--am-fs-label)/1.3 var(--font-mono); color: var(--ink-2); text-align: end; }
+.am-panel-body { padding: 14px 16px 16px; }
+.am-panel-body > * + * { margin-top: 12px; }
+
+/* ── Markdown body ───────────────────────── */
+.am-md > :first-child { margin-top: 0; }
+.am-md > :last-child { margin-bottom: 0; }
+.am-md p { margin: 0 0 8px; }
+.am-md ul, .am-md ol { margin: 0 0 8px; padding-inline-start: 20px; }
+.am-md li + li { margin-top: 3px; }
+.am-md h3, .am-md h4 { margin: 14px 0 6px; font-size: var(--am-fs-text); }
+.am-md a { color: var(--accent); }
+.am-md blockquote { margin: 0 0 8px; padding: 2px 12px; border-inline-start: 3px solid var(--line-2); color: var(--ink-2); }
+.am-md :not(pre) > code { font-size: 0.9em; background: var(--fill); padding: 1px 5px; border-radius: 4px; }
+.am-md hr { border: 0; border-top: 1px solid var(--line-2); margin: 12px 0; }
+.am-md table { width: 100%; border-collapse: collapse; font-size: var(--am-fs-text); }
+.am-md th {
+  text-align: start; font: var(--am-fs-label)/1.3 var(--font-mono); color: var(--ink-2); font-weight: 400;
+  padding: 6px 10px; border-bottom: 1px solid var(--line-2);
+}
+/* th { text-align: start } outranks the align attribute from Markdown alignment, so restore right and center columns explicitly. */
+.am-md th[align="right"] { text-align: right; }
+.am-md th[align="center"] { text-align: center; }
+.am-md td { padding: 7px 10px; border-bottom: 1px solid var(--line-2); vertical-align: top; }
+.am-md tbody tr:nth-child(even) td { background: var(--fill); }
+.am-table-wrap { overflow-x: auto; }
+/* Images scale down to the panel and never past 70% of the window height, keeping their shape. */
+.am-md img { max-width: 100%; max-height: 70vh; height: auto; }
+.am-figure { margin: 0; text-align: center; }
+.am-figure img { display: block; margin: 0 auto; border: 1px solid var(--line-2); border-radius: var(--radius); }
+.am-figure figcaption { margin-top: 6px; font-size: var(--am-fs-small); line-height: 1.4; color: var(--ink-2); }
+.am-code {
+  margin: 0; padding: 12px 14px; background: var(--fill); border: 1px solid var(--line-2);
+  border-radius: var(--radius); overflow-x: auto; font-size: var(--am-fs-code); line-height: 1.5;
+}
+/* Ask: a decision the reader makes; the suggested option has a tag and starts unselected like the others */
+.am-ask { margin: 10px 0; padding: 10px 12px 8px; border: 1px solid var(--line-2); border-radius: var(--radius); background: var(--fill); min-width: 0; }
+/* The question floats inside the box, so a long question wraps like text instead of riding on the border */
+.am-ask-q { float: left; width: 100%; padding: 0; margin-bottom: 4px; font-weight: 600; }
+/* Two columns: the control, then the label, tag and note, which wrap under the label and never under the control */
+.am-ask-opt { clear: both; display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: 8px; align-items: baseline; padding: 5px 2px; cursor: pointer; }
+.am-ask-opt input { margin: 0; accent-color: var(--accent); position: relative; top: 2px; }
+.am-ask-tag { display: inline-block; font-size: var(--am-fs-label); line-height: 1.5; color: var(--accent); border: 1px solid var(--accent); border-radius: 999px; padding: 0 6px; white-space: nowrap; }
+.am-ask-note { display: block; color: var(--ink-2); }
+/* Comment box under each panel, and the Reply sheet */
+.am-comment-btn {
+  display: flex; flex-shrink: 0; align-self: center; margin-block: 0; margin-inline: auto 6px; color: var(--ink-3); background: transparent;
+  border: 1px solid transparent; border-radius: var(--radius); padding: 3px; cursor: pointer;
+}
+.am-panel-meta + .am-comment-btn { margin-inline-start: 0; }
+.am-panel:hover .am-comment-btn, .am-comment-btn:focus-visible, .am-comment-btn[aria-expanded="true"] { border-color: var(--line-2); color: var(--ink-2); }
+.am-panel .am-comment-btn.am-comment-btn--on { color: var(--accent); border-color: var(--accent); }
+.am-panel--bare { position: relative; }
+.am-panel--bare > .am-comment-btn { position: absolute; top: 4px; inset-inline-end: 0; }
+.am-comment { padding: 0 14px 12px; }
+.am-comment textarea, .am-reply textarea {
+  width: 100%; font: var(--am-fs-text)/1.5 var(--font-sans); color: var(--ink); background: var(--paper);
+  border: 1px solid var(--line-2); border-radius: var(--radius); padding: 8px 10px; resize: vertical;
+}
+.am-comment textarea:focus-visible, .am-reply textarea:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.am-btn--reply { color: var(--paper); background: var(--ink); border-color: var(--ink); }
+.am-btn--reply:hover { opacity: .88; }
+.am-reply {
+  width: min(640px, calc(100vw - 32px)); padding: 16px; color: var(--ink); background: var(--paper);
+  border: 1px solid var(--line-2); border-radius: var(--radius); box-shadow: 0 12px 40px rgba(0,0,0,.25);
+}
+.am-reply::backdrop { background: rgba(0,0,0,.35); }
+.am-reply-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; margin-bottom: 10px; }
+.am-reply-head span { color: var(--ink-2); font-size: var(--am-fs-text); }
+.am-reply textarea { font-family: var(--font-mono); font-size: var(--am-fs-code); }
+.am-reply-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 10px; }
+.am-reply .am-btn:disabled { opacity: .5; cursor: default; }
+/* The sheet shows the reply drawn (src/runtime/reply-view.js), each line in its own direction; the Markdown that Copy copies sits under a fold. */
+.am-reply-view {
+  max-height: min(60vh, 26em); overflow: auto; padding: 10px 12px; font: var(--am-fs-body)/1.6 var(--font-sans); color: var(--ink);
+  background: var(--paper); border: 1px solid var(--line-2); border-radius: var(--radius); overflow-wrap: anywhere;
+}
+.am-reply-view:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.am-reply-view > div { text-align: start; unicode-bidi: isolate; }
+.am-rv-gap { height: .5em; }
+.am-rv-h1 { font-weight: 700; font-size: var(--am-fs-heading); }
+.am-rv-h2 { font-weight: 700; color: var(--ink-2); margin-top: 2px; }
+.am-rv-tag {
+  display: inline-block; min-width: 1.6em; padding: 0 4px; font-size: var(--am-fs-small); line-height: 1.5; text-align: center;
+  color: var(--ink-2); border: 1px solid var(--line-2); border-radius: var(--radius);
+}
+.am-rv-a { padding-inline-start: 1.6em; }
+.am-rv-a em { color: var(--ink-2); }
+.am-rv-quote { margin-inline-start: 1em; padding-inline-start: 10px; border-inline-start: 3px solid var(--line-2); color: var(--ink-2); white-space: pre-wrap; }
+.am-reply-raw summary { margin-top: 10px; margin-bottom: 6px; font-size: var(--am-fs-small); color: var(--ink-2); cursor: pointer; }
+/* The bar at the bottom of the page: counts and one-click copy, so the reader need not go to the Reply button at the top. */
+.am-reply-bar {
+  position: fixed; inset-block-end: 16px; inset-inline: 0; margin-inline: auto; width: max-content; max-width: calc(100vw - 24px);
+  z-index: 10; display: flex; align-items: center; gap: 10px; padding-block: 8px; padding-inline: 14px 8px; font-size: var(--am-fs-text);
+  color: var(--ink); background: var(--paper); border: 1px solid var(--line-2); border-radius: var(--radius); box-shadow: 0 6px 24px rgba(0,0,0,.18);
+}
+.am-reply-bar[hidden] { display: none; }
+.am-reply-bar-count { color: var(--ink-2); }
+.am-reply-bar .am-btn { flex: none; white-space: nowrap; }
+body.am-has-reply-bar { padding-block-end: 72px; }
+@media (max-width: 480px) {
+  .am-reply-bar { inset-inline: 12px; width: auto; justify-content: space-between; }
+}
+/* Code block: a header (title or path:lines, language, copy), then one span per line; numbered blocks show the line number in a gutter */
+.am-codeblock { margin: 10px 0; min-width: 0; }
+.am-codeblock .am-code { border-top-left-radius: 0; border-top-right-radius: 0; padding: 10px 0; }
+.am-code-head {
+  display: flex; align-items: center; gap: 8px; padding: 5px 6px 5px 12px; font: var(--am-fs-small)/1.3 var(--font-sans); color: var(--ink-2);
+  background: var(--paper); border: 1px solid var(--line-2); border-bottom: 0; border-radius: var(--radius) var(--radius) 0 0;
+}
+.am-code-title { font-family: var(--font-mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.am-code-lang { margin-left: auto; color: var(--ink-3); text-transform: lowercase; }
+.am-code-copy { font: var(--am-fs-small)/1 var(--font-sans); color: var(--ink-2); background: transparent; border: 1px solid var(--line-2); border-radius: var(--radius); padding: 4px 8px; cursor: pointer; margin-left: auto; }
+.am-code-lang + .am-code-copy { margin-left: 0; }
+.am-code-copy:hover { border-color: var(--ink-3); color: var(--ink); }
+.am-code-copy:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.am-code code { display: block; min-width: max-content; }
+.am-ln { display: block; padding: 0 14px; min-height: 1.5em; white-space: pre; }
+.am-ln--hl { background: var(--accent-bg); box-shadow: inset 3px 0 0 var(--accent); }
+.am-code--num .am-ln::before {
+  content: attr(data-n); display: inline-block; width: 3.5ch; margin-right: 12px; text-align: right; color: var(--ink-3);
+  user-select: none; -webkit-user-select: none;
+}
+
+/* ── Status badges ok / no / warn ──────────────── */
+.am-status { white-space: nowrap; font-weight: 500; }
+.am-status--ok { color: var(--ok); }
+.am-status--no { color: var(--err); }
+.am-status--warn { color: var(--warn); }
+.am-status-icon { display: inline-block; width: 1.1em; font-weight: 700; }
+
+/* ── callout ─────────────────────────────── */
+.am-callout {
+  border: 1px solid var(--line-2); border-inline-start: 3px solid var(--accent); background: var(--accent-bg);
+  padding: 10px 14px; border-radius: var(--radius);
+}
+.am-callout--ok { border-inline-start-color: var(--ok); background: var(--ok-bg); }
+.am-callout--warn { border-inline-start-color: var(--warn); background: var(--warn-bg); }
+.am-callout--err { border-inline-start-color: var(--err); background: var(--err-bg); }
+.am-callout-title { font-weight: 600; margin-bottom: 4px; }
+
+/* ── kv title block ─────────────────────────── */
+.am-kv {
+  display: grid; grid-template-columns: repeat(var(--kv-cols, 2), minmax(0, 1fr)); margin: 0;
+  border-top: var(--bw) solid var(--line); border-inline-start: var(--bw) solid var(--line);
+}
+.am-kv-cell { border-inline-end: var(--bw) solid var(--line); border-bottom: var(--bw) solid var(--line); padding: 6px 10px 8px; min-width: 0; }
+.am-kv-cell--wide { grid-column: 1 / -1; }
+.am-kv dt { font: var(--am-fs-label)/1.4 var(--font-mono); color: var(--ink-2); }
+.am-kv dd { margin: 2px 0 0; font-size: var(--am-fs-body); font-weight: 500; overflow-wrap: anywhere; }
+.am-kv-cell--wide dd { font-size: var(--am-fs-stat); font-weight: 600; }
+
+/* ── timeline ────────────────────────────── */
+.am-timeline { list-style: none; margin: 0; padding: 0; }
+.am-timeline--h { display: grid; grid-template-columns: repeat(var(--n, 1), minmax(0, 1fr)); padding-top: 4px; }
+.am-timeline--h li { position: relative; text-align: center; padding: 0 6px; }
+.am-timeline--h li::before {
+  content: ""; position: absolute; top: calc(var(--am-ln-whenHeight) + 7px); left: 0; right: 0; border-top: var(--bw) solid var(--line);
+}
+.am-timeline--h li:first-child::before { inset-inline-start: 50%; }
+.am-timeline--h li:last-child::before { inset-inline-end: 50%; }
+.am-tl-when { display: block; font-size: var(--am-fs-heading); font-weight: 500; height: var(--am-ln-whenHeight); }
+.am-tl-dot {
+  position: relative; display: block; width: 11px; height: 11px; margin: 2px auto 8px;
+  border: var(--bw) solid var(--line); border-radius: 50%; background: var(--paper);
+}
+.am-tl-item--hi .am-tl-dot { background: var(--hi-stroke, var(--accent)); border-color: var(--hi-stroke, var(--accent)); }
+.am-tl-title { display: block; font-size: var(--am-fs-code); font-weight: 500; }
+.am-tl-text { display: block; font-size: var(--am-fs-small); color: var(--ink-2); line-height: 1.45; }
+.am-timeline--v li { position: relative; padding: 0 0 14px; padding-inline-start: 22px; }
+.am-timeline--v li::before { content: ""; position: absolute; inset-inline-start: 5px; top: 6px; bottom: -6px; border-inline-start: var(--bw) solid var(--line-2); }
+.am-timeline--v li:last-child::before { display: none; }
+.am-timeline--v .am-tl-dot { position: absolute; inset-inline-start: 0; top: 4px; margin: 0; }
+.am-timeline--v .am-tl-when { display: inline; height: auto; font: var(--am-fs-small) var(--font-mono); color: var(--ink-2); margin-inline-end: 8px; }
+.am-timeline--v .am-tl-title { display: inline; font-size: var(--am-fs-body); }
+.am-timeline--v .am-tl-text { margin-top: 2px; }
+/* .am-tl-wrap is the container (src/components/timeline.js): a horizontal timeline answers to the width it has, not to the width of the window, since a
+   sheet puts panels two or three to a row. Below 560 px (about 90 px for each of the six items a timeline has by default) its dates
+   wrap and the dots cover them, so it lays out like timeline v: line and dots at the start, text beside them. */
+.am-tl-wrap { container-type: inline-size; }
+@container (max-width: 560px) {
+  .am-timeline--h { display: block; padding-top: 0; }
+  .am-timeline--h li { text-align: start; padding: 0 0 14px; padding-inline-start: 22px; }
+  .am-timeline--h li::before, .am-timeline--h li:first-child::before {
+    top: 6px; bottom: -6px; inset-inline-start: 5px; inset-inline-end: auto; border-top: 0; border-inline-start: var(--bw) solid var(--line-2);
+  }
+  .am-timeline--h li:last-child::before { display: none; }
+  .am-timeline--h .am-tl-dot { position: absolute; inset-inline-start: 0; top: 4px; margin: 0; }
+  .am-timeline--h .am-tl-when { display: inline; height: auto; font: var(--am-fs-small) var(--font-mono); color: var(--ink-2); margin-inline-end: 8px; }
+  .am-timeline--h .am-tl-title { display: inline; font-size: var(--am-fs-body); }
+  .am-timeline--h .am-tl-text { margin-top: 2px; }
+}
+
+/* ── annot sentence notes ──────────────────────── */
+.am-annot + .am-annot { border-top: 1px solid var(--line-2); padding-top: 12px; }
+.am-annot-head { display: flex; justify-content: space-between; gap: 12px; font-size: var(--am-fs-text); font-weight: 600; margin-bottom: 8px; }
+.am-annot-meta { font: var(--am-fs-label) var(--font-mono); font-weight: 400; color: var(--ink-2); }
+.am-annot-scroll { overflow-x: auto; }
+.am-annot-line {
+  position: relative; display: inline-block; white-space: pre; font: var(--am-fs-body)/1.6 var(--font-mono);
+  padding-bottom: calc(var(--rows, 0) * (var(--am-ln-segLine) + 1px) + var(--am-ln-annotPad));
+}
+.am-annot-line--wrap { display: block; white-space: normal; padding-bottom: 10px; }
+.am-annot-line--wrap .am-seg { white-space: nowrap; }
+.am-seg { position: relative; }
+.am-seg::after {
+  content: ""; position: absolute; left: 1px; right: 1px; top: calc(100% + 1px); height: 5px;
+  border: 1px solid var(--accent); border-top: 0;
+}
+.am-seg-n {
+  position: absolute; inset-inline-start: 0; top: calc(100% + 8px + var(--row, 0) * (var(--am-ln-segLine) + 1px));
+  font: var(--am-fs-label)/var(--am-ln-segLine) var(--font-sans); color: var(--accent); white-space: nowrap;
+}
+.am-seg--err { color: var(--err); }
+.am-seg--err::after { border-color: var(--err); }
+.am-seg--err .am-seg-n { color: var(--err); }
+.am-annot-caption { font-size: var(--am-fs-small); color: var(--ink-2); }
+
+/* ── limits bars ───────────────────────── */
+.am-lim + .am-lim { margin-top: 14px; }
+.am-lim-head { display: flex; justify-content: space-between; gap: 12px; font-size: var(--am-fs-text); margin-bottom: 4px; }
+.am-lim-val { font: var(--am-fs-small) var(--font-mono); color: var(--accent); white-space: nowrap; }
+.am-lim-track { position: relative; height: 12px; border: 1px solid var(--line-2); background: var(--fill); border-radius: calc(var(--radius) / 2); }
+.am-lim-fill { position: absolute; inset-inline-start: 0; top: 0; bottom: 0; background: var(--accent-bg); border-inline-end: 1px solid var(--accent); }
+.am-lim-mark { position: absolute; top: -4px; bottom: -4px; border-left: 2px solid var(--accent); }
+.am-lim.is-over .am-lim-fill { background: var(--err-bg); border-inline-end-color: var(--err); }
+.am-lim.is-over .am-lim-val { color: var(--err); }
+.am-lim-ticks { position: relative; height: var(--am-ln-limitsTick); font: var(--am-fs-tick)/var(--am-ln-limitsTick) var(--font-mono); color: var(--ink-3); }
+.am-lim-ticks span { position: absolute; transform: translateX(-50%); }
+.am-lim-ticks span:first-child { transform: none; }
+.am-lim-note { font-size: var(--am-fs-label); color: var(--ink-2); margin-inline-start: 6px; }
+
+/* ── tree ─────────────────────────── */
+.am-tree { font-size: var(--am-fs-text); }
+.am-tree-root { display: flex; justify-content: center; position: relative; padding-bottom: 18px; }
+.am-tree-root::after { content: ""; position: absolute; bottom: 0; left: 50%; height: 18px; border-left: var(--bw) solid var(--line); }
+.am-tree-root--solo { padding-bottom: 12px; }
+.am-tree-root--solo::after { display: none; }
+.am-tree-box {
+  border: var(--node-width, var(--bw)) solid var(--node-stroke, var(--line)); background: var(--node-fill, var(--paper)); padding: 6px 14px; text-align: center;
+  border-radius: var(--node-radius, var(--radius)); font-weight: 600; color: var(--node-text, inherit); filter: var(--node-shadow, none);
+}
+.am-tree-box small { display: block; font-weight: 400; color: var(--ink-2); font-size: var(--am-fs-small); }
+/* The root box and a highlighted box are emphasis: they take the highlight tokens. With none set the root box keeps its accent tint and a highlighted box looks like any other. */
+.am-tree-box--root, .am-tree-box--hi { border-color: var(--hi-stroke, var(--node-stroke, var(--line))); color: var(--hi-text, var(--node-text, inherit)); }
+.am-tree-box--root { background: var(--hi-fill, var(--accent-bg)); }
+.am-tree-box--hi { background: var(--hi-fill, var(--node-fill, var(--paper))); }
+.am-tree-box--root small, .am-tree-box--hi small { color: var(--hi-text, var(--ink-2)); }
+.am-tree-box--root { font-size: var(--am-fs-heading); padding: 8px 28px; }
+.am-tree-cols { display: grid; grid-template-columns: repeat(var(--n, 1), minmax(0, 1fr)); }
+.am-tree-col { position: relative; padding: 18px 8px 0; min-width: 0; }
+.am-tree-col::before { content: ""; position: absolute; top: 0; left: 0; right: 0; border-top: var(--bw) solid var(--line); }
+.am-tree-col:first-child::before { inset-inline-start: 50%; }
+.am-tree-col:last-child::before { inset-inline-end: 50%; }
+.am-tree-col::after { content: ""; position: absolute; top: 0; left: 50%; height: 18px; border-left: var(--bw) solid var(--line); }
+.am-tree-list, .am-tree-list ul { list-style: none; margin: 0; padding: 0; }
+.am-tree-col > .am-tree-list { margin: 8px 0 0; margin-inline-start: 14px; }
+.am-tree-list ul { margin-inline-start: 16px; }
+.am-tree-list li { position: relative; padding: 3px 0; padding-inline-start: 18px; }
+.am-tree-list li::before { content: ""; position: absolute; inset-inline-start: 0; top: 0.95em; width: 12px; border-top: 1px solid var(--ink-3); }
+.am-tree-list li::after { content: ""; position: absolute; inset-inline-start: 0; top: 0; bottom: 0; border-inline-start: 1px solid var(--ink-3); }
+.am-tree-list li:last-child::after { bottom: auto; height: 0.95em; }
+.am-tree-tag { font: var(--am-fs-label) var(--font-mono); color: var(--ink-3); margin-inline-end: 4px; }
+.am-tree code { font: var(--am-fs-small) var(--font-mono); }
+.am-tree-sub { display: block; font-size: var(--am-fs-fine); color: var(--ink-2); }
+.am-tree-hi > .am-tree-label { color: var(--accent); font-weight: 600; }
+
+/* ── Diagrams (flow / sequence) ───────────────── */
+.am-diagram { margin: 0; overflow-x: auto; text-align: center; }
+/* Embedded previews can lose html[data-theme]; the fallbacks keep diagrams readable, and defined theme variables still win. */
+.am-diagram svg { max-width: 100%; height: auto; font-family: var(--font-sans, sans-serif); }
+.am-diagram text { fill: var(--ink, #16181d); font-size: var(--am-fs-d-node); }
+/* Diagram tokens (docs/reference.md, "Diagram tokens"): each painted part reads an optional token and falls back to the look it always had,
+   so a theme that sets none of them draws the same diagram. Font family, size and weight are not tokens: diagram text is measured for the sans font. */
+.am-node-shape { fill: var(--node-fill, var(--paper, #ffffff)); stroke: var(--node-stroke, var(--line, #1d2026)); stroke-width: var(--node-width, var(--bw, 1.5px)); filter: var(--node-shadow, none); }
+/* A cylinder is two shapes (body, then cap): only the body casts the shadow. */
+.am-node-shape ~ .am-node-shape { filter: none; }
+/* The corner radius is an SVG attribute (the fallback for Safari before 17.4, which ignores a CSS rx); the default here equals the attribute. A pill and a diamond keep their shape. */
+.am-node--rect .am-node-shape, .am-node--er .am-node-shape { rx: var(--node-radius, 3px); }
+.am-node--hi .am-node-shape { fill: var(--hi-fill, var(--accent-bg, #e4ecf8)); stroke: var(--hi-stroke, var(--accent, #1d5fbf)); }
+.am-diagram .am-node-text { fill: var(--node-text, var(--ink, #16181d)); }
+.am-node--hi text { fill: var(--hi-text, var(--accent, #1d5fbf)); font-weight: 600; }
+.am-diagram .am-node--hi .am-node-text { fill: var(--hi-text, var(--accent, #1d5fbf)); }
+.am-edge { fill: none; stroke: var(--edge-color, var(--ink-2, #4b5260)); stroke-width: var(--edge-width, 1.3); }
+.am-edge--dashed { stroke-dasharray: 5 4; }
+.am-arrow { fill: var(--edge-color, var(--ink-2, #4b5260)); }
+.am-edge-label rect { fill: var(--paper, #ffffff); }
+.am-diagram .am-edge-label text { fill: var(--edge-label, var(--accent, #1d5fbf)); font-size: var(--am-fs-d-edge); }
+.am-cluster { fill: var(--cluster-fill, var(--fill, #f3f5f8)); stroke: var(--cluster-stroke, var(--line-2, #d6dae1)); stroke-width: 1; stroke-dasharray: 4 3; }
+.am-diagram .am-cluster-label { fill: var(--ink-2, #4b5260); font: var(--am-fs-d-cluster) var(--font-mono, monospace); }
+/* The PK / FK / UK marks of an entity follow the node text, and the highlighted text in a highlighted entity, so they stay readable on the theme's fills. */
+.am-diagram .am-er-key { fill: var(--node-text, var(--ink-2, #4b5260)); }
+.am-diagram .am-node--hi .am-er-key { fill: var(--hi-text, var(--ink-2, #4b5260)); }
+.am-lifeline { stroke: var(--lifeline-color, var(--ink-3, #8b929e)); stroke-width: 1; stroke-dasharray: 4 4; }
+/* An actor (and the box of a divider) looks like a node unless the theme sets the actor tokens. */
+.am-actor { fill: var(--actor-fill, var(--node-fill, var(--paper, #ffffff))); stroke: var(--actor-stroke, var(--node-stroke, var(--line, #1d2026))); stroke-width: var(--node-width, var(--bw, 1.5px)); filter: var(--node-shadow, none); rx: var(--node-radius, 2px); }
+.am-diagram .am-actor-text { fill: var(--actor-text, var(--node-text, var(--ink, #16181d))); }
+.am-note { fill: var(--note-fill, var(--warn-bg, #fdf3e2)); stroke: var(--note-stroke, var(--warn, #a8620a)); stroke-width: var(--note-width, 1); rx: var(--note-radius, 2px); }
+.am-diagram .am-step { fill: var(--ink-3, #8b929e); font: var(--am-fs-d-step) var(--font-mono, monospace); }
+
+.am-diagram-expand {
+  /* In flow and sticky: it sits at the end edge (right on a left-to-right page) and stays in view when the diagram scrolls sideways.
+     It takes its own row above the drawing, so it never covers a node at the top-right corner of the drawing. */
+  position: sticky; inset-inline-start: calc(100% - 36px); z-index: 2;
+  display: flex; align-items: center; justify-content: center;
+  width: 28px; height: 28px; padding: 0; margin: 0 0 4px; margin-inline: auto 8px;
+  color: var(--ink-2); background: var(--paper);
+  border: var(--bw, 1px) solid var(--line-2); border-radius: var(--radius);
+  cursor: pointer; opacity: 0.72;
+  transition: opacity 0.15s, color 0.15s, border-color 0.15s, background 0.15s;
+}
+.am-diagram:hover .am-diagram-expand,
+.am-diagram-expand:focus-visible { opacity: 1; }
+.am-diagram-expand:hover {
+  opacity: 1; color: var(--ink); border-color: var(--accent); background: var(--fill);
+}
+.am-diagram-expand:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+/* ── Diagram Lightbox and Pan-Zoom Viewer ─────────── */
+.am-lightbox {
+  position: fixed; inset: 0; z-index: 1000;
+  display: flex; flex-direction: column;
+  touch-action: none;
+}
+.am-lightbox[hidden] { display: none !important; }
+
+.am-lightbox-backdrop {
+  position: absolute; inset: 0;
+  background: rgba(0, 0, 0, 0.72);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+
+.am-lightbox-header {
+  position: absolute; top: 12px; left: 24px; right: 24px; height: 36px;
+  display: flex; align-items: center; justify-content: space-between;
+  z-index: 10; pointer-events: none;
+}
+.am-lightbox-title {
+  display: inline-flex; align-items: center; gap: 8px;
+  color: rgba(255, 255, 255, 0.92);
+  font: var(--am-fs-text)/1 var(--font-sans, sans-serif); font-weight: 500;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
+  pointer-events: auto;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 60vw;
+}
+.am-lightbox-title svg { stroke: rgba(255, 255, 255, 0.85); flex-shrink: 0; }
+.am-lightbox-actions {
+  display: flex; align-items: center; gap: 8px; pointer-events: auto;
+}
+.am-lightbox-close {
+  width: 32px; height: 32px;
+  background: var(--paper);
+  border: var(--bw, 1px) solid var(--line-2);
+  border-radius: 50%;
+  color: var(--ink);
+  font-size: var(--am-fs-heading); line-height: 1;
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+  transition: background 0.15s, color 0.15s, transform 0.15s, border-color 0.15s;
+}
+.am-lightbox-close:hover {
+  color: var(--accent); border-color: var(--accent); background: var(--fill); transform: scale(1.05);
+}
+.am-lightbox-close:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+.am-lightbox-stage {
+  position: absolute;
+  top: 54px; bottom: 20px; left: 24px; right: 24px;
+  background: var(--paper);
+  border: var(--bw, 1px) solid var(--line-2);
+  border-radius: max(var(--radius), 14px);
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.45);
+  overflow: hidden;
+  cursor: grab;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.am-lightbox-stage.am-panning { cursor: grabbing; }
+
+.am-lightbox-canvas {
+  position: absolute; left: 0; top: 0;
+  transform-origin: 0 0;
+  will-change: transform;
+  pointer-events: none;
+}
+.am-lightbox-canvas svg {
+  max-width: none !important;
+  max-height: none !important;
+  display: block;
+  font-family: var(--font-sans, sans-serif);
+}
+
+/* ── doc template ────────────────────────── */
+.am-doc { max-width: 1120px; margin: 0 auto; padding: 40px 28px 64px; }
+.am-doc-layout { display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 32px; align-items: start; }
+.am-doc-layout--notoc { grid-template-columns: minmax(0, 1fr); max-width: 860px; }
+.am-toc { position: sticky; top: 24px; font-size: var(--am-fs-text); }
+.am-toc a { display: block; color: var(--ink-2); text-decoration: none; padding: 4px 0; padding-inline-start: 10px; border-inline-start: 2px solid var(--line-2); }
+.am-toc a:hover { color: var(--ink); border-inline-start-color: var(--accent); }
+.am-doc-body > .am-panel + .am-panel { margin-top: 20px; }
+
+/* ── Responsive and print ─────────────────────────── */
+@media (max-width: 1100px) {
+  .am-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .am-grid > .am-panel { grid-column: auto !important; }
+  .am-grid > .am-panel.am-span-wide { grid-column: 1 / -1 !important; }
+}
+@media (max-width: 760px) {
+  .am-sheet, .am-doc { padding: 56px 12px 24px; }
+  /* The toolbar holds more controls than a phone fits on one row. It scrolls sideways in place, so Theme and Mode stay reachable
+     and the page keeps the 56px top padding for one row. The rings focus draws outside a button are clipped by that scroll box. */
+  .am-toolbar { max-width: calc(100vw - 24px); overflow-x: auto; scrollbar-width: none; }
+  .am-toolbar::-webkit-scrollbar { display: none; }
+  .am-toolbar > * { flex: none; }
+  .am-toolbar .am-btn:focus-visible, .am-toolbar .am-pick:focus-within { outline-offset: -2px; }
+  .am-head { padding-inline-end: 0; }
+  .am-grid { grid-template-columns: minmax(0, 1fr); }
+  .am-grid > .am-panel.am-span-wide { grid-column: auto !important; }
+  .am-doc-layout { grid-template-columns: minmax(0, 1fr); }
+  .am-toc { position: static; }
+  .am-tree-cols { grid-template-columns: minmax(0, 1fr); }
+  /* Tables and diagrams keep their size: the wrapper scrolls horizontally when they overflow. A cell is never narrower than about
+     two short words, so a phone does not stack them one per line. On wider screens the sheet layout (src/runtime/layout-dom.js)
+     gives a table panel the width its columns read well at. */
+  .am-md th, .am-md td { min-width: 8em; }
+  .am-diagram svg { max-width: none; }
+  .am-lightbox-header { top: 8px; left: 12px; right: 12px; }
+  .am-lightbox-stage { top: 46px; bottom: 12px; left: 12px; right: 12px; border-radius: max(var(--radius), 10px); }
+}
+.am-colophon { margin: 0 0 8px; font: var(--am-fs-label) var(--font-mono); color: var(--ink-3); }
+.am-colophon a { color: inherit; text-decoration: underline; text-underline-offset: 2px; }
+
+@media print {
+  .am-toolbar, .am-diagram-expand, .am-lightbox, .am-code-copy, .am-comment-btn, .am-comment, .am-reply, .am-reply-bar { display: none !important; }
+  body { background: var(--paper); }
+  .am-panel { break-inside: avoid; box-shadow: none; }
+}
+/* Printed on paper narrower than three columns, the two-column grid left a hole beside every panel next to a full-width one
+   (a wide table, a wide diagram): one panel per row instead. */
+@media print and (max-width: 1100px) {
+  .am-grid { grid-template-columns: minmax(0, 1fr); }
+  .am-grid > .am-panel { grid-column: auto !important; }
+}
+.am-panel--bare { border: 0; background: transparent; box-shadow: none; }
+.am-panel--bare > .am-panel-body { padding: 0; }
+.am-panel--bare .am-kv { background: var(--paper); }
+
+/* Remark mode: block marks with a note, collected into the Reply copy (src/runtime/remark.js). Each kind borrows a status colour of
+   the theme, so a mark reads in light and dark mode on every theme. */
+.am-btn--remark.is-on { background: var(--ink); border-color: var(--ink); color: var(--paper); }
+.am-btn--remark-clear { color: var(--err); }
+.am-btn--remark-clear.is-armed { background: var(--err-bg); border-color: var(--err); }
+.am-remark-hover { outline: 1px dashed var(--ink-3); outline-offset: 2px; cursor: pointer; }
+:is(.am-mark, .am-remark-kind)[data-kind="suggestion"] { --mark: var(--warn); --mark-bg: var(--warn-bg); }
+:is(.am-mark, .am-remark-kind)[data-kind="keep"] { --mark: var(--ok); --mark-bg: var(--ok-bg); }
+:is(.am-mark, .am-remark-kind)[data-kind="question"] { --mark: var(--accent); --mark-bg: var(--accent-bg); }
+:is(.am-mark, .am-remark-kind)[data-kind="concern"] { --mark: var(--err); --mark-bg: var(--err-bg); }
+.am-mark { border-inline-start: 3px solid var(--mark); padding-inline-start: 10px; background: var(--mark-bg); border-radius: 1px; }
+/* The note chip sits inside the marked block (a table takes it as its caption, a list item puts it before its sub-list), so lists and
+   grids keep their children. */
+.am-mark-note {
+  display: block; margin-block-start: 4px; font: var(--am-fs-small)/1.5 var(--font-sans); letter-spacing: normal; text-transform: none;
+  color: var(--ink-2); white-space: pre-wrap; caption-side: bottom; text-align: start;
+}
+.am-mark-note b { color: var(--ink); font-weight: 600; }
+caption.am-mark-note { display: table-caption; }
+/* Table rows have their own backgrounds, so a tint on the table would show on every other row only: the bar marks a table. */
+table.am-mark { background: none; }
+.am-remark-pop {
+  position: absolute; z-index: 40; width: min(264px, calc(100vw - 16px)); padding: 8px; display: grid; gap: 6px;
+  color: var(--ink); background: var(--paper); border: 1px solid var(--line-2); border-radius: var(--radius); box-shadow: 0 6px 24px rgba(0, 0, 0, .14);
+}
+.am-remark-pop[hidden] { display: none; }
+.am-remark-kinds { display: flex; gap: 6px; flex-wrap: wrap; }
+.am-remark-kind { font: var(--am-fs-small)/1 var(--font-sans); color: var(--ink-2); background: var(--paper); border: 1px solid var(--line-2); border-radius: 999px; padding: 4px 10px; cursor: pointer; }
+.am-remark-kind:hover { border-color: var(--ink-3); }
+.am-remark-kind[aria-pressed="true"] { color: var(--ink); border-color: var(--mark); background: var(--mark-bg); }
+.am-remark-kind:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.am-remark-pop textarea { font: var(--am-fs-text)/1.5 var(--font-sans); color: var(--ink); background: var(--paper); border: 1px solid var(--line-2); border-radius: var(--radius); padding: 6px 8px; resize: vertical; }
+.am-remark-actions { display: flex; gap: 6px; }
+.am-remark-actions .am-btn:disabled { opacity: .5; cursor: default; }
+@media print { .am-remark-pop { display: none !important; } }
+
+
+html[data-theme="blueprint"] .am-frame { border: 1px solid var(--line); padding: 30px; }
+html[data-theme="blueprint"] .am-frame::before {
+  content: ""; position: absolute; inset: 18px; border: 1px solid var(--line); pointer-events: none;
+}
+html[data-theme="blueprint"] .am-ruler {
+  display: flex; position: absolute; font: var(--am-fs-tick)/1 var(--font-mono); color: var(--ink-3);
+}
+@media (max-width: 760px) {
+  html[data-theme="blueprint"] .am-frame { padding: 0; border: 0; }
+  html[data-theme="blueprint"] .am-frame::before, html[data-theme="blueprint"] .am-ruler { display: none; }
+}
+
+html[data-theme="shadcn"] .am-panel-id { border-radius: 6px; min-width: 24px; height: 24px; margin: 9px 0 9px 14px; font-size: var(--am-fs-small); }
+html[data-theme="shadcn"] .am-panel-head { border-bottom-width: 1px; }
+html[data-theme="shadcn"] .am-kv { border-color: var(--line); border-radius: var(--radius); overflow: hidden; }
+
+html[data-theme="paper"]:lang(zh-Hant)[data-mode], html[data-theme="paper"]:lang(zh-TW)[data-mode], html[data-theme="paper"]:lang(zh-HK)[data-mode], html[data-theme="paper"]:lang(zh-MO)[data-mode] { --font-serif: "Iowan Old Style", Palatino, Georgia, "Songti TC", "PMingLiU", "MingLiU", "Noto Serif CJK TC", "Noto Serif TC", "Source Han Serif TC", "Songti SC", serif; }
+html[data-theme="paper"]:lang(ja)[data-mode] { --font-serif: "Iowan Old Style", Palatino, Georgia, "Hiragino Mincho ProN", "Yu Mincho", "Noto Serif CJK JP", "Noto Serif JP", "Songti SC", serif; }
+html[data-theme="paper"]:lang(he)[data-mode] { --font-serif: "Iowan Old Style", Palatino, Georgia, "Noto Serif Hebrew", "Frank Ruehl CLM", David, "Times New Roman", serif; }
+html[data-theme="paper"] .am-head h1, html[data-theme="paper"] .am-panel-head h2, html[data-theme="paper"] .am-md, html[data-theme="paper"] .am-intro, html[data-theme="paper"] .am-callout { font-family: var(--font-serif); }
+html[data-theme="paper"] .am-head h1 { font-weight: 600; letter-spacing: 0; }
+html[data-theme="paper"] .am-md p, html[data-theme="paper"] .am-md li, html[data-theme="paper"] .am-md blockquote, html[data-theme="paper"] .am-intro { font-size: var(--am-fs-lead); line-height: 1.75; }
+html[data-theme="paper"] .am-md p { margin-bottom: 12px; }
+html[data-theme="paper"] .am-md table { font-family: var(--font-sans); }
+</style>
+</head>
+<body>
+<div class="am-toolbar" data-am-root-lang="zh-CN" data-am-root-theme="paper" data-am-root-mode="auto" data-am-root-style="80">
+<label class="am-pick">主题<select data-am="theme"><option value="blueprint">图纸</option><option value="shadcn">卡片</option><option value="paper" selected>纸张</option></select></label>
+<label class="am-pick">明暗<select data-am="mode"><option value="auto" selected>跟随系统</option><option value="light">亮</option><option value="dark">暗</option></select></label>
+<button class="am-btn" type="button" data-am="scale-down" data-min="0.8" data-max="1.5" data-step="0.05" aria-label="缩小文字" title="缩小文字" hidden>A−</button><button class="am-btn" type="button" data-am="scale-up" data-min="0.8" data-max="1.5" data-step="0.05" aria-label="放大文字" title="放大文字" hidden>A+</button>
+<button class="am-btn am-btn--reply" type="button" data-am="reply" data-ui="{&quot;button&quot;:&quot;回复&quot;,&quot;comment&quot;:&quot;评论&quot;,&quot;commentHint&quot;:&quot;对这个面板的意见&quot;,&quot;title&quot;:&quot;你的回复&quot;,&quot;hint&quot;:&quot;复制后粘贴回和 Agent 的对话，它会按你的选择和意见继续。&quot;,&quot;copy&quot;:&quot;复制回复&quot;,&quot;copyFailed&quot;:&quot;复制失败 — 请按 Cmd/Ctrl+C&quot;,&quot;close&quot;:&quot;关闭&quot;,&quot;suggested&quot;:&quot;建议&quot;,&quot;empty&quot;:&quot;先选择选项，或在面板上写评论。&quot;,&quot;decisions&quot;:&quot;决定&quot;,&quot;comments&quot;:&quot;评论&quot;,&quot;confirmed&quot;:&quot;确认了建议&quot;,&quot;untouched&quot;:&quot;未作答，建议&quot;,&quot;was&quot;:&quot;原为&quot;,&quot;typed&quot;:&quot;以 \&quot;&gt;\&quot; 开头的行是读者输入的文字。&quot;,&quot;raw&quot;:&quot;查看将复制的文本&quot;,&quot;preview&quot;:&quot;预览&quot;,&quot;count&quot;:{&quot;answered&quot;:&quot;已作答 {n} 项&quot;,&quot;comments&quot;:&quot;评论 {n} 条&quot;,&quot;remarks&quot;:&quot;标注 {n} 处&quot;},&quot;done&quot;:&quot;已复制 ✓&quot;,&quot;remarks&quot;:&quot;标注&quot;,&quot;kinds&quot;:{&quot;suggestion&quot;:&quot;建议&quot;,&quot;keep&quot;:&quot;保留&quot;,&quot;question&quot;:&quot;疑问&quot;,&quot;concern&quot;:&quot;关注&quot;}}">回复</button>
+<button class="am-btn am-btn--remark" type="button" data-am="remark" data-ui="{&quot;button&quot;:&quot;标注&quot;,&quot;hint&quot;:&quot;批注（可选）&quot;,&quot;save&quot;:&quot;保存&quot;,&quot;remove&quot;:&quot;删除&quot;,&quot;clear&quot;:&quot;清除所有标注&quot;,&quot;clearConfirm&quot;:&quot;再次点击以清除 {n} 条标注&quot;,&quot;section&quot;:&quot;标注&quot;,&quot;kinds&quot;:{&quot;suggestion&quot;:&quot;建议&quot;,&quot;keep&quot;:&quot;保留&quot;,&quot;question&quot;:&quot;疑问&quot;,&quot;concern&quot;:&quot;关注&quot;}}">标注</button>
+<button class="am-btn" type="button" data-am="copy" data-done="已复制 ✓">复制源稿</button>
+</div>
+<main class="am-doc">
+<header class="am-head"><p class="am-colophon">Generated by <a href="https://github.com/QingYunA/answer-me-with-html" target="_blank" rel="noopener">Answer me with HTML</a> 0.5.6 · 2026-10-21 05:05 · <a href="https://github.com/QingYunA/answer-me-with-html" target="_blank" rel="noopener">★ Star on GitHub</a></p><h1>evo 整套循环体检 · 2026-10</h1><p class="am-sub">第十五轮之后，按一件事的生命周期逐段查漏洞、卡点和可优化处</p><div class="am-head-meta"><span><b>source</b>kit 第十五轮（069d8c5）</span></div><div class="am-intro am-md"><div class="am-md"><p>本轮只读：没改任何代码。读了 kit/README.md 各轮、kit/bin/evo 和 evo_*.py、roles、templates、install.sh、contract-v2、presets、profiles/tubu 与 st、docs（loop-topology、optimization-review、agent-interface、model-coordination 等）、notes/decisions.md、app/README.md 和 App 调用 evo 的代码。optimization-review 里 B1–B5、C6–C9、D10–D11 已修，本文不重复。</p>
+<p>能跑的都跑了：用 kit/tests 的假 Orca 夹具写了 4 段复现脚本（见文末附录），其中 4 条问题已实测复现。各测试文件单独跑都是绿的，但在 2 核沙箱里每个文件要 80 秒或更久，全套无法在 2 分钟里跑完（见 L-28）。</p>
+</div></div></header>
+<div class="am-doc-layout">
+<nav class="am-toc" aria-label="目录"><a href="#panel-A">A · 结论</a><a href="#panel-B">B · 高严重度（7 条）</a><a href="#panel-C">C · 中严重度（14 条）</a><a href="#panel-D">D · 低严重度（9 条）</a><a href="#panel-E">E · 测试覆盖缺口</a><a href="#panel-F">F · 建议下一轮做的 8 条</a><a href="#panel-G">G · 需要老板拍板（3 个，附推荐默认）</a><a href="#panel-H">H · 附录：复现脚本（放在 kit 目录下运行）</a></nav><div class="am-doc-body">
+<section class="am-panel" id="panel-A">
+<header class="am-panel-head"><span class="am-panel-id">A</span><h2>结论</h2></header>
+<div class="am-panel-body"><div class="am-callout am-callout--warn" role="note"><div class="am-callout-title">主路径没问题，卡点在「常驻 + 真 Orca + 真网络」三处</div><div class="am-callout-body am-md"><p>单元测试查的是「一轮 tick 做对没有」，高危问题都在测试没模拟的地方。</p>
+<ul>
+<li>常驻进程不放锁</li>
+<li>有人绕过 evo 在 Orca 里结闸门</li>
+<li>一条坏消息让项目每轮崩溃</li>
+<li>远端主线红了误伤在途的件</li>
+<li>外部命令没有超时</li>
+</ul>
+<p>前 4 条已用假 Orca 复现。</p>
+</div></div>
+<div class="am-md"><div class="am-table-wrap"><table>
+<thead>
+<tr>
+<th>严重度</th>
+<th>条数</th>
+<th>其中确定的 bug</th>
+<th>其中真机才能验证</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>高</td>
+<td>7</td>
+<td>6</td>
+<td>1（L-07）</td>
+</tr>
+<tr>
+<td>中</td>
+<td>14</td>
+<td>11</td>
+<td>3（L-09、L-10、L-21）</td>
+</tr>
+<tr>
+<td>低</td>
+<td>9</td>
+<td>9</td>
+<td>0</td>
+</tr>
+</tbody></table></div>
+<p>字段说明：<strong>环节</strong>按生命周期（来源→issue→调度→施工→验收→决策→闸门→部署→回滚→通知→早报）或横向主题；<strong>证据</strong>写 <code>文件:行</code>（行号以 069d8c5 为准）或复现脚本；<strong>工作量</strong> S ≤ 半天、M ≈ 1 天、L ≥ 2 天；<strong>拍板</strong>只在删数据、线上变更、花钱、产品体验时写「要」。</p>
+</div></div>
+</section>
+<section class="am-panel" id="panel-B">
+<header class="am-panel-head"><span class="am-panel-id">B</span><h2>高严重度（7 条）</h2></header>
+<div class="am-panel-body"><div class="am-md"><h3>L-01 单项目常驻时锁永远不放，所有写命令卡死</h3>
+<ul>
+<li><strong>类型</strong>：确定的 bug（已实测）</li>
+<li><strong>环节</strong>：并发与锁 / 老板闸门 / App 接口</li>
+<li><strong>现象</strong>：只登记了一个项目时，<code>evo run</code> 自动选中它，在本进程里循环（不走子进程）。<code>load()</code> 第一次调用 <code>lock()</code> 拿到 <code>flock</code> 后从不释放，进程不退出锁就一直在。之后 <code>evo approve</code>、<code>add</code>、<code>feedback --item</code>、<code>retry</code>、<code>ship</code>、<code>status</code>、面板写接口、Telegram 按钮、App 的通过/打回全都无限等待。现在 Mac mini 上很可能只有 TB 一个项目，正好命中。</li>
+<li><strong>证据</strong>：<code>kit/bin/evo:208-216</code>（lock 只加不放）、<code>kit/bin/evo:2993-3002</code>（单项目分支在本进程里循环）。复现 <code>t_lock.py</code>：后台起 <code>evo run --every 2</code>，再跑 <code>evo -p TB add …</code>，15 秒仍卡住。</li>
+<li><strong>附带问题</strong>：这个分支里配置只在启动时读一次（<code>CFG</code>、<code>_UI</code>、<code>_ARCH</code> 缓存）。面板和 App 改的模型、目标、预设，要等常驻进程重启才生效。这和文档写的「下一次派工生效」不符。</li>
+<li><strong>修法</strong>：<code>cmd_run</code> 一律每轮起子进程 <code>evo -p &lt;代号&gt; once</code>（多项目分支已有现成写法）。锁随子进程退出自动释放，配置每轮重新读。另外把 <code>lock()</code> 改成上下文管理器，<code>cmd_tick</code> 结束就释放。补测试：起常驻，同时 <code>approve</code> 必须在 5 秒内返回。</li>
+<li><strong>工作量</strong>：S</li>
+<li><strong>拍板</strong>：不用</li>
+</ul>
+<h3>L-02 只读命令也抢写锁：tick 期间 App、面板、bot 读不到状态</h3>
+<ul>
+<li><strong>类型</strong>：确定的 bug</li>
+<li><strong>环节</strong>：App 与 evo 接口 / 可观测性</li>
+<li><strong>现象</strong>：<code>evo status --json</code> 走 <code>load()</code>，要拿写锁；tick 里含整套测试（合并前、推送前、建上线闸门都跑），一轮可能十几分钟。这段时间 App（status 超时 60 秒）显示「evo 跑不起来」，面板空白，Telegram bot 的 <code>gate_options</code> 读不到闸门，回「已经处理过或不存在」。项目处于 <code>PAUSED</code> 时 <code>load()</code> 直接退出，status 报错，老板正需要看的时候反而看不到。<code>cmd_status</code> 还会调 <code>coord()</code>，Orca 里协调终端没了就顺手新建一个：读命令有副作用。</li>
+<li><strong>证据</strong>：<code>kit/bin/evo:3487-3492</code>、<code>kit/bin/evo:219-223</code>（PAUSED 直接退出）；App 侧 <code>app/Sources/Evo/AppState.swift:179</code>（timeout 60）；bot 侧 <code>kit/bin/evo_notify.py:375-382</code>。<code>read_state_ro()</code> 已存在（<code>kit/bin/evo:2713</code>），只给了 <code>log</code> 用。</li>
+<li><strong>修法</strong>：<code>status</code>、<code>digest</code> 打印、bot 查闸门全部改用 <code>read_state_ro()</code>；闸门列表用 <code>s[&quot;coord&quot;]</code> 只读查询，查不到就标 <code>gates_stale: true</code>，不新建终端。status JSON 加 <code>paused</code>（原因文本）和 <code>tick_running</code>（锁被占且持有多久），schema 仍为 1，只加字段。App 收到 <code>paused</code> 显示「暂停：原因」，不显示出错。</li>
+<li><strong>工作量</strong>：S–M</li>
+<li><strong>拍板</strong>：不用</li>
+</ul>
+<h3>L-03 绕过 evo 结的闸门，evo 不看结果：打回照样合并</h3>
+<ul>
+<li><strong>类型</strong>：确定的 bug（假 Orca 实测；真 Orca 解锁规则待真机确认）</li>
+<li><strong>环节</strong>：老板闸门 / 部署 / 密钥与权限</li>
+<li><strong>现象</strong>：evo 只在 <code>evo approve</code> 里处理闸门的选择。老板在 Orca 手机 App 上点（README 第 4 步就让老板配手机），或者工人自己调 <code>orca orchestration gate-resolve</code>，Orca 只是把闸门结掉、任务解锁，evo 不读结果：<ul>
+<li>看效果点「打回」→ 合并任务变 ready → evo 照常合并并推送（实测：状态 merged、已推送）。</li>
+<li>做不做点「不做」→ 施工任务变 ready → evo 照常开工。</li>
+<li>上线闸门点「上线」→ evo 什么也不做，件上的 <code>ship_gate</code> 一直留着，<code>ship_batch</code> 永远不再收这些件，<code>merged</code> 是安静状态也不查活路：从此卡在「可收菜」。</li>
+<li>施工、验收工人跑在同一台机器上，能调 orca 命令，被不可信 issue 注入后可以自己批自己的看效果闸门。</li>
+</ul>
+</li>
+<li><strong>证据</strong>：<code>kit/bin/evo:1966-1968</code>（verified 且合并任务 ready 就合并，不核对是谁、选了什么）、<code>kit/bin/evo:1969-1971</code>（只认施工任务 failed 才算不做）、<code>kit/bin/evo:3699-3705</code>（已挂 ship_gate 的件不再入批）；假 Orca <code>kit/tests/fakes/orca:49-54</code>（任何结果都解锁）。复现 <code>t_phone.py</code>。</li>
+<li><strong>修法</strong>：<ol>
+<li>合并前置条件：看效果件必须有 <code>it[&quot;look_ok&quot;] == 当前 look 闸门号</code>，只在 <code>cmd_approve</code> 选「通过」时写入（L-16 防住工人冒充之后）。</li>
+<li>每轮读 <code>gate-list</code> 的 <code>resolution</code>：发现没经过 evo 就结掉的闸门，按拍板规则处理。「打回」→ 照 approve 打回流程走（原话写「手机端打回，未写原因」）；「不做」→ drop；「上线」或「通过」→ 见拍板。处理完记时间线 <code>gate_external</code>。</li>
+<li>上线闸门在 Orca 被结掉而 evo 没处理时，清掉件上的 <code>ship_gate</code>，让下一批能重新收。</li>
+<li>补测试：手机端打回、手机端不做、手机端上线三条。</li>
+</ol>
+</li>
+<li><strong>工作量</strong>：M</li>
+<li><strong>拍板</strong>：<strong>要</strong>（产品体验 + 线上）。问题：Orca 端点「通过 / 上线」算不算数？推荐：打回、不做照办；通过、上线不自动执行，推一条「请在 Telegram / App / 面板确认」，因为工人也能调 orca 命令。</li>
+</ul>
+<h3>L-04 一条消息处理出错，整个项目每轮崩（毒消息）</h3>
+<ul>
+<li><strong>类型</strong>：确定的 bug（已实测）</li>
+<li><strong>环节</strong>：崩溃、重启、重复投递幂等 / 施工 / 验收</li>
+<li><strong>现象</strong>：<code>cmd_tick</code> 先 <code>handle_msg()</code>，成功后才把消息号记进 <code>msg_seen</code>。<code>handle_msg</code> 里只要抛异常，这条消息就不会记成已处理。例如 git 读不到工作区、未跟踪文件冲突、Orca 字段缺失。下一轮重投、再崩，循环不会结束，心跳也停。真 Orca 的消息若没有 <code>id</code> 字段（README 列为待验），重投直接复现：合并后工作区已删，重投的「验收通过」去跑 <code>git rev-parse</code>，每轮抛 RuntimeError。另外 <code>handle_msg</code> 不核对消息属于哪一次派工、件当前是什么状态：一条迟到的「验收通过」能把已合并的件改回 <code>verified</code>。</li>
+<li><strong>证据</strong>：<code>kit/bin/evo:1810-1820</code>、<code>kit/bin/evo:1894</code>（验收通过分支不看状态）、<code>kit/bin/evo:1966-1968</code> 里 <code>merge_one</code> 也没有异常隔离。复现 <code>t_noid.py</code>（去掉消息 id + 确认丢失）：第 2 轮起 tick 每次退出码 1，报 <code>cannot change to …/worktrees/ab-fix-001</code>。</li>
+<li><strong>修法</strong>：<ol>
+<li>每条消息套 <code>try/except</code>：出错也记进 <code>msg_seen</code>。</li>
+<li>同时写时间线 <code>msg_error</code>（含异常摘要），交决策岗一次，再处理下一条。</li>
+<li>只接受「本次派工」的回报：<code>worker_done</code> 必须满足 <code>tid == it[role]</code> 且状态是 <code>building</code> / <code>verifying</code>，否则记 <code>msg_stale</code> 后丢弃。</li>
+<li>没有消息号时用 <code>(task_id, type, outcome, body 的 sha1)</code> 生成替代号去重。</li>
+<li><code>merge_one</code>、<code>do_push</code> 按件套异常隔离，失败的件转 <code>escalated</code> 并写明原因，不影响别的件和心跳。</li>
+</ol>
+</li>
+<li><strong>工作量</strong>：S–M</li>
+<li><strong>拍板</strong>：不用</li>
+</ul>
+<h3>L-05 远端主线红了，在途的件全被当成自己的错返工</h3>
+<ul>
+<li><strong>类型</strong>：确定的 bug（已实测）</li>
+<li><strong>环节</strong>：合并 / 推送 / 成本</li>
+<li><strong>现象</strong>：别人往远端推了一个让测试变红的提交（或者「并入远端后测试红」）。<code>do_push</code> 已把远端合进本地 main，测试红就停在那，每 30 秒重试一次，每次重跑全量测试，没有退避。之后每件合并前在本地 main 上测试都是红的，被判「合并前测试不绿 → 自动返工」。任务书还叫施工「把测试修绿」，施工只能越界改别处或空转。2 轮后交决策岗。</li>
+<li><strong>证据</strong>：<code>kit/bin/evo:663-677</code>（并入远端、测红留标记、每轮重测）、<code>kit/bin/evo:612-617</code>（合并前测红一律算本件返工）。复现 <code>t_red.py</code>：远端带红后，新登记的 AB-FIX-002 返工 3 轮进 escalated，日志「推送未成」13 次。</li>
+<li><strong>修法</strong>：<ol>
+<li>合并前测红时，先在当前 main（不含本件）上跑一次，按 main 的提交号缓存结果。</li>
+<li>main 本身就红：本件进「等主线修绿」，不算轮次、不返工。</li>
+<li>全项目只登记一件 <code>OPS</code> 修主线，推一次 <code>main_red</code>。</li>
+<li>推送重试按远端提交号去重：远端没变、本地没变，就不再重跑测试；失败间隔 1、2、4…最长 30 分钟。</li>
+<li><code>waiting</code> 加 <code>main_red</code>，App 和面板显示「等主线修绿」。</li>
+</ol>
+</li>
+<li><strong>工作量</strong>：M</li>
+<li><strong>拍板</strong>：不用</li>
+</ul>
+<h3>L-06 外部命令几乎都不设超时，一处卡住全机停</h3>
+<ul>
+<li><strong>类型</strong>：确定的 bug</li>
+<li><strong>环节</strong>：长时间卡住检测 / 多项目互相影响</li>
+<li><strong>现象</strong>：只有 <code>orca()</code> 设了 120 秒超时，而且超时抛的 <code>TimeoutExpired</code> 不是 <code>SystemExit</code>，单项目常驻循环接不住，进程直接退出（靠 launchd 拉起）。<code>git</code>（含 fetch）、<code>gh</code>、<code>test_cmd</code>、<code>push_cmd</code>、<code>deploy_cmd</code>、多项目常驻里每个项目的 <code>once</code> 子进程都不设超时。一套测试卡住 → 全局 <code>SUITE_LOCK</code> 被占 → 所有项目的合并、推送都在等；多项目循环是串行的，一个项目卡住别的项目也不转。看门狗能发现「停了」，但没有任何自动恢复。</li>
+<li><strong>证据</strong>：<code>kit/bin/evo:195</code>（orca 超时未捕获）、<code>:423-427</code>（git）、<code>:700-711</code>（run_suite 持锁无超时）、<code>:657</code>、<code>:679</code>、<code>:3669</code>、<code>:2988</code>（once 子进程）。</li>
+<li><strong>修法</strong>：加 <code>limits.timeouts</code>（建议默认：test 30 分钟、git 网络 3 分钟、git 本地 1 分钟、gh 1 分钟、push 5 分钟、deploy 20 分钟、单项目一轮 45 分钟）。统一用 <code>start_new_session=True</code> 起子进程，超时就杀整个进程组。<code>orca()</code> 捕获 <code>TimeoutExpired</code> 和 <code>FileNotFoundError</code> 并转成 SystemExit。超时按「这一步失败」处理：测试超时算红，推送超时算推送未成，once 超时记一次并推送 <code>tick_timeout</code>。</li>
+<li><strong>工作量</strong>：M</li>
+<li><strong>拍板</strong>：不用</li>
+</ul>
+<h3>L-07 TB 的 fetch 不走代理，国内直连 GitHub 推不上去</h3>
+<ul>
+<li><strong>类型</strong>：真机才能验证的风险（代码事实确定，影响看 Mac mini 网络）</li>
+<li><strong>环节</strong>：推送</li>
+<li><strong>现象</strong>：土布的 <code>push_cmd</code> 自带 <code>HTTPS_PROXY=socks5h://127.0.0.1:1082</code>，说明直连 GitHub 不通；但 <code>do_push</code> 在推送前先跑一句不带代理的 <code>git fetch origin</code>，失败就算推送未成，每轮重试，第 3 次推送「推送连续失败」；没有超时时还可能直接挂住（叠加 L-06）。<code>gh</code> 命令同样只认常驻进程的环境变量。</li>
+<li><strong>证据</strong>：<code>kit/profiles/tubu/project.json</code>（push_cmd）、<code>kit/bin/evo:657</code>。</li>
+<li><strong>修法</strong>：项目配置加 <code>git_env</code>（例如 <code>{&quot;HTTPS_PROXY&quot;: &quot;socks5h://127.0.0.1:1082&quot;}</code>），所有 git 网络操作和 gh 调用都带上；或在 <code>evo import</code> 时检测 push_cmd 里的代理，提示写进仓库的 <code>http.proxy</code>。<code>evo doctor</code>（见 L-19）里加一项「fetch 能不能通」。</li>
+<li><strong>工作量</strong>：S</li>
+<li><strong>拍板</strong>：不用</li>
+</ul>
+</div></div>
+</section>
+<section class="am-panel" id="panel-C">
+<header class="am-panel-head"><span class="am-panel-id">C</span><h2>中严重度（14 条）</h2></header>
+<div class="am-panel-body"><div class="am-md"><h3>L-08 决策岗批次自己卡住没人管</h3>
+<ul>
+<li><strong>类型</strong>：确定的 bug</li>
+<li><strong>环节</strong>：决策岗 / 长时间卡住检测</li>
+<li><strong>现象</strong>：决策岗任务一直处于 <code>dispatched</code>（工人挂了或在等权限弹窗），<code>decider_wake</code> 每轮看到「上一批没做完」就直接返回，永远不再叫；<code>live_path</code> 又把「决策岗正在看」算成有活路，不报警。<code>check_stalls</code> 只管施工和验收。结果：所有交决策岗的件悄无声息地停住。</li>
+<li><strong>证据</strong>：<code>kit/bin/evo:1715-1719</code>、<code>:2404-2406</code>、<code>:2053-2056</code>。</li>
+<li><strong>修法</strong>：<code>limits.decide_timeout_minutes</code>（默认 45）：超时就关终端、任务标 failed、记 <code>decider_timeout</code>、推一次「决策岗卡住」，<code>decide.last</code> 清零让下一轮重叫；同一批连续超时 2 次再转老板。决策岗工人也走 <code>worker-show</code> 死活检查。</li>
+<li><strong>工作量</strong>：S</li>
+<li><strong>拍板</strong>：不用</li>
+</ul>
+<h3>L-09 Orca 重启或协调终端丢失后，在途任务可能全部变成孤儿</h3>
+<ul>
+<li><strong>类型</strong>：真机才能验证的风险</li>
+<li><strong>环节</strong>：Orca 消息丢失 / 崩溃重启</li>
+<li><strong>现象</strong>：<code>coord()</code> 发现协调终端不在了就新建一个，再 <code>run-create</code> 一个新 run。若真 Orca 的 <code>task-list --from</code> 按终端或 run 隔离，旧任务全查不到，所有件变 <code>task_dead</code>；30 分钟后每件各进一次「没有活路」，决策岗被逐件叫去返工，浪费一整轮额度。旧终端收件箱里没确认的回报也丢了。假 Orca 的 task-list 不分 run，测不到。</li>
+<li><strong>证据</strong>：<code>kit/bin/evo:430-439</code>；<code>kit/tests/fakes/orca</code>（task-list 返回全部任务）。</li>
+<li><strong>修法</strong>：状态里记 <code>run_id</code>。重建协调终端后，先核对已知任务号能否查到。查不到就整项目 <code>PAUSED</code>（写清原因）并推一次，不让无活路检查逐件报警；查得到就继续。真机上按 README 第 15 节补测「关掉 Orca 再打开」。</li>
+<li><strong>工作量</strong>：M</li>
+<li><strong>拍板</strong>：不用</li>
+</ul>
+<h3>L-10 Orca 丢了 worker_done 时不对账</h3>
+<ul>
+<li><strong>类型</strong>：真机才能验证的风险</li>
+<li><strong>环节</strong>：Orca 消息丢失 / 施工 / 验收</li>
+<li><strong>现象</strong>：工人已经交卷，Orca 里任务是 <code>completed</code> / <code>failed</code>，但回报消息没送到 evo。evo 仍认为在施工：15 分钟后推「疑似卡住」，<code>check_stalls</code> 看到任务已完成就不重启，30 分钟后进「没有活路」交决策岗。活其实已经做完。</li>
+<li><strong>证据</strong>：<code>kit/bin/evo:2071-2087</code>。</li>
+<li><strong>修法</strong>：<code>check_stalls</code> 发现任务已是 completed / failed，但本次派工的回报没处理过。这时用 <code>task-show</code> / <code>dispatch-show</code> 取结果正文，合成一条消息走 <code>handle_msg</code>（受 L-04 的派工核对保护），时间线记 <code>reconciled</code>。</li>
+<li><strong>工作量</strong>：S–M</li>
+<li><strong>拍板</strong>：不用</li>
+</ul>
+<h3>L-11 交决策岗可以无限循环，用量只提醒不拦</h3>
+<ul>
+<li><strong>类型</strong>：确定的 bug</li>
+<li><strong>环节</strong>：决策岗 / 成本与用量</li>
+<li><strong>现象</strong>：<code>decide_rework</code> 每次把轮次清零，次数只记不限；施工 2 轮不过 → 决策岗返工 → 再 2 轮 → 再交决策岗……没有尽头。<code>usage_abnormal</code> 每件只推一次，推完照跑。optimization-review E 段「每件时长、轮数硬上限」至今没做。</li>
+<li><strong>证据</strong>：<code>kit/bin/evo:2181-2188</code>、<code>:1016-1029</code>。</li>
+<li><strong>修法</strong>：<code>limits.decider_reworks</code>（默认 2），超了自动转 <code>ask_owner</code>；<code>limits.item_hard_runs</code> / <code>item_hard_minutes</code>（默认 0 = 关）：超了把件转「等你：继续还是不做」闸门，不再派工。</li>
+<li><strong>工作量</strong>：S</li>
+<li><strong>拍板</strong>：<strong>要</strong>（花钱）。推荐：决策岗返工最多 2 次后转老板；单件派工超过 12 次或工人累计 6 小时，暂停等老板点「继续」。</li>
+</ul>
+<h3>L-12 上线批次和实际部署的代码不一致，也没有回滚</h3>
+<ul>
+<li><strong>类型</strong>：确定的 bug（TB 现在 <code>deploy_cmd</code> 为空，暂不触发）</li>
+<li><strong>环节</strong>：部署 / 回滚</li>
+<li><strong>现象</strong>：上线闸门建好时记的是一批件，<code>deploy_cmd</code> 却在主工作区当前 HEAD 上跑。闸门建好后才合并的件会一起上线，本地已合并、未推送的件也会。可是只有闸门里的件标「已上线」，其余件留在「可收菜」，下一批再「上线」一次。整个流程没有 <code>rollback</code>：上线后发现坏了，只能手动处理。TB 的 <code>deploy_cmd</code> 是空字符串，点「上线」只是改标签。</li>
+<li><strong>证据</strong>：<code>kit/bin/evo:3699-3716</code>（建闸门不记提交号）、<code>:3660-3682</code>（在 <code>CFG[&quot;repo&quot;]</code> 里跑 deploy_cmd）。</li>
+<li><strong>修法</strong>：建上线闸门时记 <code>ship_sha</code>（要求等于已推送的远端提交）；部署时在临时 worktree 里检出这个提交，传环境变量 <code>EVO_SHIP_SHA</code>；部署成功后把提交号是 <code>ship_sha</code> 祖先的件全部标已上线。加可选的 <code>rollback_cmd</code> 和 <code>evo rollback [批次]</code>（同样走老板闸门），以及可选的 <code>healthcheck_cmd</code>（失败只推送，回不回滚由老板点）。</li>
+<li><strong>工作量</strong>：M</li>
+<li><strong>拍板</strong>：<strong>要</strong>（线上变更），可以等 TB 真有部署时再定；推荐先只做 <code>ship_sha</code>，回滚做成老板手动点。</li>
+</ul>
+<h3>L-13 推送会丢：通道都失败不重试，早间汇总先删后发</h3>
+<ul>
+<li><strong>类型</strong>：确定的 bug</li>
+<li><strong>环节</strong>：推送通知 / 早报</li>
+<li><strong>现象</strong>：<code>deliver()</code> 里 Telegram 和邮件都失败（代理断、SMTP 挂），事件只剩 outbox，没人再发。<code>flush_digest()</code> 先删 <code>held</code> 文件再发送，发失败时整夜攒的事件全部丢失。每个闸门只提醒一次（<code>gate_pushed</code>）。那次没送到或老板没看到，就再也不提醒。闸门越堆越多，最后只触发「等你超过 5 件暂停新施工」。</li>
+<li><strong>证据</strong>：<code>kit/bin/evo_notify.py:173-187</code>、<code>:240-276</code>；<code>kit/bin/evo:1694-1705</code>。</li>
+<li><strong>修法</strong>：加 <code>retry.jsonl</code> 队列：投递失败的要推事件按 1、5、30 分钟重试，超过 6 小时并进下一次汇总；<code>held</code> 改成发送成功后再删（失败就改名回去）。闸门提醒分级：5 分钟、2 小时，之后每天早报再带一次；暂停新施工时单独推一次「等你的已有 N 件，新施工已暂停」。</li>
+<li><strong>工作量</strong>：M</li>
+<li><strong>拍板</strong>：不用</li>
+</ul>
+<h3>L-14 早报承诺和实现不符</h3>
+<ul>
+<li><strong>类型</strong>：确定的 bug（文档与行为不一致）</li>
+<li><strong>环节</strong>：早报</li>
+<li><strong>现象</strong>：loop-topology E 段写「8:30 Telegram 晨报：等你 1 件，可收菜 2 件」。实际 08:30 只在夜里攒了要推的事件时才发；夜里平静就没有早报。23:30 的晚间汇总 <code>digest_nightly</code> 不在要推的类型里，只走邮件。老板每天早上得不到一条固定的总览。</li>
+<li><strong>证据</strong>：<code>kit/bin/evo_notify.py:242</code>（没有 held 文件直接返回 0）、<code>kit/bin/evo:2899-2903</code>、<code>docs/loop-topology.md</code> E 段。</li>
+<li><strong>修法</strong>：08:30 固定发一条「早报」，全部项目合起来。内容：等你点头的件和按钮、可收菜、卡住或没活路、昨日合并数、额度暂停。再附夜里攒下的事件；全空就不发。复用 <code>status_doc</code>，不另写统计。</li>
+<li><strong>工作量</strong>：S–M</li>
+<li><strong>拍板</strong>：不用（发送时间和内容沿用已批的 08:30 汇总）</li>
+</ul>
+<h3>L-15 主动暂停也会被报「接棒器停了」</h3>
+<ul>
+<li><strong>类型</strong>：确定的 bug</li>
+<li><strong>环节</strong>：可观测性 / App 接口</li>
+<li><strong>现象</strong>：App 的「暂停循环」是 <code>launchctl bootout</code> 掉常驻进程。<code>evo bot</code> 里的看门狗和 App 自己调的 <code>evo watchdog</code> 不知道这是主动暂停，10 分钟后推「接棒器停了，看看常驻进程、Orca 和 Mac 是否睡着」。项目因状态损坏 <code>PAUSED</code> 时也报同一句话，原因说错。</li>
+<li><strong>证据</strong>：<code>kit/bin/evo:3761-3786</code>；<code>app/Sources/Evo/Shell.swift:132-141</code>、<code>AppState.swift:230</code>。</li>
+<li><strong>修法</strong>：加 <code>evo pause [--all|-p 代号] [原因]</code> / <code>evo resume</code>，写 <code>~/.evoloop/PAUSED</code> 或项目 <code>PAUSED</code>；App 的暂停改为调用它（再 bootout 也行）。看门狗跳过暂停中的项目，status 里给出暂停原因；项目 <code>PAUSED</code> 时看门狗的消息写明原因。</li>
+<li><strong>工作量</strong>：S</li>
+<li><strong>拍板</strong>：不用</li>
+</ul>
+<h3>L-16 工人能冒充老板：EVO_AGENT 只是约定</h3>
+<ul>
+<li><strong>类型</strong>：确定的 bug（被利用要靠提示词注入，属于真机风险）</li>
+<li><strong>环节</strong>：密钥与权限</li>
+<li><strong>现象</strong>：施工、验收、决策工人跑在 Orca 终端里，环境变量里没有 <code>EVO_AGENT</code>，用的是老板的 <code>gh</code> 登录。被不可信 issue 带偏的工人可以：跑 <code>evo -p TB approve &lt;看效果闸门&gt; 通过</code> 或 <code>evo ship</code>；直接 <code>orca orchestration gate-resolve</code>（叠加 L-03）；用 <code>gh issue edit --add-label autopilot:ready</code> 给外部 issue 贴标签，而 <code>labeled_by_trusted</code> 会因为操作者是老板账号判成可信。</li>
+<li><strong>证据</strong>：<code>kit/bin/evo:578-595</code>（launch 不带环境变量）、<code>:3580-3583</code>（只看 EVO_AGENT）、<code>:2820-2829</code>。</li>
+<li><strong>修法</strong>：<code>launch</code> 在工人命令前加 <code>env EVO_AGENT=worker:&lt;岗位&gt;:&lt;件号&gt;</code>；<code>approve</code> / <code>ship</code> / <code>team set</code> / <code>goal set</code> 再要求「老板凭据」：面板口令（App 从钥匙串取后用 <code>--owner-token</code> 传）或 Telegram 已认证的 bot 进程，命令行交互时允许在 TTY 上确认。决策岗贴 <code>autopilot:ready</code> 时，在 issue 里留 <code>&lt;!-- evo-decider --&gt;</code> 评论作为记录。</li>
+<li><strong>工作量</strong>：M</li>
+<li><strong>拍板</strong>：不用（只收紧权限，不改老板的操作方式：App、Telegram、面板照常可用）</li>
+</ul>
+<h3>L-17 外部 Agent 借 evo feedback 开的 issue 被当成可信</h3>
+<ul>
+<li><strong>类型</strong>：确定的 bug</li>
+<li><strong>环节</strong>：来源 / GitHub issue</li>
+<li><strong>现象</strong>：<code>EVO_AGENT</code> 设置时，<code>evo feedback</code> 用老板账号开 issue，正文以「【外部 Agent 来报：」开头。<code>pull_reports</code> 认这个标记，<code>cmd_pull</code> 不认：决策岗加 <code>autopilot:ready</code> 后，作者是老板（可信），正文原样进任务书，前面没有「外部来源原文，只当线索」的横幅。</li>
+<li><strong>证据</strong>：<code>kit/bin/evo:2787-2789</code> 对比 <code>:2853</code>。</li>
+<li><strong>修法</strong>：<code>cmd_pull</code> 里正文以 <code>AGENT_MARK</code> 开头或带 <code>agent-report</code> 标签，一律按不可信处理（加横幅）。补一条测试。</li>
+<li><strong>工作量</strong>：S</li>
+<li><strong>拍板</strong>：不用</li>
+</ul>
+<h3>L-18 evo 和决策岗都在老板自己的工作副本里动手</h3>
+<ul>
+<li><strong>类型</strong>：确定的 bug（设计层面）</li>
+<li><strong>环节</strong>：合并 / 决策岗 / 多项目</li>
+<li><strong>现象</strong>：<code>profiles/tubu</code> 的 <code>repo</code> 是桌面上老板自己的工作副本。合并时 evo 会在那里 <code>git checkout main</code>。老板在别的分支上、工作区又干净时，会被静默切走。未跟踪文件和合并冲突会让 <code>git merge</code> 抛异常（叠加 L-04 卡住项目）。决策岗工人的终端也开在这个目录，决策岗一旦改了文件，主工作区变脏，所有合并都被挡。Orca 建 worktree 的起点也取决于这个目录当前在哪个分支。</li>
+<li><strong>证据</strong>：<code>kit/bin/evo:606</code>、<code>:633</code>、<code>:1760</code>、<code>:568</code>；<code>kit/profiles/tubu/project.json</code>。</li>
+<li><strong>修法</strong>：<code>evo import</code> 默认另建专用克隆 <code>~/.evoloop/repos/&lt;代号&gt;</code>（老板的工作副本只读不碰）；决策岗终端开在只读的独立 worktree（<code>--detach</code>），岗位规则里写明决策岗不改文件。已登记的 TB 加一个迁移命令 <code>evo -p TB relocate</code>。</li>
+<li><strong>工作量</strong>：M</li>
+<li><strong>拍板</strong>：<strong>要</strong>（产品体验：以后 evo 的改动在专用克隆里，老板的桌面副本要自己 pull）。推荐：要。</li>
+</ul>
+<h3>L-19 kit 自身没有版本：App 和常驻进程可能跑两版代码</h3>
+<ul>
+<li><strong>类型</strong>：确定的 bug</li>
+<li><strong>环节</strong>：安装、升级、回滚 kit 自身 / App 与 evo 接口</li>
+<li><strong>现象</strong>：App 用包里的 <code>Contents/Resources/evo</code>；launchd 用的是当时跑 install.sh 的那份（仓库 kit 或包内 kit）。两版代码读写同一份 <code>~/.evoloop</code>，谁都不知道对方是哪一版。没有 <code>evo version</code>；状态文件没有版本号，升级没有迁移，坏了也没有回退办法。install.sh 没有把看门狗装成定时任务，它只在 <code>evo bot</code> 里跑。bot 只在设了 Telegram 变量时才装，所以没配 Telegram 就没有看门狗。README 里提到的 StartInterval 300 并不存在。</li>
+<li><strong>证据</strong>：<code>app/Sources/Evo/Shell.swift:17-37</code>；<code>kit/install.sh:103-133</code>（只装 autopilot 和可选 bot）；<code>grep -n version kit/bin/evo</code> 只有 status 的 schema_version。</li>
+<li><strong>修法</strong>：加 <code>kit/VERSION</code>，<code>evo version --json</code>，status JSON 里加 <code>kit_version</code> 和 <code>kit_path</code>；App 发现和常驻进程版本不一致就提示「用包里的版本重装常驻」。状态加 <code>schema</code> 字段，读到更高的版本就拒绝写入。install.sh 增加 <code>com.evoloop.watchdog</code>（StartInterval 300，不依赖 Telegram）。加 <code>evo doctor</code>：一次查 python、git、gh 登录、fetch 能不能通、Orca、magpie、launchd 三个常驻、版本是否一致。</li>
+<li><strong>工作量</strong>：M</li>
+<li><strong>拍板</strong>：不用</li>
+</ul>
+<h3>L-20 拉取入口出错会拖垮整轮，gh 失效时没有提醒</h3>
+<ul>
+<li><strong>类型</strong>：确定的 bug</li>
+<li><strong>环节</strong>：来源 / GitHub issue</li>
+<li><strong>现象</strong>：<code>cmd_once</code> 先 <code>cmd_pull</code> 再 <code>cmd_tick</code>。gh 输出不是 JSON（网络错误页、限流）时，<code>json.loads</code> 抛 ValueError，本轮的合并、推送、心跳都不做。反过来，gh 登录过期时 <code>stdout</code> 为空，<code>json.loads(&quot;[]&quot;)</code> 正常返回，入口安静地什么都拉不到，没有任何提醒。</li>
+<li><strong>证据</strong>：<code>kit/bin/evo:2978-2981</code>、<code>:2766-2771</code>、<code>:2350</code>、<code>:2825</code>。</li>
+<li><strong>修法</strong>：<code>cmd_pull</code> 整体包在 try 里；检查 <code>returncode</code>，失败计数，连续 3 轮失败推一次 <code>intake_down</code>（恢复后记 <code>intake_up</code>）；<code>cmd_tick</code> 无论 pull 成败都要跑。</li>
+<li><strong>工作量</strong>：S</li>
+<li><strong>拍板</strong>：不用</li>
+</ul>
+<h3>L-21 停滞阈值 15 分钟对真模型偏短</h3>
+<ul>
+<li><strong>类型</strong>：真机才能验证的风险</li>
+<li><strong>环节</strong>：施工 / 长时间卡住检测 / 推送通知</li>
+<li><strong>现象</strong>：<code>idle</code> 只看收到的消息。若真 Orca 不替工人发心跳，任何超过 15 分钟的施工都会被推「疑似卡住」；<code>live_path</code> 把 stalled 算成没有活路，30 分钟后又交决策岗。白天会频繁打扰老板。</li>
+<li><strong>证据</strong>：<code>kit/bin/evo:2066</code>、<code>:2082-2085</code>、<code>:2381-2382</code>。</li>
+<li><strong>修法</strong>：先在真机确认 Orca 心跳频率。不管有没有心跳，都把「终端输出在变」算作活着（每轮对 <code>terminal_tail</code> 取哈希，变了就刷新 <code>last_seen</code>）；默认 <code>stall_minutes</code> 改 30。</li>
+<li><strong>工作量</strong>：S</li>
+<li><strong>拍板</strong>：不用</li>
+</ul>
+</div></div>
+</section>
+<section class="am-panel" id="panel-D">
+<header class="am-panel-head"><span class="am-panel-id">D</span><h2>低严重度（9 条）</h2></header>
+<div class="am-panel-body"><div class="am-md"><div class="am-table-wrap"><table>
+<thead>
+<tr>
+<th>编号</th>
+<th>环节</th>
+<th>现象</th>
+<th>证据</th>
+<th>修法</th>
+<th>工作量</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>L-22</td>
+<td>日志与可观测性</td>
+<td><code>s[&quot;log&quot;]</code> 只留 200 行，推送失败每 30 秒一行就能刷满；夜审和晚间汇总按 <code>s[&quot;log&quot;]</code> 取当天事件会漏。<code>state/logs</code>、<code>outbox.jsonl</code>、<code>timeline.jsonl</code>、<code>~/.evoloop/logs/*.log</code> 都没有轮转</td>
+<td><code>kit/bin/evo:248</code>、<code>:2890-2893</code>、<code>:2910-2912</code></td>
+<td>夜审和汇总改读 timeline；同一句日志连续重复只记次数；日志按天轮转，保留 14 天</td>
+<td>S</td>
+</tr>
+<tr>
+<td>L-23</td>
+<td>来源</td>
+<td><code>gh issue list --limit 50</code>：已登记、没上线的 issue 仍开着且带 <code>autopilot:ready</code>，超过 50 件后新 issue 永远拉不到</td>
+<td><code>kit/bin/evo:2766-2767</code></td>
+<td>登记后贴 <code>evo:registered</code> 标签，查询加 <code>-label:evo:registered</code>；或分页</td>
+<td>S</td>
+</tr>
+<tr>
+<td>L-24</td>
+<td>推送通知</td>
+<td>bot 打回后等原话没有过期，几小时后随手一句话会被当成原话；<code>run_evo</code> 超时抛异常让 bot 进程退出，那次按钮丢失也没回话</td>
+<td><code>kit/bin/evo_notify.py:361-366</code>、<code>kit/bin/evo:3405-3407</code></td>
+<td>等原话 10 分钟过期；捕获超时，回「evo 正忙，稍后再点」</td>
+<td>S</td>
+</tr>
+<tr>
+<td>L-25</td>
+<td>老板闸门</td>
+<td>自动收菜在 08:20 遇到主线红就当天不再试（先写了 <code>auto_ship_day</code>）</td>
+<td><code>kit/bin/evo:3729-3735</code></td>
+<td>只有建成闸门或「已有闸门」时才记当天</td>
+<td>S</td>
+</tr>
+<tr>
+<td>L-26</td>
+<td>并发</td>
+<td>App「立即 tick」和常驻进程同时转不同项目时，<code>other_projects_load</code> 不加锁，整机施工上限可能多 1</td>
+<td><code>kit/bin/evo:1938-1940</code></td>
+<td>整机施工名额用 <code>~/.evoloop/slots.lock</code> 分配</td>
+<td>S</td>
+</tr>
+<tr>
+<td>L-27</td>
+<td>施工</td>
+<td>模型写成单个 magpie 组名时，返工「换一个施工模型」不起作用</td>
+<td><code>kit/bin/evo:557-563</code></td>
+<td>文档写明；或返工时改用卡片的 fallback</td>
+<td>S</td>
+</tr>
+<tr>
+<td>L-28</td>
+<td>测试覆盖</td>
+<td>2 核沙箱单个测试文件要 80 秒或更久，全套约 220 个无法在 2 分钟内跑完；没有并行</td>
+<td>本次实测（<code>/tmp/pt/*.log</code>）</td>
+<td>加 pytest-xdist；把慢的端到端测试标 <code>slow</code>，提交前先跑快集</td>
+<td>S</td>
+</tr>
+<tr>
+<td>L-29</td>
+<td>崩溃安全</td>
+<td><code>save()</code> 写临时文件不 fsync，断电后可能出现空文件，被判损坏进入暂停</td>
+<td><code>kit/bin/evo:238-243</code></td>
+<td><code>flush</code> + <code>os.fsync</code>；保留 <code>state.json.prev</code>，损坏时先自动用上一版并推送</td>
+<td>S</td>
+</tr>
+<tr>
+<td>L-30</td>
+<td>来源</td>
+<td>拓扑图里的「CI 与线上报警 → issue」还没有接入代码</td>
+<td><code>docs/loop-topology.md</code> B 段</td>
+<td>加 <code>evo intake ci --run &lt;url&gt;</code> 或 GitHub Actions 失败时用 <code>gh issue create</code> 贴 <code>type:ops</code></td>
+<td>S–M</td>
+</tr>
+</tbody></table></div>
+</div></div>
+</section>
+<section class="am-panel" id="panel-E">
+<header class="am-panel-head"><span class="am-panel-id">E</span><h2>测试覆盖缺口</h2></header>
+<div class="am-panel-body"><div class="am-callout am-callout--info" role="note"><div class="am-callout-title">假 Orca 是同步的，所以「时序」一类问题都测不到</div><div class="am-callout-body am-md"><p>假 Orca 在 dispatch 时同步跑完假工人，回报在同一轮就到；任何闸门结果都解锁；task-list 不分 run；消息都有 id。下面这些只在假 Orca 下测过，或完全没测。</p>
+</div></div>
+<div class="am-md"><div class="am-table-wrap"><table>
+<thead>
+<tr>
+<th>场景</th>
+<th>现状</th>
+<th>建议补的测试</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>evo run</code> 常驻循环（单项目 / 多项目）</td>
+<td>没有测试</td>
+<td>起常驻，同时 approve / status 必须在 5 秒内返回（L-01、L-02）</td>
+</tr>
+<tr>
+<td>绕过 evo 结闸门</td>
+<td>没有测试</td>
+<td>手机端打回、不做、上线（L-03）</td>
+</tr>
+<tr>
+<td>消息无 id、毒消息、迟到消息</td>
+<td>只测了有 id 的重投</td>
+<td>去掉 id + 不确认；handle_msg 抛异常（L-04）</td>
+</tr>
+<tr>
+<td>远端主线红</td>
+<td>只测了远端前进后测绿</td>
+<td>远端带红提交（L-05）</td>
+</tr>
+<tr>
+<td>外部命令超时</td>
+<td>没有测试</td>
+<td>假 test_cmd <code>sleep 999</code>、假 gh 挂住（L-06）</td>
+</tr>
+<tr>
+<td>协调终端丢失、Orca 重启</td>
+<td>没有测试</td>
+<td>假 Orca 加「按 run 隔离」开关（L-09）</td>
+</tr>
+<tr>
+<td>回报丢失、对账</td>
+<td>没有测试</td>
+<td>假 Orca 加「丢消息」开关（L-10）</td>
+</tr>
+<tr>
+<td>推送通道失败重试、汇总发送失败</td>
+<td>只测了成功路径</td>
+<td>http 返回 500（L-13）</td>
+</tr>
+<tr>
+<td>App 与 evo 版本不一致</td>
+<td>没有测试</td>
+<td><code>evo version --json</code> 契约测试（L-19）</td>
+</tr>
+<tr>
+<td>工人时序（交卷与 tick 并发）</td>
+<td>假工人同步，测不到</td>
+<td>假 Orca 加「延迟到下一轮再送」开关</td>
+</tr>
+<tr>
+<td>kit 测试在 macOS 上跑</td>
+<td>kit-tests 只跑 ubuntu</td>
+<td>kit-tests 加 macos-14（optimization-review E 段旧项）</td>
+</tr>
+</tbody></table></div>
+</div></div>
+</section>
+<section class="am-panel" id="panel-F">
+<header class="am-panel-head"><span class="am-panel-id">F</span><h2>建议下一轮做的 8 条</h2></header>
+<div class="am-panel-body"><div class="am-callout am-callout--ok" role="note"><div class="am-callout-title">先保证「不卡死、不误合并」，再做「不误伤、不白跑」</div><div class="am-callout-body am-md"><p>按顺序做，每条配复现测试（附录的 4 段脚本可以直接改成 pytest）。前 4 条都是 S 到 M，一天内能做完。</p>
+</div></div>
+<div class="am-md"><div class="am-table-wrap"><table>
+<thead>
+<tr>
+<th>顺序</th>
+<th>编号</th>
+<th>一句话</th>
+<th>工作量</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>1</td>
+<td>L-01</td>
+<td>常驻进程每轮起子进程，锁随一轮释放</td>
+<td>S</td>
+</tr>
+<tr>
+<td>2</td>
+<td>L-02</td>
+<td>status 和查闸门改只读，不抢锁；status 给出暂停原因</td>
+<td>S–M</td>
+</tr>
+<tr>
+<td>3</td>
+<td>L-04</td>
+<td>每条消息异常隔离，只认本次派工的回报</td>
+<td>S–M</td>
+</tr>
+<tr>
+<td>4</td>
+<td>L-03</td>
+<td>合并前核对老板是否真的点了通过；读 Orca 闸门结果（先等拍板）</td>
+<td>M</td>
+</tr>
+<tr>
+<td>5</td>
+<td>L-06 + L-07</td>
+<td>外部命令加超时；git 和 gh 带项目代理</td>
+<td>M</td>
+</tr>
+<tr>
+<td>6</td>
+<td>L-05</td>
+<td>main 本身红就不算本件返工；推送重试退避</td>
+<td>M</td>
+</tr>
+<tr>
+<td>7</td>
+<td>L-08</td>
+<td>决策岗批次超时重叫</td>
+<td>S</td>
+</tr>
+<tr>
+<td>8</td>
+<td>L-20</td>
+<td>拉取出错不拖垮整轮，gh 失效推提醒</td>
+<td>S</td>
+</tr>
+</tbody></table></div>
+<p>紧接着做：L-16（工人冒充老板）、L-13（推送重试）、L-19（版本和看门狗常驻）、L-14（固定早报）。</p>
+</div></div>
+</section>
+<section class="am-panel" id="panel-G">
+<header class="am-panel-head"><span class="am-panel-id">G</span><h2>需要老板拍板（3 个，附推荐默认）</h2></header>
+<div class="am-panel-body"><div class="am-md"><div class="am-table-wrap"><table>
+<thead>
+<tr>
+<th>#</th>
+<th>问题</th>
+<th>推荐默认</th>
+<th>关联</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>1</td>
+<td>Orca 手机端点「通过 / 上线」算不算数？</td>
+<td>打回、不做照办；通过、上线不自动执行，推一条请在 Telegram / App / 面板确认（工人也能调 orca 命令）</td>
+<td>L-03、L-16</td>
+</tr>
+<tr>
+<td>2</td>
+<td>evo 改用专用克隆，不再动桌面上的工作副本？</td>
+<td>要。以后 evo 的改动在 <code>~/.evoloop/repos/TB</code>，老板的桌面副本自己 pull</td>
+<td>L-18</td>
+</tr>
+<tr>
+<td>3</td>
+<td>给每件设硬上限？</td>
+<td>决策岗返工最多 2 次后转老板；单件派工超过 12 次或工人累计 6 小时就暂停，等老板点「继续」</td>
+<td>L-11</td>
+</tr>
+</tbody></table></div>
+<p>回滚上线（L-12）等 TB 真配了 <code>deploy_cmd</code> 再问。</p>
+</div></div>
+</section>
+<section class="am-panel" id="panel-H">
+<header class="am-panel-head"><span class="am-panel-id">H</span><h2>附录：复现脚本（放在 kit 目录下运行）</h2></header>
+<div class="am-panel-body"><div class="am-md"><p>4 段脚本都用 <code>kit/tests/conftest.py</code> 的 <code>Loop</code> 夹具（假 Orca、临时仓库、裸远端），本次放在沙箱 <code>/tmp/audit/</code>，没有提交。要点如下，可以直接改成 pytest：</p>
+<ul>
+<li><strong>t_lock.py（L-01）</strong>：只建一个项目 TB，后台 <code>evo run --every 2</code>，8 秒后 <code>evo -p TB add …</code> 设 15 秒超时 → 超时。</li>
+<li><strong>t_phone.py（L-03）</strong>：建 <code>--look</code> 件，跑到 verified，用假 orca <code>orchestration gate-resolve --id &lt;看效果闸门&gt; --resolution 打回</code>，再 tick 3 次 → 件为 merged 且已推送。</li>
+<li><strong>t_noid.py（L-04）</strong>：PATH 前面放一个包装 orca，把 check 结果里的消息 <code>id</code> 去掉，并设 <code>FAKE_ORCA_NO_ACK=1</code> → 第 2 轮起 tick 退出码 1（<code>cannot change to …/worktrees/…</code>）。</li>
+<li><strong>t_red.py（L-05）</strong>：<code>test_cmd=&quot;test ! -f BROKEN&quot;</code>，从另一个克隆往远端推一个带 BROKEN 文件的提交；登记第一件后跑 5 轮，再登记 <code>api/</code> 范围的第二件跑 10 轮 → 第二件 round 3、escalated，「推送未成」13 次。</li>
+</ul>
+</div></div>
+</section>
+</div>
+</div>
+</main>
+<textarea id="am-source" hidden readonly aria-hidden="true">---
+template: doc
+title: evo 整套循环体检 · 2026-10
+subtitle: 第十五轮之后，按一件事的生命周期逐段查漏洞、卡点和可优化处
+lang: zh
+source: kit 第十五轮（069d8c5）
+---
+本轮只读：没改任何代码。读了 kit/README.md 各轮、kit/bin/evo 和 evo_*.py、roles、templates、install.sh、contract-v2、presets、profiles/tubu 与 st、docs（loop-topology、optimization-review、agent-interface、model-coordination 等）、notes/decisions.md、app/README.md 和 App 调用 evo 的代码。optimization-review 里 B1–B5、C6–C9、D10–D11 已修，本文不重复。
+
+能跑的都跑了：用 kit/tests 的假 Orca 夹具写了 4 段复现脚本（见文末附录），其中 4 条问题已实测复现。各测试文件单独跑都是绿的，但在 2 核沙箱里每个文件要 80 秒或更久，全套无法在 2 分钟里跑完（见 L-28）。
+
+## A 结论
+```callout warn 主路径没问题，卡点在「常驻 + 真 Orca + 真网络」三处
+单元测试查的是「一轮 tick 做对没有」，高危问题都在测试没模拟的地方。
+
+- 常驻进程不放锁
+- 有人绕过 evo 在 Orca 里结闸门
+- 一条坏消息让项目每轮崩溃
+- 远端主线红了误伤在途的件
+- 外部命令没有超时
+
+前 4 条已用假 Orca 复现。
+```
+
+| 严重度 | 条数 | 其中确定的 bug | 其中真机才能验证 |
+|---|---|---|---|
+| 高 | 7 | 6 | 1（L-07） |
+| 中 | 14 | 11 | 3（L-09、L-10、L-21） |
+| 低 | 9 | 9 | 0 |
+
+字段说明：**环节**按生命周期（来源→issue→调度→施工→验收→决策→闸门→部署→回滚→通知→早报）或横向主题；**证据**写 `文件:行`（行号以 069d8c5 为准）或复现脚本；**工作量** S ≤ 半天、M ≈ 1 天、L ≥ 2 天；**拍板**只在删数据、线上变更、花钱、产品体验时写「要」。
+
+## B 高严重度（7 条）
+
+### L-01 单项目常驻时锁永远不放，所有写命令卡死
+- **类型**：确定的 bug（已实测）
+- **环节**：并发与锁 / 老板闸门 / App 接口
+- **现象**：只登记了一个项目时，`evo run` 自动选中它，在本进程里循环（不走子进程）。`load()` 第一次调用 `lock()` 拿到 `flock` 后从不释放，进程不退出锁就一直在。之后 `evo approve`、`add`、`feedback --item`、`retry`、`ship`、`status`、面板写接口、Telegram 按钮、App 的通过/打回全都无限等待。现在 Mac mini 上很可能只有 TB 一个项目，正好命中。
+- **证据**：`kit/bin/evo:208-216`（lock 只加不放）、`kit/bin/evo:2993-3002`（单项目分支在本进程里循环）。复现 `t_lock.py`：后台起 `evo run --every 2`，再跑 `evo -p TB add …`，15 秒仍卡住。
+- **附带问题**：这个分支里配置只在启动时读一次（`CFG`、`_UI`、`_ARCH` 缓存）。面板和 App 改的模型、目标、预设，要等常驻进程重启才生效。这和文档写的「下一次派工生效」不符。
+- **修法**：`cmd_run` 一律每轮起子进程 `evo -p &lt;代号&gt; once`（多项目分支已有现成写法）。锁随子进程退出自动释放，配置每轮重新读。另外把 `lock()` 改成上下文管理器，`cmd_tick` 结束就释放。补测试：起常驻，同时 `approve` 必须在 5 秒内返回。
+- **工作量**：S
+- **拍板**：不用
+
+### L-02 只读命令也抢写锁：tick 期间 App、面板、bot 读不到状态
+- **类型**：确定的 bug
+- **环节**：App 与 evo 接口 / 可观测性
+- **现象**：`evo status --json` 走 `load()`，要拿写锁；tick 里含整套测试（合并前、推送前、建上线闸门都跑），一轮可能十几分钟。这段时间 App（status 超时 60 秒）显示「evo 跑不起来」，面板空白，Telegram bot 的 `gate_options` 读不到闸门，回「已经处理过或不存在」。项目处于 `PAUSED` 时 `load()` 直接退出，status 报错，老板正需要看的时候反而看不到。`cmd_status` 还会调 `coord()`，Orca 里协调终端没了就顺手新建一个：读命令有副作用。
+- **证据**：`kit/bin/evo:3487-3492`、`kit/bin/evo:219-223`（PAUSED 直接退出）；App 侧 `app/Sources/Evo/AppState.swift:179`（timeout 60）；bot 侧 `kit/bin/evo_notify.py:375-382`。`read_state_ro()` 已存在（`kit/bin/evo:2713`），只给了 `log` 用。
+- **修法**：`status`、`digest` 打印、bot 查闸门全部改用 `read_state_ro()`；闸门列表用 `s[&quot;coord&quot;]` 只读查询，查不到就标 `gates_stale: true`，不新建终端。status JSON 加 `paused`（原因文本）和 `tick_running`（锁被占且持有多久），schema 仍为 1，只加字段。App 收到 `paused` 显示「暂停：原因」，不显示出错。
+- **工作量**：S–M
+- **拍板**：不用
+
+### L-03 绕过 evo 结的闸门，evo 不看结果：打回照样合并
+- **类型**：确定的 bug（假 Orca 实测；真 Orca 解锁规则待真机确认）
+- **环节**：老板闸门 / 部署 / 密钥与权限
+- **现象**：evo 只在 `evo approve` 里处理闸门的选择。老板在 Orca 手机 App 上点（README 第 4 步就让老板配手机），或者工人自己调 `orca orchestration gate-resolve`，Orca 只是把闸门结掉、任务解锁，evo 不读结果：
+  - 看效果点「打回」→ 合并任务变 ready → evo 照常合并并推送（实测：状态 merged、已推送）。
+  - 做不做点「不做」→ 施工任务变 ready → evo 照常开工。
+  - 上线闸门点「上线」→ evo 什么也不做，件上的 `ship_gate` 一直留着，`ship_batch` 永远不再收这些件，`merged` 是安静状态也不查活路：从此卡在「可收菜」。
+  - 施工、验收工人跑在同一台机器上，能调 orca 命令，被不可信 issue 注入后可以自己批自己的看效果闸门。
+- **证据**：`kit/bin/evo:1966-1968`（verified 且合并任务 ready 就合并，不核对是谁、选了什么）、`kit/bin/evo:1969-1971`（只认施工任务 failed 才算不做）、`kit/bin/evo:3699-3705`（已挂 ship_gate 的件不再入批）；假 Orca `kit/tests/fakes/orca:49-54`（任何结果都解锁）。复现 `t_phone.py`。
+- **修法**：
+  1. 合并前置条件：看效果件必须有 `it[&quot;look_ok&quot;] == 当前 look 闸门号`，只在 `cmd_approve` 选「通过」时写入（L-16 防住工人冒充之后）。
+  2. 每轮读 `gate-list` 的 `resolution`：发现没经过 evo 就结掉的闸门，按拍板规则处理。「打回」→ 照 approve 打回流程走（原话写「手机端打回，未写原因」）；「不做」→ drop；「上线」或「通过」→ 见拍板。处理完记时间线 `gate_external`。
+  3. 上线闸门在 Orca 被结掉而 evo 没处理时，清掉件上的 `ship_gate`，让下一批能重新收。
+  4. 补测试：手机端打回、手机端不做、手机端上线三条。
+- **工作量**：M
+- **拍板**：**要**（产品体验 + 线上）。问题：Orca 端点「通过 / 上线」算不算数？推荐：打回、不做照办；通过、上线不自动执行，推一条「请在 Telegram / App / 面板确认」，因为工人也能调 orca 命令。
+
+### L-04 一条消息处理出错，整个项目每轮崩（毒消息）
+- **类型**：确定的 bug（已实测）
+- **环节**：崩溃、重启、重复投递幂等 / 施工 / 验收
+- **现象**：`cmd_tick` 先 `handle_msg()`，成功后才把消息号记进 `msg_seen`。`handle_msg` 里只要抛异常，这条消息就不会记成已处理。例如 git 读不到工作区、未跟踪文件冲突、Orca 字段缺失。下一轮重投、再崩，循环不会结束，心跳也停。真 Orca 的消息若没有 `id` 字段（README 列为待验），重投直接复现：合并后工作区已删，重投的「验收通过」去跑 `git rev-parse`，每轮抛 RuntimeError。另外 `handle_msg` 不核对消息属于哪一次派工、件当前是什么状态：一条迟到的「验收通过」能把已合并的件改回 `verified`。
+- **证据**：`kit/bin/evo:1810-1820`、`kit/bin/evo:1894`（验收通过分支不看状态）、`kit/bin/evo:1966-1968` 里 `merge_one` 也没有异常隔离。复现 `t_noid.py`（去掉消息 id + 确认丢失）：第 2 轮起 tick 每次退出码 1，报 `cannot change to …/worktrees/ab-fix-001`。
+- **修法**：
+  1. 每条消息套 `try/except`：出错也记进 `msg_seen`。
+  2. 同时写时间线 `msg_error`（含异常摘要），交决策岗一次，再处理下一条。
+  3. 只接受「本次派工」的回报：`worker_done` 必须满足 `tid == it[role]` 且状态是 `building` / `verifying`，否则记 `msg_stale` 后丢弃。
+  4. 没有消息号时用 `(task_id, type, outcome, body 的 sha1)` 生成替代号去重。
+  5. `merge_one`、`do_push` 按件套异常隔离，失败的件转 `escalated` 并写明原因，不影响别的件和心跳。
+- **工作量**：S–M
+- **拍板**：不用
+
+### L-05 远端主线红了，在途的件全被当成自己的错返工
+- **类型**：确定的 bug（已实测）
+- **环节**：合并 / 推送 / 成本
+- **现象**：别人往远端推了一个让测试变红的提交（或者「并入远端后测试红」）。`do_push` 已把远端合进本地 main，测试红就停在那，每 30 秒重试一次，每次重跑全量测试，没有退避。之后每件合并前在本地 main 上测试都是红的，被判「合并前测试不绿 → 自动返工」。任务书还叫施工「把测试修绿」，施工只能越界改别处或空转。2 轮后交决策岗。
+- **证据**：`kit/bin/evo:663-677`（并入远端、测红留标记、每轮重测）、`kit/bin/evo:612-617`（合并前测红一律算本件返工）。复现 `t_red.py`：远端带红后，新登记的 AB-FIX-002 返工 3 轮进 escalated，日志「推送未成」13 次。
+- **修法**：
+  1. 合并前测红时，先在当前 main（不含本件）上跑一次，按 main 的提交号缓存结果。
+  2. main 本身就红：本件进「等主线修绿」，不算轮次、不返工。
+  3. 全项目只登记一件 `OPS` 修主线，推一次 `main_red`。
+  4. 推送重试按远端提交号去重：远端没变、本地没变，就不再重跑测试；失败间隔 1、2、4…最长 30 分钟。
+  5. `waiting` 加 `main_red`，App 和面板显示「等主线修绿」。
+- **工作量**：M
+- **拍板**：不用
+
+### L-06 外部命令几乎都不设超时，一处卡住全机停
+- **类型**：确定的 bug
+- **环节**：长时间卡住检测 / 多项目互相影响
+- **现象**：只有 `orca()` 设了 120 秒超时，而且超时抛的 `TimeoutExpired` 不是 `SystemExit`，单项目常驻循环接不住，进程直接退出（靠 launchd 拉起）。`git`（含 fetch）、`gh`、`test_cmd`、`push_cmd`、`deploy_cmd`、多项目常驻里每个项目的 `once` 子进程都不设超时。一套测试卡住 → 全局 `SUITE_LOCK` 被占 → 所有项目的合并、推送都在等；多项目循环是串行的，一个项目卡住别的项目也不转。看门狗能发现「停了」，但没有任何自动恢复。
+- **证据**：`kit/bin/evo:195`（orca 超时未捕获）、`:423-427`（git）、`:700-711`（run_suite 持锁无超时）、`:657`、`:679`、`:3669`、`:2988`（once 子进程）。
+- **修法**：加 `limits.timeouts`（建议默认：test 30 分钟、git 网络 3 分钟、git 本地 1 分钟、gh 1 分钟、push 5 分钟、deploy 20 分钟、单项目一轮 45 分钟）。统一用 `start_new_session=True` 起子进程，超时就杀整个进程组。`orca()` 捕获 `TimeoutExpired` 和 `FileNotFoundError` 并转成 SystemExit。超时按「这一步失败」处理：测试超时算红，推送超时算推送未成，once 超时记一次并推送 `tick_timeout`。
+- **工作量**：M
+- **拍板**：不用
+
+### L-07 TB 的 fetch 不走代理，国内直连 GitHub 推不上去
+- **类型**：真机才能验证的风险（代码事实确定，影响看 Mac mini 网络）
+- **环节**：推送
+- **现象**：土布的 `push_cmd` 自带 `HTTPS_PROXY=socks5h://127.0.0.1:1082`，说明直连 GitHub 不通；但 `do_push` 在推送前先跑一句不带代理的 `git fetch origin`，失败就算推送未成，每轮重试，第 3 次推送「推送连续失败」；没有超时时还可能直接挂住（叠加 L-06）。`gh` 命令同样只认常驻进程的环境变量。
+- **证据**：`kit/profiles/tubu/project.json`（push_cmd）、`kit/bin/evo:657`。
+- **修法**：项目配置加 `git_env`（例如 `{&quot;HTTPS_PROXY&quot;: &quot;socks5h://127.0.0.1:1082&quot;}`），所有 git 网络操作和 gh 调用都带上；或在 `evo import` 时检测 push_cmd 里的代理，提示写进仓库的 `http.proxy`。`evo doctor`（见 L-19）里加一项「fetch 能不能通」。
+- **工作量**：S
+- **拍板**：不用
+
+## C 中严重度（14 条）
+
+### L-08 决策岗批次自己卡住没人管
+- **类型**：确定的 bug
+- **环节**：决策岗 / 长时间卡住检测
+- **现象**：决策岗任务一直处于 `dispatched`（工人挂了或在等权限弹窗），`decider_wake` 每轮看到「上一批没做完」就直接返回，永远不再叫；`live_path` 又把「决策岗正在看」算成有活路，不报警。`check_stalls` 只管施工和验收。结果：所有交决策岗的件悄无声息地停住。
+- **证据**：`kit/bin/evo:1715-1719`、`:2404-2406`、`:2053-2056`。
+- **修法**：`limits.decide_timeout_minutes`（默认 45）：超时就关终端、任务标 failed、记 `decider_timeout`、推一次「决策岗卡住」，`decide.last` 清零让下一轮重叫；同一批连续超时 2 次再转老板。决策岗工人也走 `worker-show` 死活检查。
+- **工作量**：S
+- **拍板**：不用
+
+### L-09 Orca 重启或协调终端丢失后，在途任务可能全部变成孤儿
+- **类型**：真机才能验证的风险
+- **环节**：Orca 消息丢失 / 崩溃重启
+- **现象**：`coord()` 发现协调终端不在了就新建一个，再 `run-create` 一个新 run。若真 Orca 的 `task-list --from` 按终端或 run 隔离，旧任务全查不到，所有件变 `task_dead`；30 分钟后每件各进一次「没有活路」，决策岗被逐件叫去返工，浪费一整轮额度。旧终端收件箱里没确认的回报也丢了。假 Orca 的 task-list 不分 run，测不到。
+- **证据**：`kit/bin/evo:430-439`；`kit/tests/fakes/orca`（task-list 返回全部任务）。
+- **修法**：状态里记 `run_id`。重建协调终端后，先核对已知任务号能否查到。查不到就整项目 `PAUSED`（写清原因）并推一次，不让无活路检查逐件报警；查得到就继续。真机上按 README 第 15 节补测「关掉 Orca 再打开」。
+- **工作量**：M
+- **拍板**：不用
+
+### L-10 Orca 丢了 worker_done 时不对账
+- **类型**：真机才能验证的风险
+- **环节**：Orca 消息丢失 / 施工 / 验收
+- **现象**：工人已经交卷，Orca 里任务是 `completed` / `failed`，但回报消息没送到 evo。evo 仍认为在施工：15 分钟后推「疑似卡住」，`check_stalls` 看到任务已完成就不重启，30 分钟后进「没有活路」交决策岗。活其实已经做完。
+- **证据**：`kit/bin/evo:2071-2087`。
+- **修法**：`check_stalls` 发现任务已是 completed / failed，但本次派工的回报没处理过。这时用 `task-show` / `dispatch-show` 取结果正文，合成一条消息走 `handle_msg`（受 L-04 的派工核对保护），时间线记 `reconciled`。
+- **工作量**：S–M
+- **拍板**：不用
+
+### L-11 交决策岗可以无限循环，用量只提醒不拦
+- **类型**：确定的 bug
+- **环节**：决策岗 / 成本与用量
+- **现象**：`decide_rework` 每次把轮次清零，次数只记不限；施工 2 轮不过 → 决策岗返工 → 再 2 轮 → 再交决策岗……没有尽头。`usage_abnormal` 每件只推一次，推完照跑。optimization-review E 段「每件时长、轮数硬上限」至今没做。
+- **证据**：`kit/bin/evo:2181-2188`、`:1016-1029`。
+- **修法**：`limits.decider_reworks`（默认 2），超了自动转 `ask_owner`；`limits.item_hard_runs` / `item_hard_minutes`（默认 0 = 关）：超了把件转「等你：继续还是不做」闸门，不再派工。
+- **工作量**：S
+- **拍板**：**要**（花钱）。推荐：决策岗返工最多 2 次后转老板；单件派工超过 12 次或工人累计 6 小时，暂停等老板点「继续」。
+
+### L-12 上线批次和实际部署的代码不一致，也没有回滚
+- **类型**：确定的 bug（TB 现在 `deploy_cmd` 为空，暂不触发）
+- **环节**：部署 / 回滚
+- **现象**：上线闸门建好时记的是一批件，`deploy_cmd` 却在主工作区当前 HEAD 上跑。闸门建好后才合并的件会一起上线，本地已合并、未推送的件也会。可是只有闸门里的件标「已上线」，其余件留在「可收菜」，下一批再「上线」一次。整个流程没有 `rollback`：上线后发现坏了，只能手动处理。TB 的 `deploy_cmd` 是空字符串，点「上线」只是改标签。
+- **证据**：`kit/bin/evo:3699-3716`（建闸门不记提交号）、`:3660-3682`（在 `CFG[&quot;repo&quot;]` 里跑 deploy_cmd）。
+- **修法**：建上线闸门时记 `ship_sha`（要求等于已推送的远端提交）；部署时在临时 worktree 里检出这个提交，传环境变量 `EVO_SHIP_SHA`；部署成功后把提交号是 `ship_sha` 祖先的件全部标已上线。加可选的 `rollback_cmd` 和 `evo rollback [批次]`（同样走老板闸门），以及可选的 `healthcheck_cmd`（失败只推送，回不回滚由老板点）。
+- **工作量**：M
+- **拍板**：**要**（线上变更），可以等 TB 真有部署时再定；推荐先只做 `ship_sha`，回滚做成老板手动点。
+
+### L-13 推送会丢：通道都失败不重试，早间汇总先删后发
+- **类型**：确定的 bug
+- **环节**：推送通知 / 早报
+- **现象**：`deliver()` 里 Telegram 和邮件都失败（代理断、SMTP 挂），事件只剩 outbox，没人再发。`flush_digest()` 先删 `held` 文件再发送，发失败时整夜攒的事件全部丢失。每个闸门只提醒一次（`gate_pushed`）。那次没送到或老板没看到，就再也不提醒。闸门越堆越多，最后只触发「等你超过 5 件暂停新施工」。
+- **证据**：`kit/bin/evo_notify.py:173-187`、`:240-276`；`kit/bin/evo:1694-1705`。
+- **修法**：加 `retry.jsonl` 队列：投递失败的要推事件按 1、5、30 分钟重试，超过 6 小时并进下一次汇总；`held` 改成发送成功后再删（失败就改名回去）。闸门提醒分级：5 分钟、2 小时，之后每天早报再带一次；暂停新施工时单独推一次「等你的已有 N 件，新施工已暂停」。
+- **工作量**：M
+- **拍板**：不用
+
+### L-14 早报承诺和实现不符
+- **类型**：确定的 bug（文档与行为不一致）
+- **环节**：早报
+- **现象**：loop-topology E 段写「8:30 Telegram 晨报：等你 1 件，可收菜 2 件」。实际 08:30 只在夜里攒了要推的事件时才发；夜里平静就没有早报。23:30 的晚间汇总 `digest_nightly` 不在要推的类型里，只走邮件。老板每天早上得不到一条固定的总览。
+- **证据**：`kit/bin/evo_notify.py:242`（没有 held 文件直接返回 0）、`kit/bin/evo:2899-2903`、`docs/loop-topology.md` E 段。
+- **修法**：08:30 固定发一条「早报」，全部项目合起来。内容：等你点头的件和按钮、可收菜、卡住或没活路、昨日合并数、额度暂停。再附夜里攒下的事件；全空就不发。复用 `status_doc`，不另写统计。
+- **工作量**：S–M
+- **拍板**：不用（发送时间和内容沿用已批的 08:30 汇总）
+
+### L-15 主动暂停也会被报「接棒器停了」
+- **类型**：确定的 bug
+- **环节**：可观测性 / App 接口
+- **现象**：App 的「暂停循环」是 `launchctl bootout` 掉常驻进程。`evo bot` 里的看门狗和 App 自己调的 `evo watchdog` 不知道这是主动暂停，10 分钟后推「接棒器停了，看看常驻进程、Orca 和 Mac 是否睡着」。项目因状态损坏 `PAUSED` 时也报同一句话，原因说错。
+- **证据**：`kit/bin/evo:3761-3786`；`app/Sources/Evo/Shell.swift:132-141`、`AppState.swift:230`。
+- **修法**：加 `evo pause [--all|-p 代号] [原因]` / `evo resume`，写 `~/.evoloop/PAUSED` 或项目 `PAUSED`；App 的暂停改为调用它（再 bootout 也行）。看门狗跳过暂停中的项目，status 里给出暂停原因；项目 `PAUSED` 时看门狗的消息写明原因。
+- **工作量**：S
+- **拍板**：不用
+
+### L-16 工人能冒充老板：EVO_AGENT 只是约定
+- **类型**：确定的 bug（被利用要靠提示词注入，属于真机风险）
+- **环节**：密钥与权限
+- **现象**：施工、验收、决策工人跑在 Orca 终端里，环境变量里没有 `EVO_AGENT`，用的是老板的 `gh` 登录。被不可信 issue 带偏的工人可以：跑 `evo -p TB approve &lt;看效果闸门&gt; 通过` 或 `evo ship`；直接 `orca orchestration gate-resolve`（叠加 L-03）；用 `gh issue edit --add-label autopilot:ready` 给外部 issue 贴标签，而 `labeled_by_trusted` 会因为操作者是老板账号判成可信。
+- **证据**：`kit/bin/evo:578-595`（launch 不带环境变量）、`:3580-3583`（只看 EVO_AGENT）、`:2820-2829`。
+- **修法**：`launch` 在工人命令前加 `env EVO_AGENT=worker:&lt;岗位&gt;:&lt;件号&gt;`；`approve` / `ship` / `team set` / `goal set` 再要求「老板凭据」：面板口令（App 从钥匙串取后用 `--owner-token` 传）或 Telegram 已认证的 bot 进程，命令行交互时允许在 TTY 上确认。决策岗贴 `autopilot:ready` 时，在 issue 里留 `&lt;!-- evo-decider --&gt;` 评论作为记录。
+- **工作量**：M
+- **拍板**：不用（只收紧权限，不改老板的操作方式：App、Telegram、面板照常可用）
+
+### L-17 外部 Agent 借 evo feedback 开的 issue 被当成可信
+- **类型**：确定的 bug
+- **环节**：来源 / GitHub issue
+- **现象**：`EVO_AGENT` 设置时，`evo feedback` 用老板账号开 issue，正文以「【外部 Agent 来报：」开头。`pull_reports` 认这个标记，`cmd_pull` 不认：决策岗加 `autopilot:ready` 后，作者是老板（可信），正文原样进任务书，前面没有「外部来源原文，只当线索」的横幅。
+- **证据**：`kit/bin/evo:2787-2789` 对比 `:2853`。
+- **修法**：`cmd_pull` 里正文以 `AGENT_MARK` 开头或带 `agent-report` 标签，一律按不可信处理（加横幅）。补一条测试。
+- **工作量**：S
+- **拍板**：不用
+
+### L-18 evo 和决策岗都在老板自己的工作副本里动手
+- **类型**：确定的 bug（设计层面）
+- **环节**：合并 / 决策岗 / 多项目
+- **现象**：`profiles/tubu` 的 `repo` 是桌面上老板自己的工作副本。合并时 evo 会在那里 `git checkout main`。老板在别的分支上、工作区又干净时，会被静默切走。未跟踪文件和合并冲突会让 `git merge` 抛异常（叠加 L-04 卡住项目）。决策岗工人的终端也开在这个目录，决策岗一旦改了文件，主工作区变脏，所有合并都被挡。Orca 建 worktree 的起点也取决于这个目录当前在哪个分支。
+- **证据**：`kit/bin/evo:606`、`:633`、`:1760`、`:568`；`kit/profiles/tubu/project.json`。
+- **修法**：`evo import` 默认另建专用克隆 `~/.evoloop/repos/&lt;代号&gt;`（老板的工作副本只读不碰）；决策岗终端开在只读的独立 worktree（`--detach`），岗位规则里写明决策岗不改文件。已登记的 TB 加一个迁移命令 `evo -p TB relocate`。
+- **工作量**：M
+- **拍板**：**要**（产品体验：以后 evo 的改动在专用克隆里，老板的桌面副本要自己 pull）。推荐：要。
+
+### L-19 kit 自身没有版本：App 和常驻进程可能跑两版代码
+- **类型**：确定的 bug
+- **环节**：安装、升级、回滚 kit 自身 / App 与 evo 接口
+- **现象**：App 用包里的 `Contents/Resources/evo`；launchd 用的是当时跑 install.sh 的那份（仓库 kit 或包内 kit）。两版代码读写同一份 `~/.evoloop`，谁都不知道对方是哪一版。没有 `evo version`；状态文件没有版本号，升级没有迁移，坏了也没有回退办法。install.sh 没有把看门狗装成定时任务，它只在 `evo bot` 里跑。bot 只在设了 Telegram 变量时才装，所以没配 Telegram 就没有看门狗。README 里提到的 StartInterval 300 并不存在。
+- **证据**：`app/Sources/Evo/Shell.swift:17-37`；`kit/install.sh:103-133`（只装 autopilot 和可选 bot）；`grep -n version kit/bin/evo` 只有 status 的 schema_version。
+- **修法**：加 `kit/VERSION`，`evo version --json`，status JSON 里加 `kit_version` 和 `kit_path`；App 发现和常驻进程版本不一致就提示「用包里的版本重装常驻」。状态加 `schema` 字段，读到更高的版本就拒绝写入。install.sh 增加 `com.evoloop.watchdog`（StartInterval 300，不依赖 Telegram）。加 `evo doctor`：一次查 python、git、gh 登录、fetch 能不能通、Orca、magpie、launchd 三个常驻、版本是否一致。
+- **工作量**：M
+- **拍板**：不用
+
+### L-20 拉取入口出错会拖垮整轮，gh 失效时没有提醒
+- **类型**：确定的 bug
+- **环节**：来源 / GitHub issue
+- **现象**：`cmd_once` 先 `cmd_pull` 再 `cmd_tick`。gh 输出不是 JSON（网络错误页、限流）时，`json.loads` 抛 ValueError，本轮的合并、推送、心跳都不做。反过来，gh 登录过期时 `stdout` 为空，`json.loads(&quot;[]&quot;)` 正常返回，入口安静地什么都拉不到，没有任何提醒。
+- **证据**：`kit/bin/evo:2978-2981`、`:2766-2771`、`:2350`、`:2825`。
+- **修法**：`cmd_pull` 整体包在 try 里；检查 `returncode`，失败计数，连续 3 轮失败推一次 `intake_down`（恢复后记 `intake_up`）；`cmd_tick` 无论 pull 成败都要跑。
+- **工作量**：S
+- **拍板**：不用
+
+### L-21 停滞阈值 15 分钟对真模型偏短
+- **类型**：真机才能验证的风险
+- **环节**：施工 / 长时间卡住检测 / 推送通知
+- **现象**：`idle` 只看收到的消息。若真 Orca 不替工人发心跳，任何超过 15 分钟的施工都会被推「疑似卡住」；`live_path` 把 stalled 算成没有活路，30 分钟后又交决策岗。白天会频繁打扰老板。
+- **证据**：`kit/bin/evo:2066`、`:2082-2085`、`:2381-2382`。
+- **修法**：先在真机确认 Orca 心跳频率。不管有没有心跳，都把「终端输出在变」算作活着（每轮对 `terminal_tail` 取哈希，变了就刷新 `last_seen`）；默认 `stall_minutes` 改 30。
+- **工作量**：S
+- **拍板**：不用
+
+## D 低严重度（9 条）
+
+| 编号 | 环节 | 现象 | 证据 | 修法 | 工作量 |
+|---|---|---|---|---|---|
+| L-22 | 日志与可观测性 | `s[&quot;log&quot;]` 只留 200 行，推送失败每 30 秒一行就能刷满；夜审和晚间汇总按 `s[&quot;log&quot;]` 取当天事件会漏。`state/logs`、`outbox.jsonl`、`timeline.jsonl`、`~/.evoloop/logs/*.log` 都没有轮转 | `kit/bin/evo:248`、`:2890-2893`、`:2910-2912` | 夜审和汇总改读 timeline；同一句日志连续重复只记次数；日志按天轮转，保留 14 天 | S |
+| L-23 | 来源 | `gh issue list --limit 50`：已登记、没上线的 issue 仍开着且带 `autopilot:ready`，超过 50 件后新 issue 永远拉不到 | `kit/bin/evo:2766-2767` | 登记后贴 `evo:registered` 标签，查询加 `-label:evo:registered`；或分页 | S |
+| L-24 | 推送通知 | bot 打回后等原话没有过期，几小时后随手一句话会被当成原话；`run_evo` 超时抛异常让 bot 进程退出，那次按钮丢失也没回话 | `kit/bin/evo_notify.py:361-366`、`kit/bin/evo:3405-3407` | 等原话 10 分钟过期；捕获超时，回「evo 正忙，稍后再点」 | S |
+| L-25 | 老板闸门 | 自动收菜在 08:20 遇到主线红就当天不再试（先写了 `auto_ship_day`） | `kit/bin/evo:3729-3735` | 只有建成闸门或「已有闸门」时才记当天 | S |
+| L-26 | 并发 | App「立即 tick」和常驻进程同时转不同项目时，`other_projects_load` 不加锁，整机施工上限可能多 1 | `kit/bin/evo:1938-1940` | 整机施工名额用 `~/.evoloop/slots.lock` 分配 | S |
+| L-27 | 施工 | 模型写成单个 magpie 组名时，返工「换一个施工模型」不起作用 | `kit/bin/evo:557-563` | 文档写明；或返工时改用卡片的 fallback | S |
+| L-28 | 测试覆盖 | 2 核沙箱单个测试文件要 80 秒或更久，全套约 220 个无法在 2 分钟内跑完；没有并行 | 本次实测（`/tmp/pt/*.log`） | 加 pytest-xdist；把慢的端到端测试标 `slow`，提交前先跑快集 | S |
+| L-29 | 崩溃安全 | `save()` 写临时文件不 fsync，断电后可能出现空文件，被判损坏进入暂停 | `kit/bin/evo:238-243` | `flush` + `os.fsync`；保留 `state.json.prev`，损坏时先自动用上一版并推送 | S |
+| L-30 | 来源 | 拓扑图里的「CI 与线上报警 → issue」还没有接入代码 | `docs/loop-topology.md` B 段 | 加 `evo intake ci --run &lt;url&gt;` 或 GitHub Actions 失败时用 `gh issue create` 贴 `type:ops` | S–M |
+
+## E 测试覆盖缺口
+```callout info 假 Orca 是同步的，所以「时序」一类问题都测不到
+假 Orca 在 dispatch 时同步跑完假工人，回报在同一轮就到；任何闸门结果都解锁；task-list 不分 run；消息都有 id。下面这些只在假 Orca 下测过，或完全没测。
+```
+
+| 场景 | 现状 | 建议补的测试 |
+|---|---|---|
+| `evo run` 常驻循环（单项目 / 多项目） | 没有测试 | 起常驻，同时 approve / status 必须在 5 秒内返回（L-01、L-02） |
+| 绕过 evo 结闸门 | 没有测试 | 手机端打回、不做、上线（L-03） |
+| 消息无 id、毒消息、迟到消息 | 只测了有 id 的重投 | 去掉 id + 不确认；handle_msg 抛异常（L-04） |
+| 远端主线红 | 只测了远端前进后测绿 | 远端带红提交（L-05） |
+| 外部命令超时 | 没有测试 | 假 test_cmd `sleep 999`、假 gh 挂住（L-06） |
+| 协调终端丢失、Orca 重启 | 没有测试 | 假 Orca 加「按 run 隔离」开关（L-09） |
+| 回报丢失、对账 | 没有测试 | 假 Orca 加「丢消息」开关（L-10） |
+| 推送通道失败重试、汇总发送失败 | 只测了成功路径 | http 返回 500（L-13） |
+| App 与 evo 版本不一致 | 没有测试 | `evo version --json` 契约测试（L-19） |
+| 工人时序（交卷与 tick 并发） | 假工人同步，测不到 | 假 Orca 加「延迟到下一轮再送」开关 |
+| kit 测试在 macOS 上跑 | kit-tests 只跑 ubuntu | kit-tests 加 macos-14（optimization-review E 段旧项） |
+
+## F 建议下一轮做的 8 条
+```callout ok 先保证「不卡死、不误合并」，再做「不误伤、不白跑」
+按顺序做，每条配复现测试（附录的 4 段脚本可以直接改成 pytest）。前 4 条都是 S 到 M，一天内能做完。
+```
+
+| 顺序 | 编号 | 一句话 | 工作量 |
+|---|---|---|---|
+| 1 | L-01 | 常驻进程每轮起子进程，锁随一轮释放 | S |
+| 2 | L-02 | status 和查闸门改只读，不抢锁；status 给出暂停原因 | S–M |
+| 3 | L-04 | 每条消息异常隔离，只认本次派工的回报 | S–M |
+| 4 | L-03 | 合并前核对老板是否真的点了通过；读 Orca 闸门结果（先等拍板） | M |
+| 5 | L-06 + L-07 | 外部命令加超时；git 和 gh 带项目代理 | M |
+| 6 | L-05 | main 本身红就不算本件返工；推送重试退避 | M |
+| 7 | L-08 | 决策岗批次超时重叫 | S |
+| 8 | L-20 | 拉取出错不拖垮整轮，gh 失效推提醒 | S |
+
+紧接着做：L-16（工人冒充老板）、L-13（推送重试）、L-19（版本和看门狗常驻）、L-14（固定早报）。
+
+## G 需要老板拍板（3 个，附推荐默认）
+
+| # | 问题 | 推荐默认 | 关联 |
+|---|---|---|---|
+| 1 | Orca 手机端点「通过 / 上线」算不算数？ | 打回、不做照办；通过、上线不自动执行，推一条请在 Telegram / App / 面板确认（工人也能调 orca 命令） | L-03、L-16 |
+| 2 | evo 改用专用克隆，不再动桌面上的工作副本？ | 要。以后 evo 的改动在 `~/.evoloop/repos/TB`，老板的桌面副本自己 pull | L-18 |
+| 3 | 给每件设硬上限？ | 决策岗返工最多 2 次后转老板；单件派工超过 12 次或工人累计 6 小时就暂停，等老板点「继续」 | L-11 |
+
+回滚上线（L-12）等 TB 真配了 `deploy_cmd` 再问。
+
+## H 附录：复现脚本（放在 kit 目录下运行）
+4 段脚本都用 `kit/tests/conftest.py` 的 `Loop` 夹具（假 Orca、临时仓库、裸远端），本次放在沙箱 `/tmp/audit/`，没有提交。要点如下，可以直接改成 pytest：
+
+- **t_lock.py（L-01）**：只建一个项目 TB，后台 `evo run --every 2`，8 秒后 `evo -p TB add …` 设 15 秒超时 → 超时。
+- **t_phone.py（L-03）**：建 `--look` 件，跑到 verified，用假 orca `orchestration gate-resolve --id &lt;看效果闸门&gt; --resolution 打回`，再 tick 3 次 → 件为 merged 且已推送。
+- **t_noid.py（L-04）**：PATH 前面放一个包装 orca，把 check 结果里的消息 `id` 去掉，并设 `FAKE_ORCA_NO_ACK=1` → 第 2 轮起 tick 退出码 1（`cannot change to …/worktrees/…`）。
+- **t_red.py（L-05）**：`test_cmd=&quot;test ! -f BROKEN&quot;`，从另一个克隆往远端推一个带 BROKEN 文件的提交；登记第一件后跑 5 轮，再登记 `api/` 范围的第二件跑 10 轮 → 第二件 round 3、escalated，「推送未成」13 次。
+</textarea>
+<script>
+(() => {
+// How a formula reads in a quote. MathML has no plain text, so src/math.js writes the formula as the draft wrote it, delimiters included, in
+// data-am-tex on the <math> element, and the Remark and Reply scripts read page text through this file. On a page without math there is no
+// such element, so formulaOf is null and every text comes out as it did before.
+// A plain ES module for tests; the page gets it with its `export` keyword dropped (src/runtime/compose.js).
+
+const TEX = 'data-am-tex';
+
+// The formula that holds a node, or null.
+const formulaOf = (node) => node.parentElement?.closest(`[${TEX}]`) ?? null;
+
+const firstText = (el) => {
+  for (const child of el.childNodes) {
+    const found = child.nodeType === 3 ? child : firstText(child);
+    if (found) return found;
+  }
+  return null;
+};
+
+// What a text node adds to a quote: its data. The first text node of a formula adds the formula, and the others add nothing.
+// (A formula in an error style is plain text with its delimiters, not a <math>, so it comes out once.)
+function nodeText(node) {
+  const math = formulaOf(node);
+  if (!math) return node.data;
+  return firstText(math) === node ? math.getAttribute(TEX) : '';
+}
+
+// The text of a node as textContent reads it, but with each formula as written.
+const textWithMath = (node) => (node.nodeType === 3 ? nodeText(node) : [...node.childNodes].map(textWithMath).join(''));
+
+(() => {
+  const root = document.documentElement;
+  // A host that serves this page inside its own document leaves the real root without the page's settings. The toolbar keeps a copy;
+  // set back what the root lacks, before anything below reads the root. A root's own value, even an empty one, is never replaced.
+  const carrier = document.querySelector('.am-toolbar');
+  for (const [attr, key] of [['lang', 'data-am-root-lang'], ['dir', 'data-am-root-dir'], ['data-theme', 'data-am-root-theme'], ['data-mode', 'data-am-root-mode'], ['data-style', 'data-am-root-style']]) {
+    if (root.getAttribute(attr) === null && carrier?.getAttribute(key) != null) root.setAttribute(attr, carrier.getAttribute(key));
+  }
+  // Each toolbar list sets one root attribute; its options name the values, so the runtime names no theme or mode.
+  for (const [name, attr] of [['theme', 'data-theme'], ['mode', 'data-mode']]) {
+    const select = document.querySelector(`select[data-am="${name}"]`);
+    if (!select) continue;
+    select.value = root.getAttribute(attr);
+    select.addEventListener('change', () => root.setAttribute(attr, select.value));
+  }
+
+  // ── Text size ─────────────────────────────
+  // A− / A+ set --am-scale on the root; every page size and line (src/themes/type-scale.js) follows it, and the drawing boxes grow
+  // with it while their viewBox keeps the units Node measured. The buttons carry the range from SCALE, so this script keeps no
+  // second copy of the numbers. A reader's choice is remembered in this browser and wins over the page's own scale; where storage
+  // is off (am serve, file://) it lasts for this tab, and the click still works.
+  const scaleDown = document.querySelector('[data-am="scale-down"]');
+  const scaleUp = document.querySelector('[data-am="scale-up"]');
+  if (scaleDown && scaleUp) {
+    const min = Number(scaleDown.dataset.min);
+    const max = Number(scaleDown.dataset.max);
+    const step = Number(scaleDown.dataset.step);
+    const storeKey = 'am-scale';
+    let value;
+
+    const inRange = (n) => Number.isFinite(n) && n >= min && n <= max;
+    const savedScale = () => {
+      try {
+        return Number(localStorage.getItem(storeKey));
+      } catch {
+        return NaN;
+      }
+    };
+    const saveScale = (n) => {
+      try {
+        localStorage.setItem(storeKey, String(n));
+      } catch {
+        // Storage may be off (am serve, file://); the size then lasts until the tab closes.
+      }
+    };
+
+    const updateButtons = () => {
+      const setUnavailable = (btn, unavailable) => {
+        if (unavailable) btn.setAttribute('aria-disabled', 'true');
+        else btn.removeAttribute('aria-disabled');
+      };
+      setUnavailable(scaleDown, value <= min);
+      setUnavailable(scaleUp, value >= max);
+    };
+
+    // One step is a multiple of `step`: Math.round first, then two decimals, so 1.1500000000000001 becomes 1.15.
+    const setScale = (next, remember = false) => {
+      value = Math.min(max, Math.max(min, Number((Math.round(next / step) * step).toFixed(2))));
+      root.style.setProperty('--am-scale', String(value));
+      for (const svg of document.querySelectorAll('.am-diagram:not(.am-lightbox-canvas) > svg[role="img"]')) {
+        const box = svg.viewBox?.baseVal;
+        if (!box || !(box.width > 0) || !(box.height > 0)) continue;
+        svg.setAttribute('width', String(Math.ceil(box.width * value)));
+        svg.setAttribute('height', String(Math.ceil(box.height * value)));
+      }
+      updateButtons();
+      if (remember) saveScale(value);
+      window.dispatchEvent(new Event('am-scale'));
+    };
+
+    // A page with no stored choice is left exactly as it was rendered: no inline variable, no svg rewrite, no extra layout pass.
+    value = parseFloat(getComputedStyle(root).getPropertyValue('--am-scale')) || 1;
+    updateButtons();
+    const saved = savedScale();
+    if (inRange(saved) && saved !== value) setScale(saved);
+    scaleDown.hidden = false;
+    scaleUp.hidden = false;
+    scaleDown.addEventListener('click', () => {
+      if (scaleDown.getAttribute('aria-disabled') === 'true') return;
+      setScale(value - step, true);
+    });
+    scaleUp.addEventListener('click', () => {
+      if (scaleUp.getAttribute('aria-disabled') === 'true') return;
+      setScale(value + step, true);
+    });
+  }
+
+  // A phone cannot show the whole toolbar. Its end (Reply, Remark, Copy source) is what a phone showed before the text-size
+  // buttons, so open at that end: Theme, Mode and A− / A+ are reached by scrolling toward the start. A reader scroll leaves the
+  // position we set, so a later resize does not pull the toolbar back.
+  if (carrier) {
+    const rtl = getComputedStyle(carrier).direction === 'rtl';
+    let lastProgrammatic = null;
+    let readerScrolled = false;
+    const scrollToEnd = () => {
+      if (carrier.scrollWidth <= carrier.clientWidth) return;
+      // Chrome keeps a right-to-left box's scrollLeft negative; the browser clamps either value to the real end.
+      carrier.scrollTo({ left: rtl ? -carrier.scrollWidth : carrier.scrollWidth });
+      lastProgrammatic = carrier.scrollLeft;
+    };
+    carrier.addEventListener('scroll', () => {
+      if (Math.abs(carrier.scrollLeft - lastProgrammatic) > 1) readerScrolled = true;
+    });
+    scrollToEnd();
+    addEventListener('resize', () => {
+      if (!readerScrolled) scrollToEnd();
+    });
+  }
+
+  const copyText = async (text) => {
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      const ta = Object.assign(document.createElement('textarea'), { value: text });
+      document.body.append(ta);
+      ta.select();
+      document.execCommand('copy');
+      ta.remove();
+    }
+  };
+  // A button reads its label from data-done for a moment after a copy, then comes back to the label it started from. That label is
+  // read once, here: a second click inside the moment would otherwise read the copied label off the button and restore that instead,
+  // and the label would never come back. The moment starts again on each click: the timer of the previous one is left to fire and
+  // does nothing (a token, so this needs no timer bookkeeping the page scripts do not already have).
+  const flasher = (btn) => {
+    const idle = btn.textContent;
+    let clicks = 0;
+    return () => {
+      btn.textContent = btn.dataset.done;
+      const mine = ++clicks;
+      setTimeout(() => { if (mine === clicks) btn.textContent = idle; }, 1400);
+    };
+  };
+
+  const copyBtn = document.querySelector('[data-am="copy"]');
+  if (copyBtn) {
+    const flash = flasher(copyBtn);
+    copyBtn.addEventListener('click', async () => {
+      const nodes = document.querySelectorAll('#am-source');
+      await copyText(nodes[nodes.length - 1]?.value ?? '');
+      flash();
+    });
+  }
+
+  // Each code block copies its own lines, without the line numbers.
+  for (const btn of document.querySelectorAll('[data-am="copy-code"]')) {
+    const flash = flasher(btn);
+    btn.addEventListener('click', async () => {
+      const lines = btn.closest('.am-codeblock')?.querySelectorAll('.am-ln') ?? [];
+      await copyText([...lines].map((l) => l.textContent).join('\n'));
+      flash();
+    });
+  }
+
+  // ── Diagram Lightbox & Pan-Zoom Viewer ─────────────
+  const diagrams = document.querySelectorAll('.am-diagram:not(.am-lightbox-canvas)');
+  const lb = document.querySelector('.am-lightbox');
+  if (diagrams.length && lb) {
+    const backdrop = lb.querySelector('.am-lightbox-backdrop');
+    const titleText = lb.querySelector('.am-lightbox-title-text');
+    const stage = lb.querySelector('.am-lightbox-stage');
+    const canvas = lb.querySelector('.am-lightbox-canvas');
+    const closeBtn = lb.querySelector('.am-lightbox-close');
+    const expandLabel = lb.getAttribute('data-expand') || 'Expand diagram';
+
+    let scale = 1, x = 0, y = 0, fitScale = 1, curVw = 800, curVh = 600;
+    let isDragging = false, activePointerId = null, startX = 0, startY = 0, origX = 0, origY = 0;
+    let lastTrigger = null;
+
+    const apply = () => {
+      canvas.style.transform = `translate3d(${x.toFixed(2)}px, ${y.toFixed(2)}px, 0) scale(${scale.toFixed(4)})`;
+    };
+
+    const zoomTo = (newScale, pivotX, pivotY) => {
+      newScale = Math.max(0.2, Math.min(6.0, newScale));
+      if (Math.abs(newScale - scale) < 0.0001) return;
+      const r = newScale / scale;
+      x = pivotX - (pivotX - x) * r;
+      y = pivotY - (pivotY - y) * r;
+      scale = newScale;
+      apply();
+    };
+
+    const open = (diag, trigger) => {
+      const svg = [...diag.children].find((el) => el.tagName.toLowerCase() === 'svg');
+      if (!svg) return;
+      lastTrigger = trigger;
+
+      const panel = diag.closest('.am-panel');
+      const panelTitle = panel?.querySelector('.am-panel-head h2')?.textContent?.trim() || panel?.querySelector('h2')?.textContent?.trim() || lb.getAttribute('aria-label') || 'Diagram viewer';
+      if (titleText) titleText.textContent = panelTitle;
+
+      const clone = svg.cloneNode(true);
+      const defElements = clone.querySelectorAll('[id]');
+      if (defElements.length) {
+        const idMap = new Map();
+        defElements.forEach((el, i) => {
+          const oldId = el.id;
+          const newId = `${oldId}-lb-${i}`;
+          idMap.set(oldId, newId);
+          el.id = newId;
+        });
+        const urlAttrs = ['marker-start', 'marker-mid', 'marker-end', 'fill', 'stroke', 'filter', 'clip-path', 'mask'];
+        clone.querySelectorAll('*').forEach((el) => {
+          for (const attr of urlAttrs) {
+            const val = el.getAttribute(attr);
+            if (val && val.startsWith('url(#')) {
+              const id = val.slice(5, -1);
+              if (idMap.has(id)) el.setAttribute(attr, `url(#${idMap.get(id)})`);
+            }
+          }
+          const href = el.getAttribute('href') || el.getAttribute('xlink:href');
+          if (href && href.startsWith('#')) {
+            const id = href.slice(1);
+            if (idMap.has(id)) {
+              if (el.hasAttribute('href')) el.setAttribute('href', `#${idMap.get(id)}`);
+              if (el.hasAttribute('xlink:href')) el.setAttribute('xlink:href', `#${idMap.get(id)}`);
+            }
+          }
+        });
+      }
+
+      const vb = svg.viewBox?.baseVal;
+      curVw = (vb && vb.width > 0) ? vb.width : (parseFloat(svg.getAttribute('width')) || svg.clientWidth || 800);
+      curVh = (vb && vb.height > 0) ? vb.height : (parseFloat(svg.getAttribute('height')) || svg.clientHeight || 600);
+      clone.style.width = `${curVw}px`;
+      clone.style.height = `${curVh}px`;
+      canvas.innerHTML = '';
+      canvas.append(clone);
+      lb.removeAttribute('hidden');
+      document.body.style.overflow = 'hidden';
+
+      const rect = stage.getBoundingClientRect();
+      const pad = 48;
+      const availW = Math.max(100, rect.width - pad * 2);
+      const availH = Math.max(100, rect.height - pad * 2);
+      fitScale = Math.min(availW / curVw, availH / curVh, 1.0);
+      scale = fitScale;
+      x = (rect.width - curVw * scale) / 2;
+      y = (rect.height - curVh * scale) / 2;
+      apply();
+      closeBtn.focus();
+    };
+
+    const close = () => {
+      if (lb.hasAttribute('hidden')) return;
+      lb.setAttribute('hidden', '');
+      canvas.innerHTML = '';
+      document.body.style.overflow = '';
+      lastTrigger?.focus();
+    };
+
+    stage.addEventListener('wheel', (e) => {
+      e.preventDefault();
+      const rect = stage.getBoundingClientRect();
+      const dy = e.deltaMode === 1 ? e.deltaY * 16 : (e.deltaMode === 2 ? e.deltaY * 400 : e.deltaY);
+      const factor = Math.exp(-Math.max(-200, Math.min(200, dy)) * 0.0015);
+      zoomTo(scale * factor, e.clientX - rect.left, e.clientY - rect.top);
+    }, { passive: false });
+
+    stage.addEventListener('pointerdown', (e) => {
+      if (e.button !== 0 || isDragging) return;
+      isDragging = true;
+      activePointerId = e.pointerId;
+      startX = e.clientX;
+      startY = e.clientY;
+      origX = x;
+      origY = y;
+      stage.setPointerCapture(e.pointerId);
+      stage.classList.add('am-panning');
+    });
+
+    stage.addEventListener('pointermove', (e) => {
+      if (!isDragging || e.pointerId !== activePointerId) return;
+      x = origX + (e.clientX - startX);
+      y = origY + (e.clientY - startY);
+      apply();
+    });
+
+    const endDrag = (e) => {
+      if (!isDragging || e.pointerId !== activePointerId) return;
+      isDragging = false;
+      activePointerId = null;
+      stage.classList.remove('am-panning');
+      try { stage.releasePointerCapture(e.pointerId); } catch {}
+    };
+    stage.addEventListener('pointerup', endDrag);
+    stage.addEventListener('pointercancel', endDrag);
+
+    stage.addEventListener('dblclick', () => {
+      const rect = stage.getBoundingClientRect();
+      scale = fitScale;
+      x = (rect.width - curVw * scale) / 2;
+      y = (rect.height - curVh * scale) / 2;
+      apply();
+    });
+
+    closeBtn.addEventListener('click', close);
+    backdrop.addEventListener('click', close);
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && !lb.hasAttribute('hidden')) close();
+    });
+
+    lb.addEventListener('keydown', (e) => {
+      if (e.key !== 'Tab') return;
+      const focusables = lb.querySelectorAll('button:not([disabled]), [tabindex]:not([tabindex="-1"])');
+      if (!focusables.length) return;
+      const first = focusables[0];
+      const last = focusables[focusables.length - 1];
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    });
+
+    const expandSvg = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="15 3 21 3 21 9"></polyline><polyline points="9 21 3 21 3 15"></polyline><line x1="21" y1="3" x2="14" y2="10"></line><line x1="3" y1="21" x2="10" y2="14"></line></svg>';
+    diagrams.forEach((diag) => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'am-diagram-expand';
+      btn.title = expandLabel;
+      btn.setAttribute('aria-label', expandLabel);
+      btn.innerHTML = expandSvg;
+      btn.addEventListener('click', () => open(diag, btn));
+      diag.prepend(btn);
+    });
+  }
+})();
+(() => {
+// The reply a reader copies from the page: one Markdown text with the decisions, the panel comments and the block remarks.
+// A plain ES module for tests; the page gets it with its `export` keyword dropped (src/runtime/compose.js).
+// decisions: [{ panel, question, picked: [label], suggested: [label], touched }]; comments: [{ panel, title, text }];
+// remarks: [{ panel, quote, kind, note }], where quote is the start of the marked block and kind is a key of ui.kinds.
+// Comment and remark text is quoted line by line, so text the reader typed cannot pass as part of the structure.
+// rtl: the page reads right to left, so the arrow before each answer points left, the way the text runs.
+function replyText({ title, decisions, comments, remarks = [], ui, rtl = false }) {
+  const arrow = rtl ? '←' : '→';
+  const out = [`# Re: ${title}`];
+  if (decisions.length) {
+    out.push('', `## ${ui.decisions}`);
+    decisions.forEach((d, i) => {
+      const answer = d.picked.length ? d.picked.map((l) => `**${l}**`).join(', ') : '**—**';
+      // Every option starts unselected, so an ask the reader never clicked has no answer: the reply names the suggestion
+      // instead of passing it off as the reader's choice.
+      const same = d.picked.length === d.suggested.length && d.picked.every((l) => d.suggested.includes(l));
+      const suggested = d.suggested.join(', ') || '—';
+      const why = !d.touched ? `${ui.untouched}: ${suggested}` : same ? ui.confirmed : `${ui.was}: ${suggested}`;
+      out.push(`${i + 1}. [${d.panel}] ${d.question}`, `   ${arrow} ${answer} _(${why})_`);
+    });
+  }
+  const written = comments.filter((c) => c.text.trim());
+  const quoted = (text) => (text.trim() ? text.trim().split('\n').map((l) => `  > ${l}`) : []);
+  if (written.length) {
+    out.push('', `## ${ui.comments}`);
+    for (const c of written) out.push(`- **${c.panel} · ${c.title}**`, ...quoted(c.text));
+  }
+  if (remarks.length) {
+    out.push('', `## ${ui.remarks}`);
+    for (const r of remarks) {
+      const label = [r.panel, ui.kinds?.[r.kind] ?? r.kind].filter(Boolean).join(' · ');
+      out.push(`- **${label}** "${r.quote}"`, ...quoted(r.note));
+    }
+  }
+  if (written.length || remarks.some((r) => r.note.trim())) out.push('', `_${ui.typed}_`);
+  return `${out.join('\n')}\n`;
+}
+
+// A letter of a right-to-left script. One definition for the page builder (src/bidi.js) and for the right-to-left page script
+// (src/runtime/reply-view.js), so the two cannot drift apart. A plain ES module; the page script gets this file in front of
+// reply-view.js, with its `export` keyword dropped and reply-view.js's import of it removed (src/runtime/compose.js).
+const RTL_LETTER = /[\p{Script=Hebrew}\p{Script=Arabic}\p{Script=Syriac}\p{Script=Thaana}\p{Script=Nko}\p{Script=Samaritan}\p{Script=Mandaic}]/u;
+
+// The reply as the reader sees it in the Reply sheet (src/runtime/reply.js): the Markdown that Copy copies, drawn as headings, bold answers
+// and quoted comments instead of raw "# Re: ...", "1. [E] ..." and "- **A · ...**" lines. Each line gets its own direction, so a
+// Hebrew reader sees Latin answers and paths in place; a line with no right-to-left letter reads left to right, as on any other page.
+// The raw Markdown stays in the sheet under a fold, so the copied text does not change.
+// A plain ES module for tests; the page gets it with its `export` keyword dropped and rtl-letter.js in front of it in place of the
+// import (src/runtime/compose.js).
+
+const escHtml = (s) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+// A line with a right-to-left letter reads right to left; a line without one (an English comment, a path) reads left to right.
+const dirOf = (s) => (RTL_LETTER.test(s) ? 'rtl' : 'ltr');
+
+// The only inline Markdown src/runtime/reply-text.js writes: **answer**, _(note)_ and the "quote" of a remark. Each piece is isolated in its own direction,
+// so a Latin answer inside a Hebrew line keeps its place, and "A · title" still starts with the panel letter.
+const piece = (tag, text) => `<${tag}><bdi dir="${dirOf(text)}">${text}</bdi></${tag}>`;
+function inline(s) {
+  return escHtml(s)
+    .replace(/\*\*(.+?)\*\*/g, (_, t) => piece('strong', t))
+    .replace(/(^|\s)_(.+?)_(?=\s|$)/g, (_, pre, t) => pre + piece('em', t))
+    // The quoted start of a marked block ("- **A · concern** "text""): isolated, so Latin text in a Hebrew line keeps its place.
+    .replace(/&quot;(.+)&quot;$/, (_, t) => `&quot;<bdi dir="${dirOf(t)}">${t}</bdi>&quot;`);
+}
+
+// The reply text (src/runtime/reply-text.js) as HTML, one block per line.
+function replyViewHtml(text) {
+  return text
+    .replace(/\n$/, '')
+    .split('\n')
+    .map((line) => {
+      const dir = dirOf(line);
+      let m;
+      if (!line.trim()) return '<div class="am-rv-gap"></div>';
+      if ((m = line.match(/^(#{1,2}) (.*)$/))) return `<div class="am-rv-h${m[1].length}" dir="${dir}">${inline(m[2])}</div>`;
+      if ((m = line.match(/^(\d+)\. \[([^\]]*)\] (.*)$/))) {
+        return `<div class="am-rv-q" dir="${dir}"><bdi>${m[1]}.</bdi> <bdi class="am-rv-tag">${escHtml(m[2])}</bdi> ${inline(m[3])}</div>`;
+      }
+      if ((m = line.match(/^ {3}([←→]) (.*)$/))) return `<div class="am-rv-a" dir="${dir}">${m[1]} ${inline(m[2])}</div>`;
+      if ((m = line.match(/^- (.*)$/))) return `<div class="am-rv-c" dir="${dir}">${inline(m[1])}</div>`;
+      // A comment line is shown exactly as the reader typed it.
+      if ((m = line.match(/^ {2}> ?(.*)$/))) return `<div class="am-rv-quote" dir="${dirOf(m[1])}">${escHtml(m[1]) || '&nbsp;'}</div>`;
+      return `<div dir="${dir}">${inline(line)}</div>`;
+    })
+    .join('');
+}
+
+// Answer on the page: every panel gets a Comment box, and the Reply button collects the ask answers, the comments and the remarks
+// into one Markdown reply (replyText) to copy back to the agent. Answers and comments stay in localStorage across reloads.
+// The remark script (remark.js) adds the blocks the reader marked, through window.__amRemarkData, and tells this script about a change
+// with an "am-remark-change" event on the document.
+// The Reply sheet shows the reply drawn (replyViewHtml) with the Markdown that Copy copies under a fold. Once the reader has given any
+// input, a bar at the bottom of the page shows the counts and copies the reply in one click, so there is no trip to the top-right button.
+const replyBtn = document.querySelector('[data-am="reply"]');
+const COMMENT_ICON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>';
+if (replyBtn) {
+  const ui = JSON.parse(replyBtn.dataset.ui);
+  const storeKey = `am-reply:${location.pathname}`;
+  const panels = [...document.querySelectorAll('.am-panel')];
+  const asks = [...document.querySelectorAll('.am-ask')];
+  // Answers are saved by question text, so they still match after am patch has renumbered the asks.
+  // Page text without the word joiners a right-to-left page puts after a Hebrew prefix hyphen (src/bidi.js): the reply and the saved
+  // answers hold the text as the draft wrote it, a formula too (src/runtime/math-text.js).
+  const WJ = new RegExp(String.fromCharCode(0x2060), 'g');
+  const textOf = (el) => el && textWithMath(el).replace(WJ, '').trim();
+  const keyOf = (ask) => textOf(ask.querySelector('legend')) ?? ask.dataset.ask;
+  const touched = new Set();
+  const boxes = new Map();
+  // The bar is built below with the sheet; the handlers that change the counts only call this.
+  let refreshBar = () => {};
+  // The textarea a failed copy keeps selected, so the reader can still use the keyboard shortcut.
+  let stuck = null;
+
+  const load = () => {
+    try {
+      return JSON.parse(localStorage.getItem(storeKey)) || {};
+    } catch {
+      return {};
+    }
+  };
+  const save = () => {
+    const state = {
+      asks: Object.fromEntries(asks.map((a) => [keyOf(a), { picked: picked(a), touched: touched.has(a) }])),
+      comments: Object.fromEntries([...boxes].map(([id, box]) => [id, box.value]).filter(([, text]) => text.trim())),
+    };
+    try {
+      localStorage.setItem(storeKey, JSON.stringify(state));
+    } catch {
+      // Storage may be off (private window, file:// policy); answers then last until the page closes.
+    }
+  };
+  const picked = (ask) => [...ask.querySelectorAll('input')].filter((i) => i.checked).map((i) => i.value);
+  const panelOf = (el) => {
+    const panel = el.closest('.am-panel');
+    return { id: panel?.id.replace(/^panel-/, '') ?? '', title: textOf(panel?.querySelector('.am-panel-head h2')) ?? '' };
+  };
+
+  const saved = load();
+  for (const ask of asks) {
+    const inputs = [...ask.querySelectorAll('input')];
+    const state = saved.asks?.[keyOf(ask)];
+    // A saved answer applies only while every picked option still exists on the page, and only if the reader clicked: older versions started
+    // with the suggestion selected and saved it untouched, and that state must come back unselected.
+    if (state?.touched && state.picked.every((v) => inputs.some((i) => i.value === v))) {
+      for (const input of inputs) input.checked = state.picked.includes(input.value);
+      touched.add(ask);
+    }
+    // A click counts even on the option that is already picked: the reader confirms the suggestion.
+    const answer = () => {
+      touched.add(ask);
+      save();
+      refreshBar();
+    };
+    ask.addEventListener('change', answer);
+    ask.addEventListener('click', (e) => { if (e.target.matches('input')) answer(); });
+  }
+
+  for (const panel of panels) {
+    const id = panel.id.replace(/^panel-/, '');
+    // An icon only: narrow panels have no room for a word next to the title.
+    const btn = Object.assign(document.createElement('button'), { type: 'button', className: 'am-comment-btn', title: ui.comment, innerHTML: COMMENT_ICON });
+    btn.setAttribute('aria-label', `${ui.comment} ${id}`);
+    btn.setAttribute('aria-expanded', 'false');
+    const wrap = Object.assign(document.createElement('div'), { className: 'am-comment', hidden: true });
+    const box = Object.assign(document.createElement('textarea'), { rows: 3, placeholder: ui.commentHint, value: saved.comments?.[id] ?? '' });
+    box.setAttribute('aria-label', `${ui.comment} ${id}`);
+    wrap.append(box);
+    const show = (open) => {
+      wrap.hidden = !open;
+      btn.setAttribute('aria-expanded', String(open));
+    };
+    btn.addEventListener('click', () => {
+      show(wrap.hidden);
+      if (!wrap.hidden) box.focus();
+    });
+    box.addEventListener('input', () => {
+      btn.classList.toggle('am-comment-btn--on', Boolean(box.value.trim()));
+      save();
+      refreshBar();
+    });
+    btn.classList.toggle('am-comment-btn--on', Boolean(box.value.trim()));
+    if (box.value.trim()) show(true);
+    (panel.querySelector('.am-panel-head') ?? panel).append(btn);
+    panel.append(wrap);
+    boxes.set(id, box);
+  }
+
+  const sheet = document.createElement('dialog');
+  sheet.className = 'am-reply';
+  sheet.setAttribute('aria-label', ui.title);
+  sheet.innerHTML = '<div class="am-reply-head"><strong></strong><span></span></div><div class="am-reply-view" tabindex="0"></div><details class="am-reply-raw"><summary></summary><textarea readonly rows="10"></textarea></details><div class="am-reply-actions"><button type="button" class="am-btn" data-act="copy"></button><button type="button" class="am-btn" data-act="close"></button></div>';
+  sheet.querySelector('strong').textContent = ui.title;
+  sheet.querySelector('span').textContent = ui.hint;
+  sheet.querySelector('summary').textContent = ui.raw;
+  const view = sheet.querySelector('.am-reply-view');
+  const raw = sheet.querySelector('details');
+  const text = sheet.querySelector('textarea');
+  const copy = sheet.querySelector('[data-act="copy"]');
+  const close = sheet.querySelector('[data-act="close"]');
+  copy.textContent = ui.copy;
+  close.textContent = ui.close;
+  document.body.append(sheet);
+
+  const compose = () => {
+    const decisions = asks.map((ask) => ({
+      panel: panelOf(ask).id,
+      question: textOf(ask.querySelector('legend')) ?? '',
+      picked: picked(ask),
+      suggested: [...ask.querySelectorAll('input[data-suggested]')].map((i) => i.value),
+      touched: touched.has(ask),
+    }));
+    const comments = [...boxes].map(([id, box]) => ({ panel: id, title: panelOf(box).title, text: box.value }));
+    const remarks = window.__amRemarkData?.() ?? [];
+    const empty = !decisions.length && !comments.some((c) => c.text.trim()) && !remarks.length;
+    const title = textOf(document.querySelector('.am-head h1')) ?? document.title;
+    return empty ? '' : replyText({ title, decisions, comments, remarks, ui, rtl: document.documentElement.dir === 'rtl' });
+  };
+
+  // The text goes through the clipboard API; a page the browser treats as insecure (file://) falls back to selecting a temporary
+  // textarea, because the sheet's own textarea can sit inside a closed fold, where it cannot be selected.
+  // That fallback reports whether it worked. When it does not, the text stays selected (so Cmd/Ctrl+C still copies it) and the
+  // button says what to do instead of showing the "Copied ✓" label the reader cannot trust.
+  const copyText = async (str, btn) => {
+    stuck?.remove();
+    stuck = null;
+    try {
+      await navigator.clipboard.writeText(str);
+      // The close_after_reply script (close-after-reply.js) closes the tab once the reply is on the clipboard.
+      document.dispatchEvent(new Event('am-reply-copied'));
+    } catch {
+      const tmp = Object.assign(document.createElement('textarea'), { value: str });
+      tmp.style.cssText = 'position:fixed;top:-100px;opacity:0';
+      // Inside the sheet while it is open: while a modal dialog is open the rest of the document cannot take focus, so a textarea
+      // in the body can be selected but not focused, and the keyboard shortcut the reader is told to press would copy nothing.
+      // The bottom bar copies while the sheet is closed, and a closed dialog is not rendered, so there the textarea goes in the body.
+      (sheet.open ? sheet : document.body).append(tmp);
+      tmp.select();
+      let copied = false;
+      try {
+        copied = document.execCommand('copy');
+      } catch {
+        copied = false;
+      }
+      if (!copied) {
+        stuck = tmp;
+        btn.textContent = ui.copyFailed;
+        setTimeout(() => { btn.textContent = ui.copy; }, 3000);
+        return;
+      }
+      tmp.remove();
+    }
+    btn.textContent = ui.done;
+    setTimeout(() => { btn.textContent = ui.copy; }, 1400);
+  };
+
+  const open = () => {
+    const reply = compose();
+    if (reply) view.innerHTML = replyViewHtml(reply);
+    else view.textContent = ui.empty;
+    view.scrollTop = 0;
+    text.value = reply;
+    raw.open = false;
+    raw.hidden = !reply;
+    copy.disabled = !reply;
+    if (sheet.showModal) sheet.showModal();
+    else sheet.setAttribute('open', '');
+    (reply ? copy : close).focus();
+  };
+  replyBtn.addEventListener('click', open);
+  close.addEventListener('click', () => (sheet.close ? sheet.close() : sheet.removeAttribute('open')));
+  // A failed copy leaves the text selected for Cmd/Ctrl+C; closing the sheet drops that textarea.
+  sheet.addEventListener('close', () => { stuck?.remove(); stuck = null; });
+  copy.addEventListener('click', () => copyText(text.value, copy));
+
+  const bar = Object.assign(document.createElement('div'), { className: 'am-reply-bar', hidden: true });
+  bar.setAttribute('role', 'region');
+  bar.setAttribute('aria-label', ui.title);
+  const summary = Object.assign(document.createElement('span'), { className: 'am-reply-bar-count' });
+  summary.setAttribute('aria-live', 'polite');
+  const preview = Object.assign(document.createElement('button'), { type: 'button', className: 'am-btn', textContent: ui.preview });
+  const barCopy = Object.assign(document.createElement('button'), { type: 'button', className: 'am-btn am-btn--reply', textContent: ui.copy });
+  preview.addEventListener('click', open);
+  barCopy.addEventListener('click', () => copyText(compose(), barCopy));
+  bar.append(summary, preview, barCopy);
+  document.body.append(bar);
+
+  // The bar shows only the counts that are above zero, and only once there is any input at all.
+  refreshBar = () => {
+    const counts = {
+      answered: touched.size,
+      comments: [...boxes.values()].filter((box) => box.value.trim()).length,
+      remarks: (window.__amRemarkData?.() ?? []).length,
+    };
+    const parts = Object.entries(counts).filter(([, n]) => n > 0).map(([kind, n]) => ui.count[kind].replace('{n}', n));
+    summary.textContent = parts.join(' · ');
+    bar.hidden = !parts.length;
+    document.body.classList.toggle('am-has-reply-bar', parts.length > 0);
+  };
+  document.addEventListener('am-remark-change', () => refreshBar());
+  // Saved remarks are restored by remark.js, which runs after this script in the same <script> element: its data is not there yet.
+  // A microtask runs when that whole element has finished, so the first count includes them.
+  queueMicrotask(() => refreshBar());
+}
+})();
+(() => {
+// Text helpers for remark mode (src/runtime/remark.js): how a marked block is named and quoted.
+// A plain ES module for tests; the page gets it with its `export` keyword dropped (src/runtime/compose.js).
+// A block keeps its mark across `am patch` because the key is its panel, its tag and the start of its text, not its position.
+
+const collapse = (text) => String(text).replace(/\s+/g, ' ').trim();
+
+// The start of a block's text with whitespace collapsed: the readable identity of the block.
+function fingerprint(text, len = 80) {
+  return collapse(text).slice(0, len);
+}
+
+// What the reply quotes of a block: the start of its text, with an ellipsis when it is cut.
+function quote(text, len = 60) {
+  const t = collapse(text);
+  return t.length > len ? `${t.slice(0, len).trimEnd()}…` : t;
+}
+
+// Two blocks with the same text (two identical list items) get the same base key. The n-th one in the page gets "\t<n>" added;
+// a tab cannot be in a fingerprint, which has its whitespace collapsed, so the new key never meets another base key.
+function occurrenceKeys(bases) {
+  const seen = new Map();
+  return bases.map((base) => {
+    const n = seen.get(base) ?? 0;
+    seen.set(base, n + 1);
+    return n ? `${base}\t${n}` : base;
+  });
+}
+
+// Remark mode: the reader turns it on, clicks a block, tags it (suggestion, keep, question, concern) and may add a note.
+// A mark shows as a bar and a note chip inside the block, lives in localStorage like panel comments, and the Reply button carries it
+// back to the agent: reply.js calls window.__amRemarkData, and replyText (reply-text.js) writes the Remarks section.
+(() => {
+  const btn = document.querySelector('[data-am="remark"]');
+  if (!btn) return;
+  const ui = JSON.parse(btn.dataset.ui);
+  const KINDS = ['suggestion', 'keep', 'question', 'concern'];
+  const storeKey = `am-remark:${location.pathname}`;
+  // The one definition of a block a reader can mark: the content under <main>. The page and panel titles are left out, because the
+  // reply reads them as text; a panel has its Comment button.
+  // A $$ block on its own is a div; a $$ formula inside a sentence is a span of its paragraph.
+  const BLOCK = 'main :is(h1,h2,h3,h4,h5,h6,p,li,blockquote,pre,table,dd,dt,figure,div.am-math-block):not(.am-head *, .am-panel-head *)';
+  // A click on these does what it always did.
+  const LIVE = '.am-remark-pop, .am-toolbar, a, button, input, textarea, select, label';
+  const blockAt = (target) => (target.closest(LIVE) ? null : target.closest(BLOCK));
+
+  const WJ = new RegExp(String.fromCharCode(0x2060), 'g'); // word joiners of a right-to-left page (src/bidi.js); not part of the draft's text
+  // A narrow horizontal timeline shows its date and title inline (src/themes/base.css). They stay parts of their own, so a block key
+  // does not change with the width of the window (#194).
+  const OWN_BOX = '.am-timeline--h .am-tl-when, .am-timeline--h .am-tl-title';
+  const inlineBox = new WeakMap();
+  const isInline = (el) => {
+    if (!inlineBox.has(el)) inlineBox.set(el, !el.matches(OWN_BOX) && getComputedStyle(el).display.startsWith('inline'));
+    return inlineBox.get(el);
+  };
+  // The text of a block as the reader sees it: separate lines, cells and timeline parts are joined by a space (textContent would run
+  // "2026" and "Ship" together), and the note chip is not part of it. A formula is one box and reads as the TeX the draft wrote
+  // (src/runtime/math-text.js), not as the MathML tokens.
+  const blockText = (el) => {
+    const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+    let text = '';
+    let last = null;
+    for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+      if (node.parentElement.closest('.am-mark-note')) continue;
+      let box = formulaOf(node) ?? node.parentElement;
+      while (box !== el && isInline(box)) box = box.parentElement;
+      if (last && box !== last) text += ' ';
+      text += nodeText(node).replace(WJ, '');
+      last = box;
+    }
+    return text;
+  };
+
+  const panelOf = (el) => el.closest('.am-panel')?.id.replace(/^panel-/, '') ?? '';
+  // Block keys, in page order. Built when first needed: a page nobody marked pays nothing.
+  let keys = null;
+  const keyMap = () => {
+    if (!keys) {
+      const blocks = [...document.querySelectorAll(BLOCK)];
+      const ids = occurrenceKeys(blocks.map((el) => `${panelOf(el)}|${el.localName}|${fingerprint(blockText(el))}`));
+      keys = new Map(blocks.map((el, i) => [el, ids[i]]));
+    }
+    return keys;
+  };
+
+  const load = () => {
+    try {
+      const saved = JSON.parse(localStorage.getItem(storeKey));
+      return Array.isArray(saved) ? saved.filter((m) => typeof m?.key === 'string' && KINDS.includes(m.kind)) : [];
+    } catch {
+      return [];
+    }
+  };
+  // A mark whose block is gone from the page stays stored (it may return with `am patch`); it is neither painted nor sent.
+  const marks = new Map(load().map((m) => [m.key, { key: m.key, kind: m.kind, note: String(m.note ?? '') }]));
+  const clearBtn = document.createElement('button');
+  clearBtn.type = 'button';
+  clearBtn.className = 'am-btn am-btn--remark-clear';
+  clearBtn.hidden = true;
+  clearBtn.textContent = ui.clear;
+  btn.insertAdjacentElement('afterend', clearBtn);
+  let clearTimer = null;
+  let clearArmed = false;
+  const resetClear = () => {
+    if (clearTimer !== null) clearTimeout(clearTimer);
+    clearTimer = null;
+    clearArmed = false;
+    clearBtn.classList.remove('is-armed');
+    clearBtn.textContent = ui.clear;
+    clearBtn.hidden = marks.size === 0;
+  };
+  const armClear = () => {
+    clearArmed = true;
+    clearBtn.classList.add('is-armed');
+    clearBtn.textContent = ui.clearConfirm.replace('{n}', marks.size);
+    clearTimer = setTimeout(resetClear, 4000);
+  };
+  clearBtn.addEventListener('click', () => {
+    if (!clearArmed) {
+      armClear();
+      return;
+    }
+    for (const el of document.querySelectorAll('.am-mark')) unpaint(el);
+    marks.clear();
+    try {
+      localStorage.removeItem(storeKey);
+    } catch {
+      // Storage may be off (private window, a sandboxed page); the in-memory marks still clear.
+    }
+    resetClear();
+    document.dispatchEvent(new Event('am-remark-change'));
+  });
+  const save = () => {
+    try {
+      localStorage.setItem(storeKey, JSON.stringify([...marks.values()]));
+    } catch {
+      // Storage may be off (private window, a sandboxed page); marks then last until the page closes.
+    }
+    // The reply bar (reply.js) shows the number of marks.
+    document.dispatchEvent(new Event('am-remark-change'));
+    clearBtn.hidden = marks.size === 0;
+  };
+
+  const chip = (el, mark) => {
+    const note = document.createElement(el.localName === 'table' ? 'caption' : 'span');
+    note.className = 'am-mark-note';
+    const kind = document.createElement('b');
+    kind.textContent = ui.kinds[mark.kind];
+    note.append(kind, mark.note ? ` ${mark.note}` : '');
+    return note;
+  };
+  const clearChip = (el) => el.querySelector(':scope > .am-mark-note')?.remove();
+  const paint = (el, mark) => {
+    clearChip(el);
+    el.classList.add('am-mark');
+    el.dataset.kind = mark.kind;
+    // Inside the block, so a list item stays a child of its list. A table takes it as its caption; a list item with a sub-list shows
+    // it under its own text, before the sub-list.
+    const sub = el.querySelector(':scope > ul, :scope > ol');
+    if (el.localName === 'table') el.prepend(chip(el, mark));
+    else if (sub) sub.before(chip(el, mark));
+    else el.append(chip(el, mark));
+  };
+  const unpaint = (el) => {
+    clearChip(el);
+    el.classList.remove('am-mark');
+    delete el.dataset.kind;
+  };
+  clearBtn.hidden = marks.size === 0;
+  if (marks.size) for (const [el, key] of keyMap()) if (marks.has(key)) paint(el, marks.get(key));
+
+  // The popover edits one block. Save stays off until a kind is picked.
+  const pop = document.createElement('div');
+  pop.className = 'am-remark-pop';
+  pop.hidden = true;
+  pop.setAttribute('role', 'dialog');
+  pop.setAttribute('aria-label', ui.button);
+  document.body.append(pop);
+  let opener = null;
+  let anchor = null;
+  const close = (restoreFocus) => {
+    if (pop.hidden) return;
+    pop.hidden = true;
+    if (restoreFocus) (opener?.isConnected && opener !== document.body ? opener : btn).focus();
+  };
+  const place = () => {
+    const rect = anchor.getBoundingClientRect();
+    const rtl = getComputedStyle(document.documentElement).direction === 'rtl';
+    const x = rtl ? rect.right - pop.offsetWidth : rect.left;
+    // Under the block; a block taller than the window gets the popover at the bottom of the window instead.
+    const y = Math.min(rect.bottom + 6, window.innerHeight - pop.offsetHeight - 8);
+    pop.style.left = `${window.scrollX + Math.min(Math.max(8, x), window.innerWidth - pop.offsetWidth - 8)}px`;
+    pop.style.top = `${window.scrollY + Math.max(8, y)}px`;
+  };
+  const make = (tag, props) => Object.assign(document.createElement(tag), props);
+  const open = (el) => {
+    const key = keyMap().get(el);
+    const mark = marks.get(key);
+    let kind = mark?.kind ?? '';
+    opener = document.activeElement;
+    anchor = el;
+
+    const note = make('textarea', { rows: 2, placeholder: ui.hint, value: mark?.note ?? '' });
+    note.setAttribute('aria-label', ui.hint);
+    const keep = make('button', { type: 'button', className: 'am-btn', textContent: ui.save, disabled: !kind });
+    keep.addEventListener('click', () => {
+      const saved = { key, kind, note: note.value.trim() };
+      marks.set(key, saved);
+      save();
+      paint(el, saved);
+      close(true);
+    });
+    const actions = make('div', { className: 'am-remark-actions' });
+    actions.append(keep);
+    if (mark) {
+      const drop = make('button', { type: 'button', className: 'am-btn', textContent: ui.remove });
+      drop.addEventListener('click', () => {
+        marks.delete(key);
+        save();
+        unpaint(el);
+        close(true);
+      });
+      actions.append(drop);
+    }
+    const kindBtns = KINDS.map((k) => {
+      const kb = make('button', { type: 'button', className: 'am-remark-kind', textContent: ui.kinds[k] });
+      kb.dataset.kind = k;
+      kb.setAttribute('aria-pressed', String(k === kind));
+      kb.addEventListener('click', () => {
+        kind = k;
+        for (const other of kindBtns) other.setAttribute('aria-pressed', String(other === kb));
+        keep.disabled = false;
+      });
+      return kb;
+    });
+    pop.replaceChildren(make('div', { className: 'am-remark-kinds' }), note, actions);
+    pop.firstChild.append(...kindBtns);
+    pop.hidden = false;
+    place();
+    (kindBtns.find((b) => b.dataset.kind === kind) ?? kindBtns[0]).focus({ preventScroll: true });
+  };
+
+  // Picking works only while remark mode is on. A click on a marked block edits its mark, on a plain block starts one.
+  // The block under the pointer gets an outline: the same blockAt decides what is outlined and what a click picks.
+  let hover = null;
+  const track = (e) => {
+    const el = e.type === 'mouseout' && e.relatedTarget === null ? null : blockAt(e.target);
+    if (el === hover) return;
+    hover?.classList.remove('am-remark-hover');
+    hover = el;
+    hover?.classList.add('am-remark-hover');
+  };
+  const pick = (e) => {
+    const el = blockAt(e.target);
+    if (el) open(el);
+  };
+  const setMode = (on) => {
+    btn.classList.toggle('is-on', on);
+    btn.setAttribute('aria-pressed', String(on));
+    const toggle = on ? 'addEventListener' : 'removeEventListener';
+    document.body[toggle]('click', pick);
+    document.body[toggle]('mouseover', track);
+    document.body[toggle]('mouseout', track);
+    if (!on) {
+      track({ type: 'mouseout', relatedTarget: null });
+      close(false);
+    }
+  };
+  btn.addEventListener('click', () => setMode(btn.getAttribute('aria-pressed') !== 'true'));
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') close(true);
+  });
+  // A click outside the popover closes it; the same click may then start another mark.
+  document.addEventListener('click', (e) => {
+    if (!pop.hidden && !pop.contains(e.target)) close(false);
+  }, true);
+  setMode(false);
+
+  // What the Reply button reads: the marked blocks that are on the page, in page order.
+  window.__amRemarkData = () => {
+    if (!marks.size) return [];
+    const live = [];
+    for (const [el, key] of keyMap()) {
+      const mark = marks.get(key);
+      if (mark) live.push({ panel: panelOf(el), quote: quote(blockText(el)), kind: mark.kind, note: mark.note });
+    }
+    return live;
+  };
+})();
+})();
+(() => {
+// Pure planner for justified ("photo wall") rows on sheet pages. No DOM access.
+//
+// This file must stay inlinable into the page script: top-level declarations only, no imports, and the exports are
+// `planLayout` and the constants the DOM adapter shares (STEP, MAX_SCALE, MIN_SCALE). The page build strips the `export ` keyword,
+// and test/layout-plan.test.js checks that this still works.
+//
+// planLayout({ width, gap, cols, panels }) -> { rows: [{ columns: [{ panels: [index, ...], width }], height }] }
+//
+// Input (all lengths in px):
+//   width   container width
+//   gap     space between columns, and between two panels stacked in one column
+//   cols    most columns in one row (the planner never uses more than MAX_COLUMNS, but spans stay shares of `cols`)
+//   panels  one entry per panel, in reading order:
+//     samples   [{ w, h }] panel height at sampled widths, ascending by w (heights between samples are interpolated)
+//     minWidth  narrowest feasible width (clamped to `width`)
+//     maxWidth  widest useful width; beyond it the panel only gains empty space (default: no limit)
+//     natural   natural diagram width for a diagram-only panel (default: none)
+//     pad       panel width not used by the diagram (padding and border; default 0)
+//     span      the author's width hint in grid columns (default 1); span >= cols keeps the panel alone in its row
+//
+// Output: { rows, maxScale }. Rows are in reading order; a row is a list of columns (at most `cols`); a column holds one panel or two
+// consecutive panels, stacked. For integer inputs the column widths plus the gaps between them equal `width`.
+// Rows are chosen by dynamic programming over break points; widths by a search in STEP px steps. Cost per row:
+//   H = tallest column; waste = sum((H - columnHeight) * columnWidth) + sum over diagrams wider than maxWidth of (w - maxWidth) * h
+//   dev = sum(((w - preferred) / oneColumn)^2) + SCALE_WEIGHT * sum over diagrams of (ln(scale) / ln(MAX_SCALE))^2
+//   cost = waste / 1000 + PREF_WEIGHT * dev * H
+// Scale band: diagrams on one page stay at similar sizes. With the result's `maxScale` as the diagram size limit, a diagram is
+// shown at scale min(maxScale, (width - pad) / natural). The planner tries a few bands [lo, lo * BAND_RATIO] (lo in BAND_LOS) and
+// keeps the cheapest plan in which no diagram is narrower than scale lo and none is shown above the band's top, so the largest and
+// smallest diagram scale on the page differ by at most BAND_RATIO. A panel wider than its diagram's top size keeps the diagram at
+// that size, and the page script must set the diagram's max-width to natural * maxScale. The band starts no higher than the
+// largest scale the page allows the least roomy diagram, so one wide diagram lowers the band for the others.
+// If no band is feasible the plan is made without a band (maxScale = MAX_SCALE); if no plan fits (or the input is unusable) the
+// result is a single column: one panel per row at the full width.
+
+const STEP = 10;
+const MAX_SCALE = 1.25;
+const MIN_SCALE = 0.75; // the narrowest a diagram is shown, as a share of its natural width
+const MAX_COLUMNS = 6; // rows with more columns are unreadable, and the search grows steeply with the column count
+const BAND_RATIO = 1.25; // the largest and smallest diagram scale on a page differ by at most this
+const BAND_LOS = [MIN_SCALE, 0.85, 0.95, 1]; // lower ends tried for the band; lo * BAND_RATIO is the upper end (1.25 means no upper limit)
+const SCALE_WEIGHT = 3;
+const PREF_WEIGHT = 0.15;
+
+function heightAt(samples, w) {
+  const i = samples.findIndex((s) => s.w >= w);
+  if (i === -1) return samples[samples.length - 1].h;
+  if (i === 0) return samples[0].h;
+  const a = samples[i - 1];
+  const b = samples[i];
+  return a.h + ((b.h - a.h) * (w - a.w)) / (b.w - a.w);
+}
+
+// Every way to split `len` consecutive panels into columns of 1 or 2 panels, as lists of column sizes.
+function splits(len) {
+  if (len === 0) return [[]];
+  return [1, 2].filter((k) => k <= len).flatMap((k) => splits(len - k).map((rest) => [k, ...rest]));
+}
+
+function singleColumn(width, panels) {
+  return { rows: panels.map((_, i) => ({ columns: [{ panels: [i], width }], height: 0 })) };
+}
+
+function planLayout({ width, gap = 0, cols = 3, panels }) {
+  const usable = Number.isFinite(width) && width > 0 && panels.every((p) => Array.isArray(p.samples) && p.samples.length > 0);
+  if (!usable) return singleColumn(width, panels);
+
+  // `cols` stays the unit of the author's spans; no row gets more than MAX_COLUMNS columns however large `cols` is.
+  const maxColumns = Math.min(cols, MAX_COLUMNS);
+  const oneColumn = Math.max(1, (width - gap * (cols - 1)) / cols);
+  // Per-panel limits. With a band [lo, lo * BAND_RATIO], a diagram is no narrower than scale lo and shown at most at the top of the
+  // band: a wider panel keeps it at that size and gains empty space, which the cost counts as waste.
+  const prepare = (lo) => panels.map((p) => {
+    const pad = p.pad ?? 0;
+    const diagram = lo > 0 && p.natural > 0;
+    const scaleCap = diagram ? Math.min(MAX_SCALE, lo * BAND_RATIO) : MAX_SCALE;
+    return {
+      ...p,
+      minWidth: Math.min(width, Math.max(Math.ceil(p.minWidth || 0), diagram ? Math.ceil(p.natural * lo + pad) : 0)),
+      maxWidth: Math.min(p.maxWidth ?? Infinity, diagram ? p.natural * scaleCap + pad : Infinity),
+      scaleCap,
+      pad,
+      preferred: Math.min(width, (p.span ?? 1) * oneColumn + ((p.span ?? 1) - 1) * gap),
+      alone: (p.span ?? 1) >= cols,
+    };
+  });
+  let info = prepare(0);
+  // Beyond its maxWidth a panel only gains empty space, so its height stops changing there (matters when a band lowers maxWidth).
+  const heightOf = (p, w) => heightAt(p.samples, Math.min(w, p.maxWidth));
+  const columnHeight = (col, w) => col.reduce((h, k) => h + heightOf(info[k], w), 0) + gap * (col.length - 1);
+
+  function bestColumns(columns) {
+    const avail = width - gap * (columns.length - 1);
+    const mins = columns.map((c) => Math.max(...c.map((k) => info[k].minWidth)));
+    const minsFrom = mins.map((_, n) => mins.slice(n).reduce((s, w) => s + w, 0));
+    if (minsFrom[0] > avail) return null;
+    let best = null;
+    const evaluate = (ws) => {
+      const hs = ws.map((w, n) => columnHeight(columns[n], w));
+      const H = Math.max(...hs);
+      let waste = 0;
+      let dev = 0;
+      ws.forEach((w, n) => {
+        waste += (H - hs[n]) * w;
+        for (const k of columns[n]) {
+          const p = info[k];
+          if (w > p.maxWidth) waste += (w - p.maxWidth) * heightOf(p, w);
+          dev += ((w - p.preferred) / oneColumn) ** 2;
+          if (p.natural > 0) {
+            const scale = Math.min(p.scaleCap, Math.max(w - p.pad, 1) / p.natural);
+            dev += SCALE_WEIGHT * (Math.log(scale) / Math.log(MAX_SCALE)) ** 2;
+          }
+        }
+      });
+      const cost = waste / 1000 + PREF_WEIGHT * dev * H;
+      if (!best || cost < best.cost) best = { cost, ws, height: H, columns };
+    };
+    const choose = (n, used, ws) => {
+      if (n === columns.length - 1) {
+        const w = avail - used;
+        if (w >= mins[n]) evaluate([...ws, w]);
+        return;
+      }
+      for (let w = mins[n]; used + w + minsFrom[n + 1] <= avail; w += STEP) choose(n + 1, used + w, [...ws, w]);
+    };
+    choose(0, 0, []);
+    return best;
+  }
+
+  // Best columns for one row of panels i..j.
+  function bestRow(i, j) {
+    if (j > i && info.slice(i, j + 1).some((p) => p.alone)) return null;
+    let best = null;
+    for (const split of splits(j - i + 1)) {
+      if (split.length > maxColumns) continue;
+      let next = i;
+      const columns = split.map((size) => Array.from({ length: size }, () => next++));
+      const r = bestColumns(columns);
+      if (r && (!best || r.cost < best.cost)) best = r;
+    }
+    return best;
+  }
+
+  // Row breaks in reading order, for the band set up in `info`. A row holds at most 2 * maxColumns panels. Null if nothing fits.
+  function solve() {
+    const n = panels.length;
+    const total = Array(n + 1).fill(Infinity);
+    const from = Array(n + 1).fill(-1);
+    const chosen = Array(n + 1).fill(null);
+    total[0] = 0;
+    for (let j = 1; j <= n; j++) {
+      for (let i = Math.max(0, j - 2 * maxColumns); i < j; i++) {
+        if (total[i] === Infinity) continue;
+        const r = bestRow(i, j - 1);
+        if (r && total[i] + r.cost < total[j]) {
+          total[j] = total[i] + r.cost;
+          from[j] = i;
+          chosen[j] = r;
+        }
+      }
+    }
+    if (total[n] === Infinity) return null;
+    const rows = [];
+    for (let j = n; j > 0; j = from[j]) {
+      const r = chosen[j];
+      rows.unshift({ columns: r.columns.map((panelsInColumn, c) => ({ panels: panelsInColumn, width: r.ws[c] })), height: r.height });
+    }
+    return { rows, cost: total[n] };
+  }
+
+  let best = null;
+  const diagrams = panels.filter((p) => p.natural > 0);
+  if (diagrams.length > 1) {
+    // No diagram can be shown larger than the page allows, so the band cannot start above the smallest of those limits.
+    const reach = Math.min(...diagrams.map((p) => Math.min(MAX_SCALE, Math.max(width - (p.pad ?? 0), 1) / p.natural)));
+    for (const lo of new Set([...BAND_LOS.filter((x) => x < reach), reach])) {
+      info = prepare(lo);
+      const r = solve();
+      if (r && (!best || r.cost < best.cost)) best = { ...r, maxScale: Math.min(MAX_SCALE, lo * BAND_RATIO) };
+    }
+    info = prepare(0);
+  }
+  best ??= solve();
+  return best ? { rows: best.rows, maxScale: best.maxScale ?? MAX_SCALE } : singleColumn(width, panels);
+}
+
+// DOM adapter for the sheet's justified ("photo wall") layout. Not a module: compose.js puts it after src/runtime/layout-plan.js
+// (which defines planLayout and the shared STEP, MAX_SCALE, MIN_SCALE) inside one function scope of the page script.
+//
+// It measures every panel at sampled widths, asks planLayout for rows and column widths, and applies them with flexbox.
+// The rendered HTML keeps the plain CSS grid: with JavaScript off, at the single-column breakpoint, or while printing, the grid is what
+// shows (the planned widths belong to the screen width, so print never gets a mix of the two); after printing the layout comes back.
+
+const grid = document.querySelector('.am-grid');
+const panels = grid ? [...grid.children].filter((el) => el.classList.contains('am-panel')) : [];
+
+if (panels.length > 1) {
+  const SINGLE_COLUMN = '(max-width: 760px)'; // the single-column breakpoint in src/themes/base.css
+  const TWO_COLUMNS = '(max-width: 1100px)'; // below this the CSS grid has two columns
+  const SAMPLE_STEP = 20; // width sampling step, px; the planner interpolates between samples
+  // The width floors are text sizes (px at scale 1). They take the page scale on every pass, so a runtime change of --am-scale re-plans.
+  const TEXT_MIN = 260; // text keeps at least about 16 CJK characters per line
+  const TABLE_COL_MIN = 96; // per table column, px
+  const TABLE_COL_COMFORT = 220; // a table column this wide reads three or four words per line
+  const KV_COL_MIN = 120; // per key-value column, px: a value of two short words stays on one line
+  const DIAGRAM_MIN = 160;
+  const RESIZE_DELAY = 150;
+  const pageScale = () => {
+    const scale = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--am-scale'));
+    return Number.isFinite(scale) && scale > 0 ? scale : 1;
+  };
+  const OVERFLOWING = '.am-table-wrap, .am-diagram, .am-annot-scroll, pre';
+
+  // The first-row cells of each table carry the column widths fitTables() sets, so restore() resets them too.
+  const tables = [...grid.querySelectorAll('.am-table-wrap > table')];
+  const headCells = (table) => [...(table.rows[0]?.cells ?? [])];
+  const original = new Map([grid, ...panels, ...grid.querySelectorAll('.am-diagram > svg'), ...tables.flatMap(headCells)].map((el) => [el, el.getAttribute('style')]));
+  const restoreStyle = (el) => (original.get(el) === null ? el.removeAttribute('style') : el.setAttribute('style', original.get(el)));
+
+  // Back to the plain grid markup and styles.
+  const restore = () => {
+    for (const box of grid.querySelectorAll(':scope > .am-col')) box.replaceWith(...box.children);
+    for (const el of original.keys()) restoreStyle(el);
+  };
+
+  // The author's width hint, rendered as data-span only when the author wrote one. The inline grid-column is the no-JavaScript fallback
+  // and may hold spans the server added, so it is never read here.
+  const spanHint = (el) => Number(el.dataset.span) || 1;
+  const diagramOnly = (el) => {
+    const body = el.querySelector(':scope > .am-panel-body');
+    return body && body.children.length === 1 ? body.querySelector(':scope > .am-diagram > svg') : null;
+  };
+  const naturalWidth = (svg) => Number(svg.getAttribute('width')) || 0;
+
+  // The width each column of a table reads well at: its natural width, but no wider than TABLE_COL_COMFORT unless its longest word
+  // needs more. Below it the cells wrap one word per line, so a panel with a table is not planned narrower than the sum, and
+  // fitTables() keeps each column at its share (the browser would otherwise give the room to the longest column).
+  const columnWidths = new Map();
+  function comfortableWidth(table, scale) {
+    const saved = table.getAttribute('style');
+    const columns = (width) => {
+      table.style.width = width;
+      return headCells(table).map((cell) => cell.getBoundingClientRect().width);
+    };
+    const most = columns('max-content');
+    const least = columns('min-content');
+    if (saved === null) table.removeAttribute('style');
+    else table.setAttribute('style', saved);
+    // A max-content column comes out a fraction under its text in Chrome, enough to wrap the last word, so it gets one pixel more.
+    const want = most.map((w, i) => Math.min(Math.ceil(w) + 1, Math.max(least[i], TABLE_COL_COMFORT * scale)));
+    columnWidths.set(table, { least, want });
+    return want.reduce((sum, w) => sum + w, 0);
+  }
+
+  // After the layout: each column gets at least its comfortable width, scaled down toward its longest word when the panel came out
+  // narrower than planned (a page narrower than the table), so a table scrolls sideways only when even its longest words do not fit.
+  function fitTables() {
+    for (const [table, { least, want }] of columnWidths) {
+      // Each width is rounded up to a whole pixel (a column a fraction too narrow wraps its last word), so keep a pixel per column spare.
+      const room = table.parentElement.clientWidth - want.length;
+      const low = least.reduce((s, w) => s + w, 0);
+      const high = want.reduce((s, w) => s + w, 0);
+      const k = high > room ? Math.max(0, (room - low) / (high - low || 1)) : 1;
+      headCells(table).forEach((cell, i) => { cell.style.minWidth = `${Math.ceil(least[i] + (want[i] - least[i]) * k)}px`; });
+    }
+  }
+
+  // Height (and, for panels with tables or code, the narrowest width without sideways scrolling) at sampled widths.
+  // Only one panel is displayed while it is measured, so each width change lays out that panel alone.
+  function measure(width) {
+    const scale = pageScale();
+    grid.style.display = 'block';
+    for (const el of panels) {
+      el.style.display = 'none';
+      el.style.boxSizing = 'border-box';
+      for (const svg of el.querySelectorAll('.am-diagram > svg')) {
+        svg.style.width = '100%';
+        svg.style.maxWidth = `${naturalWidth(svg) * MAX_SCALE}px`;
+      }
+    }
+    const info = panels.map((el) => {
+      const svg = diagramOnly(el);
+      const svgs = [...el.querySelectorAll('.am-diagram > svg')];
+      const scrollers = el.querySelectorAll(OVERFLOWING);
+      const tableCols = Math.max(0, ...[...el.querySelectorAll('table tr:first-child')].map((tr) => tr.children.length));
+      el.style.display = '';
+      el.style.width = `${width}px`;
+      const pad = svg ? el.offsetWidth - svg.parentElement.clientWidth : 0;
+      const natural = svg ? naturalWidth(svg) : 0;
+      const shrunk = Math.max(0, ...svgs.map((s) => naturalWidth(s) * MIN_SCALE)) + (svg ? pad : 34);
+      const tableFloors = [...el.querySelectorAll('.am-table-wrap > table')].map((t) => comfortableWidth(t, scale) + el.offsetWidth - t.parentElement.clientWidth);
+      // A key-value grid gets the same care: the room a table gains must not squeeze a neighbouring grid to one word per line.
+      const kvs = [...el.querySelectorAll('.am-kv')].map((kv) => (Number(kv.style.getPropertyValue('--kv-cols')) || 1) * KV_COL_MIN * scale + el.offsetWidth - kv.clientWidth);
+      const floor = svg ? Math.max(DIAGRAM_MIN * scale, natural * MIN_SCALE + pad) : Math.max(TEXT_MIN * scale, shrunk, tableCols * TABLE_COL_MIN * scale + 34, ...tableFloors, ...kvs);
+      const from = Math.min(width, Math.floor(floor / STEP) * STEP);
+      const samples = [];
+      let fits = null;
+      for (let w = from; ; w += SAMPLE_STEP) {
+        w = Math.min(w, width);
+        el.style.width = `${w}px`;
+        if (fits === null && !svg && scrollers.length && ![...scrollers].some((s) => s.scrollWidth > s.clientWidth + 1)) fits = w;
+        samples.push({ w, h: el.offsetHeight });
+        if (w === width) break;
+      }
+      el.style.display = 'none';
+      return {
+        samples,
+        minWidth: svg ? floor : Math.max(floor, fits ?? (scrollers.length ? width : 0)),
+        maxWidth: svg ? natural * MAX_SCALE + pad : Infinity,
+        natural,
+        pad,
+        span: spanHint(el),
+      };
+    });
+    for (const el of panels) {
+      el.style.display = '';
+      el.style.width = '';
+    }
+    return info;
+  }
+
+  // Each column gets a fixed width. A row adds up to the full width, so flex-wrap breaks rows by itself.
+  // Stacked panels go into a column wrapper whose last panel absorbs the extra height.
+  function apply(plan, gap) {
+    grid.style.display = 'flex';
+    grid.style.flexWrap = 'wrap';
+    grid.style.alignItems = 'stretch';
+    grid.style.gap = `${gap}px`;
+    for (const el of panels) {
+      el.style.gridColumn = '';
+      el.style.gridRow = '';
+      el.style.flex = '0 0 auto';
+    }
+    for (const row of plan.rows) {
+      for (const col of row.columns) {
+        const width = `${col.width}px`;
+        if (col.panels.length === 1) {
+          panels[col.panels[0]].style.width = width;
+          continue;
+        }
+        const box = document.createElement('div');
+        box.className = 'am-col';
+        box.style.cssText = `width:${width};flex:0 0 auto;display:flex;flex-direction:column;gap:${gap}px`;
+        panels[col.panels[0]].before(box);
+        for (const k of col.panels) {
+          panels[k].style.width = '';
+          box.append(panels[k]);
+        }
+        panels[col.panels[col.panels.length - 1]].style.flex = '1 1 auto';
+      }
+    }
+  }
+
+  // Diagram-only panels show their diagram at most at the top of the page's scale band; a wider panel gains empty space instead.
+  function capDiagrams(maxScale) {
+    for (const el of panels) {
+      const svg = diagramOnly(el);
+      if (svg) svg.style.maxWidth = `${naturalWidth(svg) * maxScale}px`;
+    }
+  }
+
+  const containerWidth = () => Math.floor(grid.getBoundingClientRect().width);
+
+  function justify() {
+    if (printing || printQuery.matches) return;
+    try {
+      // A vertical scrollbar can appear or vanish once the rows change height; plan again if the width moved.
+      let planned = -1;
+      for (let pass = 0; pass < 3 && planned !== containerWidth(); pass++) {
+        restore();
+        if (matchMedia(SINGLE_COLUMN).matches) return;
+        planned = containerWidth();
+        const gap = parseFloat(getComputedStyle(grid).columnGap) || 0;
+        const cols = Math.max(1, Number(getComputedStyle(grid).getPropertyValue('--cols')) || 3);
+        const plan = planLayout({ width: planned, gap, cols: matchMedia(TWO_COLUMNS).matches ? Math.min(cols, 2) : cols, panels: measure(planned) });
+        apply(plan, gap);
+        capDiagrams(plan.maxScale);
+        fitTables();
+      }
+      // The width never settled: columns planned for another width would overflow or leave gaps, so show the plain grid.
+      if (planned !== containerWidth()) restore();
+    } catch {
+      restore();
+    }
+  }
+
+  // Printing: back to the plain grid (spans and all), and the layout again afterwards. Browsers disagree on which of the
+  // `beforeprint` event and the print media query change fires first, or at all, so listen to both; both are idempotent.
+  // While `printing` is set (beforeprint to afterprint) justify() does nothing, so a late resize cannot bring flex widths into the print layout.
+  let printing = false;
+  const printQuery = matchMedia('print');
+  let timer = 0;
+  const later = () => {
+    clearTimeout(timer);
+    timer = setTimeout(justify, RESIZE_DELAY);
+  };
+  const toPrint = () => {
+    clearTimeout(timer);
+    restore();
+  };
+  justify();
+  addEventListener('resize', later);
+  // A reader's text size changes every panel's text widths and heights, so the sheet is planned again like a resize.
+  addEventListener('am-scale', later);
+  addEventListener('beforeprint', () => {
+    printing = true;
+    toPrint();
+  });
+  addEventListener('afterprint', () => {
+    printing = false;
+    later();
+  });
+  printQuery.addEventListener('change', (e) => (e.matches ? toPrint() : later()));
+  // Late changes to panel heights: web fonts arriving, and images inside the grid finishing their load (load does not bubble, so capture it).
+  document.fonts?.ready.then(later);
+  grid.addEventListener('load', later, true);
+  // Switching theme changes paddings and fonts, hence panel heights.
+  document.querySelector('[data-am="theme"]')?.addEventListener('click', later);
+}
+})();
+})();
+</script>
+</body>
+</html>
