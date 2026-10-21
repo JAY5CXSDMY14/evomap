@@ -50,3 +50,8 @@
 - 已问老板：同意冻结 App/面板、审批改在 Orca 手机端做吗？
 - 23:11 老板想让循环更自由、真正闭环，问能不能锁定 Orca 的一个稳定版来深度融合。我的回答：能做，但手机端风险最大（官方 App 自动更新，可能和锁死的桌面版配对不上）。推荐三层方案：Orca 原版当身体；evo 当确定性的大脑，只依赖 orca CLI；缺钩子时先给上游提 PR，不行再在锁定版本上留一小叠补丁。已提议：把我们的需求和 Orca 逐条对照，做成 HTML（等老板回复）。
 - 23:47 老板在 Magpie「接入」页配好了默认模型：DSH → 免费池·DeepSeek，Claude Code → 免费池·GLM-flash，Codex → 决策脑·任务书，Pi → 施工队·实施。施工和验收用的是不同模型。决策岗也跑在 claude 上，所以 evo 派决策岗时要单独传 --model。已给老板实测版 Pi 提示词（DSH 模型、手机端能否看到 gate、审批终端推送、--unread 推送、--model 帮助），前提是他先把手机配对好。下一步：第 20 轮瘦身，然后用一件新的 EV 活跑通全程。
+
+## 2026-10-22 00:31 Air 实测结果 → 重新考虑 Multica
+- Pi 实测：Orca 用 `dsh-tui .` 启动 dsh，但 @deepseek-ai/dsh 只提供 `dsh` 这一个命令，所以 cc1b2a4 的假设是错的。Orca 的 worker-start --model 不支持 dsh。gate 能建出来，但手机上没看到。decide 岗用的是 claude auto/gpt-6.1-sol；有 4 个 claude 窗口卡在全屏渲染器的引导页；夜间错题本 EV-DOC-001 自动登记后也卡住了。
+- 老板觉得 Orca 一般，提议再看 Multica。我的结论：Multica 更合适。它原生支持 dsh（`dsh --profile multica --stdio`，可用 MULTICA_DSH_MODEL 指定模型）；每个 agent 可单独设模型；有审核关、收件箱、失败自动重试、Squads 组长分派、Autopilots（cron 和 webhook）、issue metadata。弱点：iOS App 要自己编译；需要服务端（官方云或 Docker 自建）；协议是 Apache 2.0 加额外条款。
+- 建议：关掉那 4 个窗口；EV-DOC-001 作废；先暂停 evo 常驻进程，等平台定了再开；决策岗模型不换。已提议：给 Multica 也画一版关系图（等老板回复）。
