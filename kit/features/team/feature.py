@@ -29,7 +29,7 @@ def magpie_models(timeout=3):
     组（例如 group/evo-build）如果带 members / models 列表，就用来查施工、验收有没有重叠。"""
     url = (K.GCFG.get("magpie_url") or K.DEFAULTS["magpie_url"]).rstrip("/") + "/v1/models"
     try:
-        code, data = NT.http(url, timeout=timeout)
+        code, data = K.magpie_http(url, timeout=timeout)     # 第十八轮：远程 magpie 的分组前缀按本机配置补别名
     except Exception:
         return None
     if code != 200 or not isinstance(data, dict) or not isinstance(data.get("data"), list):
@@ -151,7 +151,7 @@ def _uses_magpie():
 
 def team_health(force=False):
     """健康表（magpie 模型列表、本机 CLI）：缓存 5 分钟；真刷新那次顺带发 magpie 通断 / 新模型 / 模型下线事件（整机只发一次）。"""
-    h, evs = TEAM.health(K.EVO_ROOT, os.path.expanduser("~"), K.GCFG.get("magpie_url"), NT.http, TM.now(), team_tools(), force)
+    h, evs = TEAM.health(K.EVO_ROOT, os.path.expanduser("~"), K.GCFG.get("magpie_url"), K.magpie_http, TM.now(), team_tools(), force)
     for kind, data in evs:
         team_event(kind, data)
     return h

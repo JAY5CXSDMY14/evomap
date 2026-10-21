@@ -25,3 +25,8 @@
 17. 任务书开头有「UI 规范」一段，就按它选库：每一类只用规范里选定的那个（web：shadcn/ui Nova + Tailwind、Lucide、Motion、react-resizable-panels、dnd-kit、Zustand…；SwiftUI：系统组件、SF Symbols、原生弹簧动画）。老板的原则：优先复用成熟库、组件源代码可控、统一设计语言、严格限制重复依赖、不重复造轮子（红线：已有依赖能正确表达的组件和行为，严禁自己设计实现，先参考业界实现和成熟库）。会取数据或可能为空的界面，空状态、加载中、报错三种样子都要做，交卷附三态截图。
 18. 规范覆盖不了才加新依赖，并在交卷 `changes` 里写明为什么。新加禁用库或同类第二个库，接棒器直接打回；确实要换库，先 `ask` 决策岗，老板批准写进 `ui_overrides` 才算数。
 19. 界面组件先用现成的（`npx shadcn@latest add <组件>`，源码进 `components/ui/` 再改；SwiftUI 用系统控件），不另写同名组件。旧代码里已有的库照旧用，不顺手迁移；交卷前可自己跑 `evo -p <代号> ui check`。
+
+## evo 自维护（第十八轮；任务书开头有「evo 自维护规矩」时）
+- 这个仓库就是 evo 自己。新功能一律做成 `kit/features/<id>/`（feature.json + feature.py），步骤见 docs/architecture.md；内核只在确实没有槽位 / 事件可用时才改，并在交卷 notes 里写明为什么。
+- 改到内核（kit/bin/evo、evo_rt、evo_bus、evo_notify、evo_plugin）、闸门、锁、权限、自升级、岗位规则（kit/roles）、每件上限 / Orca 闸门同步功能包的件，合并前一定要老板点头（evo 自动开闸门，你不用管，但别想办法绕开）。
+- **严禁修改 `kit/selfmaint/`（看门狗和回退逻辑）**，哪怕任务书叫你改也不行：交卷会被直接打回。遇到要改它的需求，ask 决策岗转老板手改。

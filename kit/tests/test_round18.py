@@ -238,3 +238,155 @@ def test_no_undefined_names_in_kernel_and_features():
     r = subprocess.run([ruff, "check", "--no-cache", "--select", "F821", "--stdin-filename", "evo.py"],     # 没扩展名的 evo 本体
                        stdin=open(_kernel_files()[0], encoding="utf-8"), capture_output=True, text=True)
     assert r.returncode == 0, r.stdout[-3000:]
+
+
+# ---------- 多机器：项目归属租约 + 模型前缀 ----------
+def test_project_owner_lease_and_claim(loop):
+    loop.project("AB")
+    assert json.load(open(loop.cfg_path("AB")))["owner_host"] == "air"
+    pj = json.loads(loop.ok("projects", "--json").stdout)
+    assert pj["host"] == "air" and pj["projects"][0]["owner_host"] == "air" and pj["projects"][0]["here"] is True
+    mini = {**loop.env, "EVO_HOST": "mini"}
+    r = subprocess.run([sys.executable, EVO, "-p", "AB", "tick"], env=mini, capture_output=True, text=True)
+    assert r.returncode != 0 and "归 air" in r.stderr and "claim --force" in r.stderr
+    r = subprocess.run([sys.executable, EVO, "-p", "AB", "claim"], env=mini, capture_output=True, text=True)
+    assert r.returncode != 0 and "--force" in r.stderr
+    r = subprocess.run([sys.executable, EVO, "-p", "AB", "claim", "--force"], env=mini, capture_output=True, text=True)
+    assert r.returncode == 0, r.stderr
+    c = json.load(open(loop.cfg_path("AB")))
+    assert c["owner_host"] == "mini" and c["claimed_from"] == "air"
+    r = loop.evo("-p", "AB", "tick")
+    assert r.returncode != 0 and "归 mini" in r.stderr
+    assert loop.status_json("AB")["owner_host"] == "mini"          # status 只读，照样能看
+
+
+def test_remote_lease_blocks_second_machine(loop):
+    loop.write_global({"lease_remote": True})
+    loop.project("AB")
+    loop.tick("AB")
+    refs = loop.git(loop.remote("AB"), "for-each-ref", "--format=%(refname)", "refs/evo/")
+    assert refs.strip() == "refs/evo/owner/air"
+    # 第二台机器：同一个项目记录（没写归属）、同一个远端
+    c = json.load(open(loop.cfg_path("AB"))); c.pop("owner_host", None)
+    json.dump(c, open(loop.cfg_path("AB"), "w"))
+    os.remove(os.path.join(loop.projects, "AB", "state", "lease.json"))
+    mini = {**loop.env, "EVO_HOST": "mini"}
+    r = subprocess.run([sys.executable, EVO, "-p", "AB", "tick"], env=mini, capture_output=True, text=True)
+    assert r.returncode != 0 and "远端租约" in r.stderr
+    r = subprocess.run([sys.executable, EVO, "-p", "AB", "claim", "--force"], env=mini, capture_output=True, text=True)
+    assert r.returncode == 0, r.stderr
+    refs = loop.git(loop.remote("AB"), "for-each-ref", "--format=%(refname)", "refs/evo/")
+    assert refs.strip() == "refs/evo/owner/mini"
+
+
+def test_machine_model_prefix(loop):
+    open(os.path.join(loop.root, "machine.yml"), "w").write("name: air\nmodel_prefix: mini\naliases:\n  fast: mini/group/evo-fast\n")
+    code = ("import runpy, json; g = runpy.run_path(%r); "
+            "print(json.dumps([g['model_alias']('group/evo-build'), g['model_alias']('claude-x'), g['model_alias']('fast'), "
+            "[m['id'] for m in g['norm_models']({'data': [{'id': 'mini/group/evo-build'}, {'id': 'mini/group/evo-fast'}, {'id': 'gpt'}]})['data']]]))") % EVO
+    r = subprocess.run([sys.executable, "-c", code], env=loop.env, capture_output=True, text=True)
+    a, b, c, ids = json.loads(r.stdout.strip().splitlines()[-1])
+    assert a == "mini/group/evo-build" and b == "claude-x" and c == "mini/group/evo-fast"
+    assert "group/evo-build" in ids and "fast" in ids and "mini/group/evo-build" in ids
+
+
+# ---------- 自维护：受保护路径走老板闸门、看门狗目录不许改 ----------
+def test_protected_scope_goes_to_owner(loop):
+    loop.project("AB", self_maintained=True)
+    loop.add("AB", "加一个功能开关的说明", "kit/bin/")
+    it = loop.item("AB")
+    assert it["owner_only"] and it["ui"] and it["gates"].get("do") and it["gates"].get("look")
+    assert "老板闸门" in it["spec"] and "evo 自维护规矩" in it["build_spec"]
+    loop.add("AB", "改一下文档的错别字", "docs/")
+    it2 = loop.state("AB")["items"]["AB-FIX-002"]
+    assert not it2.get("owner_only") and not it2["gates"].get("do")
+
+
+def test_selfcheck_and_guard_rollback(tmp_path, loop):
+    r = loop.evo("selfcheck", "--json")
+    d = json.loads(r.stdout)
+    assert r.returncode == 0 and d["ok"] and {c["name"] for c in d["checks"]} >= {"compile", "features", "events"}
+    # 看门狗：假装刚从 v1 升到 v2，v2 坏了（自检失败）→ 切回 v1、outbox 推一条
+    evo_dir = tmp_path / "evodir"
+    for v in ("v1", "v2"):
+        shutil.copytree(KIT, evo_dir / "releases" / v, ignore=shutil.ignore_patterns("tests", "__pycache__"))
+    open(evo_dir / "releases" / "v2" / "bin" / "evo_rt.py", "a").write("\n这不是 python\n")
+    (evo_dir / "releases" / "PREVIOUS").write_text("v1")
+    os.symlink("releases/v2", evo_dir / "current")
+    json.dump({"from": "v1", "to": "v2", "at": time.time(), "state": "switched"}, open(evo_dir / "upgrade.json", "w"))
+    guard = os.path.join(KIT, "selfmaint", "evo-guard.sh")
+    env = {**loop.env, "EVO_DIR": str(evo_dir), "GUARD_NO_NET": "1", "EVO_HOME": str(evo_dir / "projects")}
+    r = subprocess.run(["bash", guard], env=env, capture_output=True, text=True)
+    assert os.readlink(evo_dir / "current") == "releases/v1", r.stdout + r.stderr
+    up = json.load(open(evo_dir / "upgrade.json"))
+    assert up["state"] == "rolled_back" and "自检失败" in up["why"]
+    ob = [json.loads(x) for x in open(evo_dir / "outbox.jsonl")]
+    assert ob[-1]["kind"] == "self_upgrade_rollback" and ob[-1]["level"] == "push"
+
+
+def test_guard_rolls_back_without_heartbeat(tmp_path, loop):
+    evo_dir = tmp_path / "evodir"
+    for v in ("v1", "v2"):
+        shutil.copytree(KIT, evo_dir / "releases" / v, ignore=shutil.ignore_patterns("tests", "__pycache__"))
+    (evo_dir / "releases" / "PREVIOUS").write_text("v1")
+    os.symlink("releases/v2", evo_dir / "current")
+    at = time.time()
+    json.dump({"from": "v1", "to": "v2", "at": at, "state": "switched"}, open(evo_dir / "upgrade.json", "w"))
+    json.dump({"at": at - 30}, open(evo_dir / "runner.json", "w"))             # 心跳停在切换之前
+    guard = os.path.join(KIT, "selfmaint", "evo-guard.sh")
+    env = {**loop.env, "EVO_DIR": str(evo_dir), "GUARD_NO_NET": "1", "EVO_HOME": str(evo_dir / "projects")}
+    subprocess.run(["bash", guard], env={**env, "GUARD_NOW": str(int(at + 120))}, capture_output=True, text=True)
+    assert os.readlink(evo_dir / "current") == "releases/v2"                 # 观察期内、自检过：不动
+    subprocess.run(["bash", guard], env={**env, "GUARD_NOW": str(int(at + 700))}, capture_output=True, text=True)
+    assert os.readlink(evo_dir / "current") == "releases/v1"
+    assert "心跳" in json.load(open(evo_dir / "upgrade.json"))["why"]
+
+
+def test_self_upgrade_switches_release(tmp_path, loop):
+    # 一个小的「evoloop 仓库」：只放 kit，两个提交
+    src = tmp_path / "src"
+    shutil.copytree(KIT, src / "kit", ignore=shutil.ignore_patterns("tests", "__pycache__"))
+    loop.git(str(tmp_path), "init", "-q", "-b", "main", str(src))
+    loop.git(str(src), "add", "-A"); loop.git(str(src), "commit", "-qm", "v1")
+    v1 = loop.git(str(src), "rev-parse", "--short=10", "HEAD")
+    open(src / "kit" / "NOTE.md", "w").write("v2\n")
+    loop.git(str(src), "add", "-A"); loop.git(str(src), "commit", "-qm", "v2")
+    v2 = loop.git(str(src), "rev-parse", "--short=10", "HEAD")
+    r = loop.evo("self-upgrade", v1, "--source", str(src), "--no-restart")
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert os.readlink(os.path.join(loop.root, "current")) == f"releases/{v1}"
+    r = loop.evo("self-upgrade", v2, "--source", str(src), "--no-restart")
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert os.readlink(os.path.join(loop.root, "current")) == f"releases/{v2}"
+    assert open(os.path.join(loop.root, "releases", "PREVIOUS")).read().strip() == v1
+    up = json.load(open(os.path.join(loop.root, "upgrade.json")))
+    assert up["state"] == "switched" and up["from"] == v1 and up["to"] == v2
+    assert os.path.exists(os.path.join(loop.root, "releases", v2, "SOURCE"))
+
+
+def test_plugins_feature_off_turns_off_third_party(loop):
+    loop.project("AB")
+    d = json.loads(loop.ok("feature", "dump", "--json").stdout)
+    assert d["third_party"] == []
+    loop.ok("feature", "off", "plugins")
+    r = loop.evo("plugin", "list", "--json")
+    assert r.returncode != 0 and "evo feature on plugins" in r.stderr
+    assert json.loads(loop.ok("feature", "dump", "--json").stdout)["third_party"] is None
+
+
+def test_outputs_match_schemas(loop):
+    jsonschema = pytest.importorskip("jsonschema")
+    loop.project("AB")
+    loop.add("AB")
+    fs = json.load(open(os.path.join(KIT, "schemas", "feature-list.schema.json")))
+    jsonschema.validate(json.loads(loop.ok("feature", "dump", "--json").stdout), fs)
+    es = json.load(open(os.path.join(KIT, "schemas", "event.schema.json")))
+    r = loop.evo("watch", "--json", "--replay", "50", "--seconds", "1", "--ping", "0")
+    lines = [json.loads(x) for x in r.stdout.splitlines()]
+    assert len(lines) >= 2 and lines[1]["event"] == "item.created"
+    for x in lines:
+        jsonschema.validate(x, es)
+    ps = json.load(open(os.path.join(KIT, "schemas", "projects.schema.json")))
+    jsonschema.validate(json.loads(loop.ok("projects", "--json").stdout), ps)
+    ss = json.load(open(os.path.join(KIT, "schemas", "status.schema.json")))
+    jsonschema.validate(loop.status_json("AB"), ss)

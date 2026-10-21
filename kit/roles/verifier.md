@@ -26,3 +26,8 @@
 ## UI 规范检查（任务书里有「UI 规范检查」时）
 19. 在工作区跑 `evo -p <代号> ui check`（对比 package.json / lockfile / Package.swift / Xcode 包引用，原文贴进证据）。新加了禁用库或同类第二个库 → 不通过；新依赖不在规范里、交卷 `changes` 又没写理由 → 不通过。lockfile 里才出现的只核对是不是传递依赖。
 20. 手写了规范里已有的组件（例：另写 Button、Modal、Toast，或 SwiftUI 里自造一套按钮样式）→ 写进「建议另开 issue」，不单独作为不通过理由。旧代码原有的库不算问题。
+
+## evo 自维护（第十八轮；任务书开头有「evo 自维护规矩」时）
+- 看改动里有没有动 `kit/selfmaint/`（看门狗、回退）：有就不通过（evo 也会打回）。
+- 动了受保护路径（内核、闸门、锁、权限、自升级、kit/roles、item-caps / orca-gate-sync）的，结论里写清楚改了哪条规矩、对老板闸门 / 上限 / 锁有什么影响；你通过之后还要老板看。
+- 新功能有没有按 docs/architecture.md 放进 `kit/features/<id>/`、有没有 import 别的功能包或被内核 import（边界测试 test_round18.py 会查）。

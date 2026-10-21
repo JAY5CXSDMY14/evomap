@@ -34,7 +34,7 @@ class Loop:
                     "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t", "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@t",
                     "EVO_TG_TOKEN": "tok", "EVO_TG_CHAT": "chat", "PYTHONDONTWRITEBYTECODE": "1",
                     # 不联网：HTTP / 邮件记到假目录；时间固定在周二中午（免打扰、时间窗、额度暂停都按它算）
-                    "EVO_FAKE_NET": self.orca_dir, "EVO_NOW": "2026-10-20T12:00:00+08:00"}
+                    "EVO_FAKE_NET": self.orca_dir, "EVO_NOW": "2026-10-20T12:00:00+08:00", "EVO_HOST": "air"}
         self.write_global({})
 
     # ---------- 配置 ----------
@@ -48,7 +48,8 @@ class Loop:
                                   "boot_seconds": 0},
                        "retro": {"prompt": "roles/retro.md"}},
              "notify": {"macos": False},
-             "auto_ship_gate": False}          # 自动收菜默认关：只在专门的测试里打开，免得影响别的测试
+             "auto_ship_gate": False,          # 自动收菜默认关：只在专门的测试里打开，免得影响别的测试
+             "lease_remote": False}            # 第十八轮：远端租约（refs/evo/owner/<机器>）只在专门的测试里打开
         for k, v in extra.items():
             g[k] = {**g[k], **v} if isinstance(v, dict) and isinstance(g.get(k), dict) else v
         json.dump(g, open(os.path.join(self.root, "config.json"), "w"), ensure_ascii=False)

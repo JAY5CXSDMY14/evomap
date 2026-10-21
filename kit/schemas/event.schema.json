@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/JAY5CXSDMY14/evomap/kit/schemas/event.schema.json",
+  "title": "evo watch --json 的一行（~/.evoloop/events.jsonl 的一行）",
+  "description": "第十八轮：行分隔 JSON 事件流。App 订阅它代替 30 秒轮询（轮询保留兜底）。只加事件种类和字段，不改名。",
+  "type": "object",
+  "required": ["schema_version", "event", "ts"],
+  "additionalProperties": true,
+  "properties": {
+    "schema_version": {"const": 1},
+    "id": {"type": "string"},
+    "ts": {"type": "string"},
+    "event": {"type": "string", "description": "item.created / build.started / build.done / verify.started / verify.passed / verify.failed / gate.pending / gate.resolved / item.merged / push.done / deploy.done / deploy.failed / item.shipped / item.dropped / item.timeline / tick / feature.changed / feature.error / project.claimed / self.upgraded / watch.ping …"},
+    "project": {"type": ["string", "null"]},
+    "item": {"type": ["string", "null"]},
+    "data": {"type": "object"}
+  }
+}

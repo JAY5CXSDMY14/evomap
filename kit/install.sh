@@ -3,15 +3,19 @@
 #   bash install.sh            只检查，不改任何东西
 #   bash install.sh --apply    装：Orca 技能、全局配置（没有才放）、launchd 常驻（evo run --every 30）
 #   bash install.sh --apply --link   另在 ~/.local/bin 放一个 evo 软链
+#   第十八轮（自维护）：--apply 时把这套 kit 拷成 ~/.evoloop/releases/<版本>/，~/.evoloop/current 软链指向它，常驻进程跑 current；
+#   另装看门狗 ~/.evoloop/guard/evo-guard.sh（launchd 每分钟一次，自升级后 10 分钟没心跳 / 自检失败就切回上一版）。
+#   bash install.sh --apply --dev    开发用：常驻进程直接跑这个目录（不建 releases / current，不装看门狗）
 # 可以反复跑：已经装好的会跳过。项目不在这里登记，装完用 evo new / evo import。
 set -uo pipefail
 KIT=$(cd "$(dirname "$0")" && pwd)
-APPLY=0; LINK=0
+APPLY=0; LINK=0; DEV=0
 for a in "$@"; do
   case "$a" in
     --apply) APPLY=1 ;;
     --link) LINK=1 ;;
-    -h|--help) sed -n '2,7p' "$0"; exit 0 ;;
+    --dev) DEV=1 ;;
+    -h|--help) sed -n '2,10p' "$0"; exit 0 ;;
     *) echo "不认识的参数：$a"; exit 2 ;;
   esac
 done
@@ -77,6 +81,42 @@ fi
 
 echo "■ 安装"
 mkdir -p "$LOGS" "$EVO_DIR/projects"
+# 第十八轮：装成一个版本（releases/<版本>/ + current 软链）。版本名 = 仓库提交号，没有 git 时用 App 版本或日期
+RUN_KIT=$KIT
+if [ $DEV = 0 ]; then
+  SRC=""
+  if git -C "$KIT/.." rev-parse --git-dir >/dev/null 2>&1; then
+    SRC=$(cd "$KIT/.." && pwd)
+    VER=$(git -C "$SRC" rev-parse --short=10 HEAD)
+    git -C "$SRC" diff --quiet HEAD -- kit 2>/dev/null || VER="$VER-dirty$(date +%m%d%H%M)"
+  elif [ -f "$KIT/APP_VERSION" ]; then
+    VER="app-$(tr -d '[:space:]' < "$KIT/APP_VERSION")"
+  else
+    VER="local-$(date +%Y%m%d%H%M)"
+  fi
+  REL="$EVO_DIR/releases/$VER"
+  if [ -d "$REL" ]; then
+    ok "版本 $VER 已在 $REL"
+  else
+    mkdir -p "$EVO_DIR/releases"
+    TMPR="$REL.tmp$$"; rm -rf "$TMPR"; mkdir -p "$TMPR"
+    (cd "$KIT" && tar --exclude tests --exclude mock --exclude __pycache__ --exclude '*.pyc' -cf - .) | (cd "$TMPR" && tar -xf -)
+    [ -n "$SRC" ] && echo "$SRC" > "$TMPR/SOURCE"
+    echo "$VER" > "$TMPR/VERSION"
+    mv "$TMPR" "$REL" && ok "已装版本 $VER → $REL"
+  fi
+  if [ -L "$EVO_DIR/current" ] && [ "$(readlink "$EVO_DIR/current")" != "releases/$VER" ]; then
+    basename "$(readlink "$EVO_DIR/current")" > "$EVO_DIR/releases/PREVIOUS"
+  fi
+  python3 -c 'import os,sys; t=sys.argv[1]+".new"; os.path.lexists(t) and os.remove(t); os.symlink(sys.argv[2], t); os.replace(t, sys.argv[1])' \
+    "$EVO_DIR/current" "releases/$VER" && ok "current → releases/$VER（上一版记在 releases/PREVIOUS）"
+  RUN_KIT="$EVO_DIR/current"
+  # 看门狗：拷到 guard/（不在 releases 里，自升级碰不到它）
+  mkdir -p "$EVO_DIR/guard"; cp "$KIT/selfmaint/evo-guard.sh" "$EVO_DIR/guard/evo-guard.sh"; chmod 755 "$EVO_DIR/guard/evo-guard.sh"
+  ok "看门狗脚本 $EVO_DIR/guard/evo-guard.sh"
+else
+  info "--dev：常驻进程直接跑 $KIT（不建 releases，不装看门狗）"
+fi
 if [ -f "$EVO_DIR/config.json" ]; then
   ok "全局配置已有，不覆盖"
 else
@@ -110,7 +150,7 @@ if [ "$(uname)" = Darwin ]; then
     cat > "$TMP" <<PL
 <?xml version="1.0" encoding="UTF-8"?><!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0"><dict><key>Label</key><string>$label</string>
-<key>ProgramArguments</key><array><string>$PY</string><string>$KIT/bin/evo</string>$args</array>
+<key>ProgramArguments</key><array><string>$PY</string><string>$RUN_KIT/bin/evo</string>$args</array>
 <key>RunAtLoad</key><true/><key>KeepAlive</key><true/>
 <key>StandardOutPath</key><string>$LOGS/$what.log</string><key>StandardErrorPath</key><string>$LOGS/$what.log</string>
 <key>EnvironmentVariables</key><dict><key>PATH</key><string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:$HOME/.local/bin</string><key>PYTHONDONTWRITEBYTECODE</key><string>1</string>$ENVX</dict>
@@ -125,6 +165,24 @@ PL
     fi
   }
   install_agent "$LABEL" "$PLIST" autopilot run --every 30
+  if [ $DEV = 0 ]; then                # 第十八轮：看门狗，每 60 秒一次（只在自升级后的观察期里动手）
+    GP="$HOME/Library/LaunchAgents/com.evoloop.guard.plist"; TMPG=$(mktemp)
+    cat > "$TMPG" <<PL
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict><key>Label</key><string>com.evoloop.guard</string>
+<key>ProgramArguments</key><array><string>/bin/bash</string><string>$EVO_DIR/guard/evo-guard.sh</string></array>
+<key>StartInterval</key><integer>60</integer><key>RunAtLoad</key><true/>
+<key>StandardOutPath</key><string>$LOGS/guard.log</string><key>StandardErrorPath</key><string>$LOGS/guard.log</string>
+<key>EnvironmentVariables</key><dict><key>PATH</key><string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string><key>EVO_DIR</key><string>$EVO_DIR</string>$ENVX</dict>
+</dict></plist>
+PL
+    if [ -f "$GP" ] && cmp -s "$TMPG" "$GP" && launchctl list 2>/dev/null | grep -q com.evoloop.guard; then
+      rm -f "$TMPG"; ok "看门狗常驻没变，跳过"
+    else
+      mv "$TMPG" "$GP"; chmod 600 "$GP"; launchctl unload "$GP" 2>/dev/null || true
+      launchctl load "$GP" && ok "看门狗已常驻（每分钟一次，日志 $LOGS/guard.log）" || warn "launchctl load com.evoloop.guard 失败"
+    fi
+  fi
   if [ -n "${EVO_TG_TOKEN:-${TUBU_TG_TOKEN:-}}" ] && [ -n "${EVO_TG_CHAT:-${TUBU_TG_CHAT:-}}" ]; then
     install_agent com.evoloop.bot "$HOME/Library/LaunchAgents/com.evoloop.bot.plist" bot bot
   else
@@ -140,9 +198,9 @@ for cfg in "${EVO_HOME:-$HOME/.evoloop/projects}"/*/config.json; do
   fi
 done
 echo "完成。下一步登记项目（安装脚本不登记项目）："
-echo "  新项目：$KIT/bin/evo new AB --name 名字 --path 目录 [--github 用户/仓库 --create]"
-echo "  旧项目：$KIT/bin/evo import TB --name 土布 --path 旧仓库   （有远端时 evo 在 ~/.evoloop/repos/TB 自己克隆一份，只在那里合并推送；不要就加 --in-place）"
-echo "  已登记的老项目切到专用克隆：$KIT/bin/evo -p TB relocate"
-echo "  每件上限：$KIT/bin/evo limits   （决策岗返工 2 次、派工 12 次、累计 6 小时；面板「每件上限」可改）"
-echo "  看进度：$KIT/bin/evo status"
-echo "  试提醒：$KIT/bin/evo notify-test"
+echo "  新项目：${RUN_KIT:-$KIT}/bin/evo new AB --name 名字 --path 目录 [--github 用户/仓库 --create]"
+echo "  旧项目：${RUN_KIT:-$KIT}/bin/evo import TB --name 土布 --path 旧仓库   （有远端时 evo 在 ~/.evoloop/repos/TB 自己克隆一份，只在那里合并推送；不要就加 --in-place）"
+echo "  已登记的老项目切到专用克隆：${RUN_KIT:-$KIT}/bin/evo -p TB relocate"
+echo "  每件上限：${RUN_KIT:-$KIT}/bin/evo limits   （决策岗返工 2 次、派工 12 次、累计 6 小时；面板「每件上限」可改）"
+echo "  看进度：${RUN_KIT:-$KIT}/bin/evo status"
+echo "  试提醒：${RUN_KIT:-$KIT}/bin/evo notify-test"

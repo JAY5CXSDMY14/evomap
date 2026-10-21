@@ -260,6 +260,402 @@ def emit(event, item=None, live=None, record=True, **data):
     return BUS.publish(event, {k: v for k, v in data.items() if v is not None}, item=item, live=live, record=record)
 
 
+# ---------- 第十八轮：自维护（EV 改 evo 自己）。见 docs/self-maintenance.md ----------
+# 受保护：内核（状态机、闸门、锁、事件、运行时）、权限（refuse_agents、插件环境白名单）、自升级、岗位规则、安全类功能包。
+SELF_PROTECTED = ["kit/bin/evo", "kit/bin/evo_rt.py", "kit/bin/evo_bus.py", "kit/bin/evo_notify.py", "kit/bin/evo_plugin.py",
+                  "kit/roles/**", "kit/install.sh", "kit/selfmaint/**", "kit/features/item-caps/**", "kit/features/orca-gate-sync/**"]
+SELF_FORBIDDEN = ["kit/selfmaint/**"]          # 看门狗和回退逻辑：施工一律不许改（只有老板手改）
+
+
+def self_maintained():
+    return bool(CFG.get("self_maintained"))
+
+
+def protected_globs():
+    return (SELF_PROTECTED + list(CFG.get("protected_paths") or [])) if self_maintained() else list(CFG.get("protected_paths") or [])
+
+
+def _glob_hit(path, pat):
+    import fnmatch
+    path, pat = path.strip("/"), pat.strip("/")
+    if pat.endswith("/**"):
+        return path == pat[:-3] or path.startswith(pat[:-2])
+    return fnmatch.fnmatch(path, pat) or path == pat
+
+
+def protected_scope(scope):
+    """件的范围碰到哪些受保护路径（范围是目录前缀；范围是 . 或空 = 整仓，也算碰到）。"""
+    globs = protected_globs()
+    if not globs:
+        return []
+    hit = []
+    for g in globs:
+        base = g[:-3] if g.endswith("/**") else g
+        for sc in scope or ["."]:
+            sc = sc.strip("/").strip()
+            if sc in ("", ".") or base.startswith(sc.rstrip("/") + "/") or base == sc or _glob_hit(sc, g):
+                hit.append(g); break
+    return hit
+
+
+def self_head(it):
+    """EV（self_maintained）任务书开头的规矩。"""
+    if not self_maintained():
+        return ""
+    return ("【evo 自维护规矩】这个仓库就是 evo 自己。改到内核（kit/bin/evo、evo_rt、evo_bus、evo_notify、evo_plugin）、闸门、锁、权限、"
+            "自升级、岗位规则（kit/roles）、每件上限 / Orca 闸门同步功能包的件，一律走老板闸门，决策岗不能批。"
+            "严禁修改 kit/selfmaint/（看门狗和回退逻辑），改了交卷直接打回。新功能放 kit/features/<id>/，按 docs/architecture.md 的步骤做。\n\n")
+
+
+def protected_delivery_check(s, k, it):
+    """交卷时：改到看门狗 / 回退（kit/selfmaint/）→ 打回；改到受保护路径但登记时没算上 → 补成老板闸门件（合并前要老板看效果）。"""
+    globs = protected_globs(); wt = it.get("worktree")
+    if not globs or not wt:
+        return None
+    base = git(wt, "merge-base", CFG["main_branch"], "HEAD", check=False)
+    if not base:
+        return None
+    changed = [x for x in git(wt, "diff", "--name-only", base, "HEAD", check=False).splitlines() if x.strip()]
+    bad = [f for f in changed if self_maintained() and any(_glob_hit(f, g) for g in SELF_FORBIDDEN)]
+    if bad:
+        return ("改了看门狗 / 回退逻辑（" + "、".join(bad[:5]) + "）：施工任务书禁止修改 kit/selfmaint/，只有老板手改。把这些改动撤掉")
+    hit = sorted({g for f in changed for g in globs if _glob_hit(f, g)})
+    if hit and not it.get("owner_only"):
+        it["owner_only"] = hit
+        if not it.get("ui"):
+            it["ui"] = True
+            c = coord(s)
+            g, _ = orca("orchestration", "gate-create", "--from", c, "--task", it["merge"],
+                        "--question", f"看效果（改到受保护路径，老板定）：{it['title']}", "--options", json.dumps(["通过", "打回"]))
+            it["gates"]["look"] = g["gate"]["id"]
+            tl(k, "gate_open", kind="look", gate=g["gate"]["id"], note="改到受保护路径：" + "、".join(hit))
+        log(s, f"{k} 改到受保护路径（{'、'.join(hit)}）：合并前要老板点头，决策岗不能批")
+    return None
+
+
+SELF_RELEASES = os.path.join(EVO_ROOT, "releases")
+SELF_CURRENT = os.path.join(EVO_ROOT, "current")
+UPGRADE_PATH = os.path.join(EVO_ROOT, "upgrade.json")
+UPGRADING = os.path.join(EVO_ROOT, "UPGRADING")
+RUNNER_HB = os.path.join(EVO_ROOT, "runner.json")
+
+
+def running_release():
+    """本进程是不是从 ~/.evoloop/releases/<版本>/ 跑的：返回版本名，否则 None（开发时直接从仓库跑）。"""
+    rel = os.path.realpath(SELF_RELEASES)
+    return os.path.basename(KIT) if os.path.dirname(KIT) == rel else None
+
+
+def selfcheck_doc():
+    """自检：代码能编译、功能包都载得进（精简必开的没有失败）、features.yml 读得懂、事件日志写得进。"""
+    checks = []
+    files = [SELF] + [os.path.join(KIT, "bin", f) for f in os.listdir(os.path.join(KIT, "bin")) if f.endswith(".py")]
+    for d in sorted(os.listdir(FEATURES_DIR)) if os.path.isdir(FEATURES_DIR) else []:
+        fd = os.path.join(FEATURES_DIR, d)
+        files += [os.path.join(fd, f) for f in os.listdir(fd) if f.endswith(".py")] if os.path.isdir(fd) else []
+    bad = []
+    for f in files:
+        try:
+            compile(open(f, encoding="utf-8").read(), f, "exec")      # 只查语法，不写 .pyc（App 包里不能写）
+        except (SyntaxError, ValueError, OSError) as e:
+            bad.append(f"{os.path.relpath(f, KIT)}：{str(e)[-200:]}")
+    checks.append({"name": "compile", "ok": not bad, "detail": bad[:10]})
+    feats = rt().dump()
+    failed = [f"{f['id']}：{f['why']}" for f in feats if f["state"] == "failed"]
+    ess = [f["id"] for f in feats if f["essential"] and f["enabled"] and f["state"] != "active"]
+    checks.append({"name": "features", "ok": not failed and not ess, "detail": failed + [f"{x} 没起来" for x in ess]})
+    checks.append({"name": "features.yml", "ok": not rt().file_error, "detail": [rt().file_error] if rt().file_error else []})
+    try:
+        os.makedirs(EVO_ROOT, exist_ok=True)
+        with open(EVENTS_PATH, "a"):
+            pass
+        checks.append({"name": "events", "ok": True, "detail": []})
+    except OSError as e:
+        checks.append({"name": "events", "ok": False, "detail": [str(e)]})
+    return {"schema_version": APP_SCHEMA_VERSION, "ok": all(c["ok"] for c in checks), "release": running_release(),
+            "kit": KIT, "checks": checks}
+
+
+def cmd_selfcheck(a):
+    d = selfcheck_doc()
+    if a.json:
+        print(json.dumps(d, ensure_ascii=False))
+    else:
+        for c in d["checks"]:
+            print(("✓ " if c["ok"] else "✗ ") + c["name"] + ("：" + "；".join(c["detail"]) if c["detail"] else ""))
+    return 0 if d["ok"] else 1
+
+
+def _release_source():
+    for p in (os.path.join(KIT, "SOURCE"), os.path.join(SELF_CURRENT, "SOURCE")):
+        try:
+            v = open(p, encoding="utf-8").read().strip()
+            if v:
+                return v
+        except OSError:
+            pass
+    src = GCFG.get("self_repo") or os.path.dirname(KIT)
+    return src if os.path.isdir(os.path.join(src, ".git")) else None
+
+
+def _lock_holders():
+    out = []
+    for code in list_projects():
+        p = os.path.join(HOME_DIR, code, "state", "lock")
+        if not os.path.exists(p):
+            continue
+        with open(p, "a") as f:
+            try:
+                fcntl.flock(f, fcntl.LOCK_SH | fcntl.LOCK_NB); fcntl.flock(f, fcntl.LOCK_UN)
+            except BlockingIOError:
+                out.append(code)
+    return out
+
+
+def cmd_self_upgrade(a):
+    """evo self-upgrade <版本或提交>：装到 releases/ 旁边 → 新版本先自检 → 等当前一轮结束 → 切 current 软链 → 再自检
+    （失败立刻切回）→ 记 upgrade.json 让看门狗盯 10 分钟（没心跳 / 自检失败它会切回上一版并推送）。"""
+    refuse_agents("自升级")
+    src = a.source or _release_source()
+    if not src:
+        sys.exit("不知道从哪个仓库升级：evo self-upgrade <提交> --source <evoloop 仓库目录>，或全局配置写 self_repo")
+    run_cmd(["git", "-C", src, "fetch", "-q", "--all"], timeout=tmo("git_net"))
+    r = run_cmd(["git", "-C", src, "rev-parse", "--short=10", f"{a.ref}^{{commit}}"], timeout=60)
+    if r.returncode:
+        sys.exit(f"找不到 {a.ref}：{r.stderr.strip()[-200:]}")
+    ver = r.stdout.strip()
+    dest = os.path.join(SELF_RELEASES, ver)
+    if not os.path.isdir(dest):
+        tmp = dest + f".tmp{os.getpid()}"
+        os.makedirs(tmp, exist_ok=True)
+        r = subprocess.run(f"git -C {shlex.quote(src)} archive {shlex.quote(ver)} kit | tar -x -C {shlex.quote(tmp)} --strip-components 1",
+                           shell=True, capture_output=True, text=True, timeout=300)
+        if r.returncode or not os.path.exists(os.path.join(tmp, "bin", "evo")):
+            subprocess.run(["rm", "-rf", tmp])
+            sys.exit(f"取 {ver} 的 kit 没成功：{(r.stderr or '')[-300:]}")
+        open(os.path.join(tmp, "SOURCE"), "w").write(src)
+        open(os.path.join(tmp, "VERSION"), "w").write(ver + "\n")
+        os.rename(tmp, dest)
+    print(f"新版本放在 {dest}")
+    chk = run_cmd([sys.executable, os.path.join(dest, "bin", "evo"), "selfcheck", "--json"], timeout=300, extra_env=False)
+    if chk.returncode:
+        sys.exit(f"新版本 {ver} 自检没过，不切换：{(chk.stdout + chk.stderr)[-600:]}")
+    old = os.path.realpath(SELF_CURRENT) if os.path.islink(SELF_CURRENT) else None
+    if old and os.path.basename(old) == ver:
+        print(f"已经是 {ver}"); return 0
+    open(UPGRADING, "w").write(ver)                    # evo run 看到它就不开新的一轮
+    try:
+        deadline = time.time() + a.wait_minutes * 60
+        while _lock_holders():
+            if time.time() > deadline:
+                sys.exit(f"等了 {a.wait_minutes} 分钟当前一轮还没结束（{'、'.join(_lock_holders())}），没切换；稍后再试")
+            print("等当前一轮结束：" + "、".join(_lock_holders())); time.sleep(5)
+        if old:
+            open(os.path.join(SELF_RELEASES, "PREVIOUS"), "w").write(os.path.basename(old))
+        tmpl = SELF_CURRENT + ".new"
+        if os.path.lexists(tmpl):
+            os.remove(tmpl)
+        os.symlink(os.path.join("releases", ver), tmpl)
+        os.replace(tmpl, SELF_CURRENT)
+        chk = run_cmd([sys.executable, os.path.join(SELF_CURRENT, "bin", "evo"), "selfcheck", "--json"], timeout=300, extra_env=False)
+        rec = {"from": os.path.basename(old) if old else None, "to": ver, "at": TM.now(), "at_iso": TM.iso(),
+               "state": "switched", "watch_until": TM.now() + 600}
+        if chk.returncode and old:
+            os.symlink(os.path.relpath(old, EVO_ROOT), tmpl); os.replace(tmpl, SELF_CURRENT)
+            rec["state"] = "rolled_back"; rec["why"] = "切换后自检没过"
+            json.dump(rec, open(UPGRADE_PATH, "w", encoding="utf-8"), ensure_ascii=False)
+            notify("self_upgrade_failed", f"自升级到 {ver} 失败，已切回 {rec['from']}", (chk.stdout + chk.stderr)[-300:])
+            sys.exit(f"切换后自检没过，已切回 {rec['from']}")
+        json.dump(rec, open(UPGRADE_PATH, "w", encoding="utf-8"), ensure_ascii=False)
+    finally:
+        try:
+            os.remove(UPGRADING)
+        except OSError:
+            pass
+    emit("self.upgraded", to=ver, previous=rec["from"])
+    if sys.platform == "darwin" and not a.no_restart:   # 常驻进程重启后用新版本（看门狗 10 分钟内看不到心跳会切回）
+        subprocess.run(["launchctl", "kickstart", "-k", f"gui/{os.getuid()}/com.evoloop.autopilot"], capture_output=True)
+    print(f"已切到 {ver}（上一版 {rec['from'] or '无'}）。看门狗盯 10 分钟：没心跳或自检失败会自动切回并推送")
+    return 0
+
+
+def runner_heartbeat():
+    """evo run 每一圈写一次：看门狗用它判断新版本有没有在转（和项目心跳分开，没有项目时也有）。"""
+    try:
+        tmp = RUNNER_HB + ".tmp"
+        json.dump({"pid": os.getpid(), "at": TM.now(), "at_iso": TM.iso(), "release": running_release(), "kit": KIT},
+                  open(tmp, "w", encoding="utf-8")); os.replace(tmp, RUNNER_HB)
+    except OSError:
+        pass
+
+
+# ---------- 第十八轮：多机器（项目归属租约 + 按机器的模型前缀）。见 docs/multi-machine.md ----------
+MACHINE_PATH = os.path.join(EVO_ROOT, "machine.yml")
+LEASE_PREFIX = "refs/evo/owner/"                 # 远端租约：refs/evo/owner/<机器名>（只有 ls-remote 就能看出归谁）
+LEASE_CHECK_MINUTES = 10
+_MACHINE = {}
+
+
+def this_host():
+    """本机名：EVO_HOST 优先（测试 / 想起个好记的名字），否则 hostname 去掉 .local、小写。"""
+    import socket
+    h = os.environ.get("EVO_HOST") or machine().get("name") or socket.gethostname()
+    return re.sub(r"[^a-z0-9-]+", "-", h.split(".")[0].lower()).strip("-") or "mac"
+
+
+def machine():
+    """~/.evoloop/machine.yml：name、model_prefix（远程 magpie 的分组前缀，例 mini/）、aliases（模型名 → 本机要用的名字）。"""
+    if "m" not in _MACHINE:
+        m = {"aliases": {}}
+        try:
+            cur = None
+            for raw in open(MACHINE_PATH, encoding="utf-8"):
+                line = raw.split(" #")[0].rstrip()
+                if not line.strip() or line.lstrip().startswith("#"):
+                    continue
+                k, _, v = line.strip().partition(":")
+                v = v.strip().strip('"').strip("'")
+                if raw.startswith((" ", "\t")) and cur == "aliases":
+                    m["aliases"][k.strip().strip('"')] = v
+                elif not raw.startswith((" ", "\t")):
+                    cur = k.strip()
+                    if v:
+                        m[cur] = v
+        except OSError:
+            pass
+        p = m.get("model_prefix") or ""
+        if p and not p.endswith("/"):
+            m["model_prefix"] = p + "/"
+        _MACHINE["m"] = m
+    return _MACHINE["m"]
+
+
+def model_alias(m):
+    """派工时真正填进命令的模型名：aliases 优先；有 model_prefix 时 group/… 前面加上它（例 mini/group/evo-build）。"""
+    if not m:
+        return m
+    mc = machine()
+    if m in mc["aliases"]:
+        return mc["aliases"][m]
+    p = mc.get("model_prefix") or ""
+    return p + m if p and str(m).startswith("group/") and not str(m).startswith(p) else m
+
+
+def norm_models(data):
+    """/v1/models 的回答：带本机前缀的分组（mini/group/evo-build）同时当作不带前缀的名字（group/evo-build）可用，
+    配置、团队页、成绩统计都用不带前缀的名字（换机器不用改配置）。"""
+    if not isinstance(data, dict) or not isinstance(data.get("data"), list):
+        return data
+    mc = machine(); p = mc.get("model_prefix") or ""
+    if not p and not mc["aliases"]:
+        return data
+    rows = [m for m in data["data"] if isinstance(m, dict) and isinstance(m.get("id"), str)]
+    have = {m["id"] for m in rows}
+    extra = []
+    for m in rows:
+        if p and m["id"].startswith(p) and m["id"][len(p):] not in have:
+            extra.append(dict(m, id=m["id"][len(p):], alias_of=m["id"])); have.add(m["id"][len(p):])
+    for short, full in mc["aliases"].items():
+        if full in have and short not in have:
+            extra.append({"id": short, "alias_of": full}); have.add(short)
+    return dict(data, data=data["data"] + extra)
+
+
+def magpie_http(url, *a, **kw):
+    """读 magpie 用这个（团队页、evo models）：/v1/models 的回答按本机前缀补上别名。"""
+    code, data = NT.http(url, *a, **kw)
+    if code == 200 and url.rstrip("/").endswith("/v1/models"):
+        data = norm_models(data)
+    return code, data
+
+
+def owner_host(cfg=None):
+    return ((cfg if cfg is not None else CFG) or {}).get("owner_host") or None
+
+
+def lease_refuse(owner, where="本机记录"):
+    sys.exit(f"项目 {CODE} 归 {owner} 这台机器跑（{where}），本机是 {this_host()}，不动它。\n"
+             f"要转到本机：先停掉 {owner} 上的 evo（或确认它不会再跑 {CODE}），再 evo -p {CODE} claim --force")
+
+
+def lease_remote_on():
+    return bool(CFG.get("push_cmd")) and CFG.get("lease_remote", GCFG.get("lease_remote", True)) is not False
+
+
+def lease_remote_get():
+    """远端租约：[机器名…]；读不到返回 None（没网不拦，下次再查）。"""
+    r = run_cmd(["git", "-C", CFG["repo"], "ls-remote", "origin", LEASE_PREFIX + "*"], timeout=tmo("git_net"))
+    if r.returncode:
+        return None
+    return sorted({ln.split("\t", 1)[1][len(LEASE_PREFIX):] for ln in r.stdout.splitlines() if "\t" in ln})
+
+
+def lease_remote_set(host, drop=()):
+    """把远端租约写成 host（推一个指向主线的 ref），去掉别的机器的。"""
+    refs = [f"{CFG['main_branch']}:{LEASE_PREFIX}{host}"] + [f":{LEASE_PREFIX}{h}" for h in drop if h != host]
+    r = run_cmd(["git", "-C", CFG["repo"], "push", "-q", "origin", *refs], timeout=tmo("git_net"))
+    return r.returncode == 0
+
+
+def lease_check(loop=False):
+    """动状态的命令先过这里：本机记录的归属不是本机 → 拒绝。loop=True（一轮 tick / once）时再每 10 分钟查一次远端租约：
+    远端归别的机器 → 拒绝；远端还没人认领 → 本机认领（第二台机器后导入同一个项目时就会被拦住）。"""
+    if not HAS_PROJECT or env("EVO_CONFIG"):
+        return
+    me = this_host(); own = owner_host()
+    if own and own != me:
+        lease_refuse(own)
+    if not loop or not lease_remote_on():
+        return
+    lp = os.path.join(STATE_DIR, "lease.json")
+    try:
+        cache = json.load(open(lp, encoding="utf-8"))
+    except (OSError, ValueError):
+        cache = {}
+    if cache.get("host") == me and TM.now() - cache.get("at", 0) < LEASE_CHECK_MINUTES * 60:
+        return
+    hosts = lease_remote_get()
+    if hosts is None:
+        return
+    if hosts and me not in hosts:
+        lease_refuse(hosts[0], "远端租约 " + LEASE_PREFIX + hosts[0])
+    if not hosts:
+        lease_remote_set(me)
+    if not own:
+        claim_write(me)
+    os.makedirs(STATE_DIR, exist_ok=True)
+    json.dump({"host": me, "at": TM.now()}, open(lp, "w", encoding="utf-8"))
+
+
+def claim_write(host, frm=None):
+    raw = _read_json(_cfgp)
+    raw["owner_host"] = host
+    if frm:
+        raw["claimed_from"] = frm; raw["claimed_at"] = TM.iso()
+    tmp = _cfgp + ".tmp"
+    json.dump(raw, open(tmp, "w", encoding="utf-8"), ensure_ascii=False, indent=2); os.replace(tmp, _cfgp)
+    CFG["owner_host"] = host
+
+
+def cmd_claim(a):
+    """evo -p X claim [--force]：把项目归到本机。归别的机器时要 --force（转移前先停掉那边）。"""
+    refuse_agents("改项目归属")
+    me = this_host(); own = owner_host()
+    remote = lease_remote_get() if lease_remote_on() else []
+    others = [h for h in (remote or []) if h != me] + ([own] if own and own != me else [])
+    if others and not a.force:
+        sys.exit(f"{CODE} 现在归 {others[0]}。确认那台机器不会再跑它，再 evo -p {CODE} claim --force")
+    if lease_remote_on() and remote is not None and not lease_remote_set(me, drop=remote or []):
+        sys.exit("远端租约没写成（推不上去）：检查网络 / 权限后重试")
+    claim_write(me, frm=others[0] if others else None)
+    try:
+        os.remove(os.path.join(STATE_DIR, "lease.json"))
+    except OSError:
+        pass
+    emit("project.claimed", host=me, previous=others[0] if others else None)
+    print(f"{CODE} 已归本机 {me}" + (f"（从 {others[0]} 转过来）" if others else ""))
+
+
 # ---------- 基础 ----------
 def orca(*args, ok=True):
     r = run_cmd(ORCA + list(args) + ["--json"], timeout=tmo("orca"), extra_env=False)   # 第十七轮：超时 / 没装都转成 SystemExit，不让进程直接崩
@@ -317,6 +713,7 @@ def lock_holder():
 
 
 def load():
+    lease_check()                     # 第十八轮：项目归别的机器 → 不动它
     if _LOCK is None:
         lock()
     if os.path.exists(PAUSED):
@@ -465,7 +862,7 @@ def goal_head(cfg=None):
 def spec_head(role, it):
     """任务书开头：项目目标一行，接着（只对碰界面的件）「UI 规范」块，（只对碰后端路径的件）「架构规范」块。"""
     # 第十八轮：UI / 架构规范块来自功能包（prompt.head 槽位，按 key 排序：10-ui、20-arch）；功能关着就没有
-    return goal_head() + "".join(fn(role, it) or "" for _, _, fn in hook("prompt.head"))
+    return goal_head() + self_head(it) + "".join(fn(role, it) or "" for _, _, fn in hook("prompt.head"))
 
 
 def notify(kind, title, body="", item=None, gate=None, **data):
@@ -638,6 +1035,10 @@ def add_item(s, a):
     deps = [it["merge"] for it in s["items"].values() if it["state"] not in ("merged", "shipped", "dropped") and overlap(scope, it["scope"])]
     spec = f"任务：{a.title}\nscope: {','.join(scope)}\n看效果: {'是（用户能感知）' if a.ui else '否'}\n" + \
         (f"时间窗: {win}（只在窗内开工）\n" if win else "") + (a.spec or "")
+    owner_only = protected_scope(scope)                 # 第十八轮：EV 改内核 / 闸门 / 锁 / 权限 / 自升级 → 老板闸门（做不做 + 看效果）
+    if owner_only:
+        a.ui = True; a.product = True
+        spec += f"老板闸门: 是（碰到受保护路径 {'、'.join(owner_only)}；决策岗不能批）\n"
     probe = {"ui": a.ui, "scope": scope}
     bspec, vspec = spec_head("build", probe) + role_prompt("build") + spec, spec_head("verify", probe) + role_prompt("verify") + spec
     b, _ = orca("orchestration", "task-create", "--from", c, "--task-title", f"{key} 施工", "--spec", bspec,
@@ -650,6 +1051,8 @@ def add_item(s, a):
           "verify": v["task"]["id"], "merge": m["task"]["id"], "spec": spec, "after": deps, "state": "queued", "round": 0,
           "model_i": 0, "worktree": None, "gates": {}, "dispatch": {}, "window": win, "build_spec": bspec, "verify_spec": vspec,
           "usage": {"runs": 0, "minutes": 0.0}}
+    if owner_only:
+        it["owner_only"] = owner_only
     if a.product:
         g, _ = orca("orchestration", "gate-create", "--from", c, "--task", it["build"],
                     "--question", f"做不做：{a.title}", "--options", json.dumps(["做", "不做"]))
@@ -696,7 +1099,7 @@ def launch(c, path, title, rc, model, tid):
     """开终端、起工人命令、派工。返回 (终端句柄, 派工号)。"""
     res, _ = orca("terminal", "create", "--worktree", f"path:{path}", "--title", title)
     h = res["terminal"]["handle"]
-    cmd = R.render_cmd(rc["cmd"], model, rc.get("thinking"))      # {model} / {thinking}；空值连参数一起去掉
+    cmd = R.render_cmd(rc["cmd"], model_alias(model), rc.get("thinking"))      # {model} / {thinking}；空值连参数一起去掉；第十八轮：按本机前缀改名
     orca("terminal", "send", "--terminal", h, "--text", cmd, "--enter", ok=False)
     time.sleep(rc.get("boot_seconds", 3))
     d, j = orca("orchestration", "dispatch", "--from", c, "--task", tid, "--to", h, "--inject", ok=False)
@@ -1038,7 +1441,8 @@ def check_delivery(s, k, it, body):
         red = [t["command"] for t in rep["tests"] if t["result"] == "failed"]
         if red:
             build_reject(s, k, it, "报告里有没通过的测试：" + "；".join(red)); return False
-    why = next((r for r in (fn(s, k, it) for _, _, fn in hook("delivery.check")) if r), None)   # 第十八轮：功能包的交卷检查
+    why = protected_delivery_check(s, k, it) or \
+        next((r for r in (fn(s, k, it) for _, _, fn in hook("delivery.check")) if r), None)   # 第十八轮：功能包的交卷检查
     if why:
         build_reject(s, k, it, why)
         return False
@@ -1557,6 +1961,7 @@ def checkpoint(s, name):
 
 # ---------- 接棒一轮 ----------
 def cmd_tick(a=None):
+    lease_check(loop=True)
     s = load(); guard_git(s); c = coord(s); T = tasks(s)
     by_task = {}
     for k, it in s["items"].items():
@@ -1969,6 +2374,9 @@ def apply_decisions(s, body):
         if it["state"] in ("merged", "shipped", "dropped", "pushing"):
             log(s, f"{k} 已是{NAMES.get(it['state'])}，决策岗的 {act} 不执行"); continue
         note = str(d.get("note") or "").strip()
+        if act == "answer" and it.get("owner_only"):     # 第十八轮：受保护的件（EV 改内核 / 闸门 / 锁 / 权限 / 自升级）决策岗不能批，转老板
+            log(s, f"{k} 碰到受保护路径，决策岗的答复改成转老板定")
+            act = "ask_owner"; note = "决策岗想这样答复（受保护的件，要老板定）：" + note
         tl(k, "decision", action=act, note=note[:1000], state=it["state"])
         try:
             DECIDE_DO[act](s, k, it, note, d)
@@ -2490,8 +2898,18 @@ def cmd_run(a):
     """一直接棒。单项目和多项目一样：每轮每个项目起一个子进程 `evo -p <代号> once`，
     本进程不拿项目锁（以前单项目在本进程里循环，锁永远不放，approve/add/status 全卡住，见 docs/loop-audit-2026-10.md L-01）。"""
     while True:
+        runner_heartbeat()
+        if os.path.exists(UPGRADING):                    # 第十八轮：自升级在切换，这一圈不开
+            time.sleep(min(a.every, 5)); continue
+        if running_release() and os.path.realpath(SELF_CURRENT) != KIT and os.path.exists(os.path.join(SELF_CURRENT, "bin", "evo")):
+            print("current 换了版本，重启自己用新版本")   # 第十八轮：自升级切了软链
+            os.execv(sys.executable, [sys.executable, os.path.join(SELF_CURRENT, "bin", "evo")] + sys.argv[1:])
         codes = list_projects() if not HAS_PROJECT else [PROJECT if not env("EVO_CONFIG") else None]
+        me = this_host()
         for code in codes:
+            own = owner_host(_read_json(os.path.join(HOME_DIR, code, "config.json"))) if code else None
+            if own and own != me:                        # 第十八轮：归别的机器的项目这台不跑
+                continue
             rc, tail = run_once_child(code)
             if rc:
                 print(f"[{code or CODE}] 本轮出错：", tail)
@@ -2516,7 +2934,7 @@ def _setup_project(code, name, path, github, test_cmd, notes, goal=None, ui_pres
     path = os.path.abspath(path)
     mb = subprocess.run(["git", "-C", path, "symbolic-ref", "--short", "HEAD"], capture_output=True, text=True).stdout.strip() or "main"
     has_origin = subprocess.run(["git", "-C", path, "remote", "get-url", "origin"], capture_output=True).returncode == 0
-    base = {"code": code, "name": name, "repo": path, "main_branch": mb, "github_repo": github or "",
+    base = {"code": code, "name": name, "repo": path, "main_branch": mb, "github_repo": github or "", "owner_host": this_host(),
             "trusted_authors": [github.split("/")[0]] if github else [], "test_cmd": test_cmd or "",
             "push_cmd": f"git push origin {mb}" if has_origin else "", "deploy_cmd": "", "policy_terms": "",
             "lessons_file": DEFAULTS["lessons_file"], "standards_file": DEFAULTS["standards_file"], "digest_issue": None}
@@ -2644,8 +3062,9 @@ def cmd_projects(a):
         for code in list_projects():
             c = _read_json(os.path.join(HOME_DIR, code, "config.json"))
             ps.append({"code": code, "name": c.get("name") or code, "repo": c.get("repo"), "github": c.get("github_repo") or None,
-                       "work_repo": clone_dir(code, c) if c.get("clone") else c.get("repo")})
-        print(json.dumps({"schema_version": APP_SCHEMA_VERSION, "projects": ps}, ensure_ascii=False)); return
+                       "work_repo": clone_dir(code, c) if c.get("clone") else c.get("repo"),
+                       "owner_host": c.get("owner_host"), "here": (c.get("owner_host") or this_host()) == this_host()})   # 第十八轮
+        print(json.dumps({"schema_version": APP_SCHEMA_VERSION, "host": this_host(), "projects": ps}, ensure_ascii=False)); return
     for code in list_projects():
         c = json.load(open(os.path.join(HOME_DIR, code, "config.json"), encoding="utf-8"))
         print(f"{code:<5} {c.get('name', ''):<10} {c.get('repo')}  {c.get('github_repo', '')}")
@@ -3103,6 +3522,7 @@ def status_doc(s, pend):
         except Exception as e:
             doc.setdefault("feature_errors", []).append({"feature": fid, "error": f"{type(e).__name__}: {e}"[:200]})
     doc["features"] = [x for x in rt().order]
+    doc["owner_host"] = owner_host(); doc["host"] = this_host()          # 第十八轮：多机器
     return doc
 
 
@@ -3532,6 +3952,11 @@ if __name__ == "__main__":
     x = sp.add_parser("suite"); x.add_argument("command", nargs=argparse.REMAINDER)
     sp.add_parser("retro")
     x = sp.add_parser("retry"); x.add_argument("key"); sp.add_parser("resume")
+    x = sp.add_parser("selfcheck", help="第十八轮：自检（编译、功能包、features.yml、事件日志）"); x.add_argument("--json", action="store_true")
+    x = sp.add_parser("self-upgrade", help="第十八轮：自升级到某个版本 / 提交（装旁边、等一轮结束、切软链、自检）")
+    x.add_argument("ref"); x.add_argument("--source", help="evoloop 仓库目录（默认记在当前版本的 SOURCE 里）")
+    x.add_argument("--wait-minutes", dest="wait_minutes", type=float, default=30); x.add_argument("--no-restart", dest="no_restart", action="store_true")
+    x = sp.add_parser("claim", help="第十八轮：把项目归到本机（归别的机器时加 --force）"); x.add_argument("--force", action="store_true")
     x = sp.add_parser("relocate", help="改用 evo 专用克隆 ~/.evoloop/repos/<代号>（老板的工作副本以后不碰）")
     x.add_argument("--force", action="store_true")
     x = sp.add_parser("feature", help="功能开关（第十八轮）：list | on <id> | off <id> | set <id> 键=值 | preset all|essentials | dump")
@@ -3556,8 +3981,8 @@ if __name__ == "__main__":
                 x = sp.add_parser(nm, help=f"（功能 {f.id} 关着）"); x.add_argument("rest", nargs=argparse.REMAINDER)
                 FEATURE_CMDS[nm] = (feature_off_stub(f, nm), True)
     a = p.parse_args()
-    if a.cmd in ("feature", "watch"):
-        sys.exit({"feature": cmd_feature, "watch": cmd_watch}[a.cmd](a) or 0)
+    if a.cmd in ("feature", "watch", "selfcheck", "self-upgrade"):
+        sys.exit({"feature": cmd_feature, "watch": cmd_watch, "selfcheck": cmd_selfcheck, "self-upgrade": cmd_self_upgrade}[a.cmd](a) or 0)
     if a.cmd in FEATURE_CMDS and FEATURE_CMDS[a.cmd][1]:
         sys.exit(FEATURE_CMDS[a.cmd][0](a) or 0)
     if not HAS_PROJECT and a.cmd not in ("new", "import", "projects", "status", "run", "suite", "panel", "notify-test", "bot", "watchdog"):
@@ -3566,4 +3991,4 @@ if __name__ == "__main__":
         sys.exit(FEATURE_CMDS[a.cmd][0](a) or 0)
     {"panel": cmd_panel, "new": cmd_new, "import": cmd_import, "projects": cmd_projects, "once": cmd_once, "add": cmd_add, "tick": cmd_tick, "run": cmd_run, "status": cmd_status, "approve": cmd_approve, "ship": cmd_ship, "retry": cmd_retry, "resume": cmd_resume, "feedback": cmd_feedback, "suite": cmd_suite, "retro": cmd_retro,
      "notify-test": cmd_notify_test, "watchdog": cmd_watchdog, "log": cmd_log,
-     "goal": cmd_goal, "relocate": cmd_relocate}[a.cmd](a)
+     "goal": cmd_goal, "relocate": cmd_relocate, "claim": cmd_claim}[a.cmd](a)
