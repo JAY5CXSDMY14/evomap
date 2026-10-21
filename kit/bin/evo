@@ -47,6 +47,7 @@ sys.path.insert(0, os.path.dirname(SELF))
 import evo_time as TM       # noqa: E402
 import evo_notify as NT     # noqa: E402
 import evo_ui as UI         # noqa: E402
+import evo_arch as ARCH     # noqa: E402  第十五轮：后端/架构预设
 # 多项目：每个项目一个目录 ~/.evoloop/projects/（旧 ~/.tubu 自动沿用）<代号>/{config.json, state/}；命令用 -p <代号> 指定
 _old = os.path.expanduser("~/.tubu/projects")
 HOME_DIR = os.environ.get("EVO_HOME") or os.environ.get("TUBU_HOME") or (
@@ -84,7 +85,8 @@ DEFAULTS = {
     "standards_file": "docs/code-standards.md",
 }
 PROJECT_KEYS = ("code", "name", "repo", "main_branch", "github_repo", "trusted_authors", "trusted_labelers", "test_cmd", "push_cmd", "deploy_cmd",
-                "policy_terms", "lessons_file", "standards_file", "digest_issue", "goal", "ui_preset", "ui_overrides", "ui_paths")
+                "policy_terms", "lessons_file", "standards_file", "digest_issue", "goal", "ui_preset", "ui_overrides", "ui_paths",
+                "arch_preset", "arch_overrides")
 # 旧环境变量名照认（先认新名，没有再认旧名）
 ENV_ALIASES = {"EVO_TG_TOKEN": "TUBU_TG_TOKEN", "EVO_TG_CHAT": "TUBU_TG_CHAT", "TUBU_TG_TOKEN": "EVO_TG_TOKEN",
                "TUBU_TG_CHAT": "EVO_TG_CHAT", "EVO_PROJECT": "TUBU_PROJECT", "EVO_CONFIG": "TUBU_CONFIG",
@@ -355,9 +357,58 @@ def ui_delivery_check(s, k, it):
     return None
 
 
+_ARCH = {}
+
+
+def arch_eff():
+    """本项目实际生效的架构规范（arch_preset=none 时 None）。一个进程算一次；预设文件坏了只提示、不拦接棒。"""
+    if "eff" not in _ARCH:
+        try:
+            _ARCH["eff"] = ARCH.effective(CFG)
+        except (ValueError, OSError, KeyError) as e:
+            print(f"架构预设读不出：{e}", file=sys.stderr)
+            _ARCH["eff"] = None
+    return _ARCH["eff"]
+
+
+def arch_conflicts_once(s):
+    """仓库已有自己的结构（源码根、按类型平铺、迁移目录、某类库）：沿用现有，日志 + 提醒各一次；内容变了再报。"""
+    eff = arch_eff()
+    sig = ARCH.conflict_sig(eff) if eff and eff["conflicts"] else ""
+    if sig and s.get("arch_reported") != sig:
+        txt = "；".join(ARCH.conflict_text(eff))
+        log(s, f"架构预设 {eff['name']} 与仓库现有结构不同，沿用现有、不迁移：{txt}")
+        notify("arch_conflict", "架构预设：沿用仓库现有结构", txt)
+    if sig or s.get("arch_reported"):
+        s["arch_reported"] = sig
+
+
+def arch_delivery_check(s, k, it):
+    """施工交卷后、送验收前：只看本件新增的目录、文件、行（evo 内置检查，不跑外部工具）。
+    约定外的新目录 / 向上依赖 / 下层用了 Web 框架 / 禁用库 / 迁移命名或编号 / 写死口令 → 打回原因；其余记提示（时间线 arch_advisory）。"""
+    eff = arch_eff(); wt = it.get("worktree")
+    if not eff or not wt:
+        return None
+    base = git(wt, "merge-base", CFG["main_branch"], "HEAD", check=False)
+    if not base:
+        return None
+    eff = ARCH.effective_at(CFG, wt, base)          # 「现有」按改动前的主线算
+    r = ARCH.check(wt, base, "HEAD", eff)
+    rep = json.dumps(it.get("report") or {}, ensure_ascii=False)
+    notes = [a for a in r["advisories"] if not (a.startswith("新依赖") and all(p in rep for p in r["new_deps"]))] + \
+            [f"lockfile 新出现禁用库 {x['package']}（{x['label']}，可能是传递依赖）" for x in r["lock_only"]]
+    if notes:
+        it["arch_notes"] = notes
+        tl(k, "arch_advisory", notes=notes)
+        log(s, f"{k} 架构规范提示：" + "；".join(notes)[:200])
+    if r["violations"]:
+        return "不符合架构规范：" + ARCH.violation_text(r["violations"])[:900]
+    return None
+
+
 def spec_head(role, it):
-    """任务书开头：项目目标一行，接着（只对碰界面的件：look 或 scope 落在 ui 路径）「UI 规范」块。"""
-    return goal_head() + UI.head(role, it, ui_eff(), CODE)
+    """任务书开头：项目目标一行，接着（只对碰界面的件）「UI 规范」块，（只对碰后端路径的件）「架构规范」块。"""
+    return goal_head() + UI.head(role, it, ui_eff(), CODE) + ARCH.head(role, it, arch_eff(), CODE)
 
 
 def notify(kind, title, body="", item=None, gate=None, **data):
@@ -799,7 +850,7 @@ def check_delivery(s, k, it, body):
         red = [t["command"] for t in rep["tests"] if t["result"] == "failed"]
         if red:
             build_reject(s, k, it, "报告里有没通过的测试：" + "；".join(red)); return False
-    why = ui_delivery_check(s, k, it)
+    why = ui_delivery_check(s, k, it) or arch_delivery_check(s, k, it)
     if why:
         build_reject(s, k, it, why)
         return False
@@ -1773,6 +1824,7 @@ def cmd_tick(a=None):
     T = tasks(s)
 
     ui_conflicts_once(s)
+    arch_conflicts_once(s)
     dispatch_all(s, c, T)          # 2) 派工、合并
     do_push(s); save(s)
     check_stalls(s)                # 3) 停滞
@@ -2563,6 +2615,97 @@ def cmd_ui(a):
         print("  · 现有栈优先：" + t)
 
 
+# ---------- 后端/架构预设（第十五轮，见 kit/presets/arch/README.md）----------
+ARCH_SET_RE = re.compile(r"(root|layout|allow_dirs|migrations_dir|migrations_pattern|arch_paths|config_modules|layers\.[a-z][a-z0-9_-]{0,23}|deps\.[a-z][a-z0-9_-]{0,23}|checks\.[a-z][a-z0-9_-]{0,31})")
+
+
+def cmd_arch(a):
+    """evo -p AB arch [show [预设]]：看本项目生效的架构规范（带预设名 = 只预览）；arch set <预设> / set 键=值 / set 键=：改（外部 Agent 不能改）；
+    arch check [--path 目录] [--base 提交] [--no-tools] [--json]：只看新增，有不合规退出码 1（验收岗用）。"""
+    act = a.action or "show"
+    if act == "show":
+        pv = (a.text or [None])[0]
+        if pv and pv not in ARCH.NAMES:
+            sys.exit(f"架构预设只能是：{' | '.join(ARCH.NAMES)}")
+        eff = ARCH.effective({**CFG, "arch_preset": pv}) if pv else arch_eff()
+        if a.json:
+            print(json.dumps({"arch_preset": CFG.get("arch_preset") or "none", "effective": eff}, ensure_ascii=False, indent=1, default=list)); return
+        print(ARCH.table(eff) if eff else "架构预设：none（没开；evo -p " + CODE + " arch set python-fastapi | node-ts | swift-app）"); return
+    if act == "check":
+        path = a.path or (os.getcwd() if git(os.getcwd(), "rev-parse", "--git-dir", check=False) else CFG["repo"])
+        if not arch_eff():
+            print("架构预设：none，不查"); return
+        base = a.base or git(path, "merge-base", CFG["main_branch"], "HEAD", check=False) or "HEAD"
+        eff = ARCH.effective_at(CFG, path, base)
+        r = ARCH.check(path, base, "HEAD", eff)
+        tools = [] if a.no_tools else ARCH.run_tools(path, base, "HEAD", eff, r["changed"])
+        bad = bool(r["violations"]) or any(t["status"] == "fail" for t in tools)
+        if a.json:
+            print(json.dumps({**r, "tools": tools, "ok": not bad}, ensure_ascii=False, indent=1))
+        else:
+            print(f"架构检查（预设 {eff['name']}，源码根 {eff['root']}/，对比 {base[:10]}..HEAD，只看新增）")
+            for x in r["violations"]:
+                print("  ✗ 不合规：" + x["text"])
+            for x in r["lock_only"]:
+                print(f"  ! 提示：lockfile 新出现禁用库 {x['package']}（{x['label']}，可能是传递依赖，核对一下）")
+            for t in r["advisories"]:
+                print("  ! 提示：" + t)
+            for t in tools:
+                mark = {"pass": "✓", "fail": "✗", "missing": "!", "error": "!", "skip": "·"}[t["status"]]
+                head_ = {"pass": "通过", "fail": "不合规（新出现）", "missing": "没装，只警告", "error": "工具报错，只警告", "skip": "没有要查的文件"}[t["status"]]
+                print(f"  {mark} {t['label']}：{head_}")
+                for n in t["notes"][:12]:
+                    print("      " + n)
+            for t in ARCH.conflict_text(eff):
+                print("  · 沿用现有：" + t)
+            if not bad and not r["advisories"] and not r["lock_only"]:
+                print("  ✓ 没有问题")
+        sys.exit(1 if bad else 0)
+    refuse_agents("改架构预设")
+    arg = " ".join(a.text or []).strip()
+    if not arg:
+        sys.exit("用法：evo arch set python-fastapi | node-ts | swift-app | none，或 evo arch set 键=值（root、layout、allow_dirs、migrations_dir、"
+                 "migrations_pattern、arch_paths、config_modules、layers.<层>、deps.<类别>、checks.<检查>=off；值留空 = 清掉）")
+    c = _read_json(_project_cfg_path(CODE))
+    if "=" in arg:
+        key, _, val = arg.partition("=")
+        key, val = key.strip(), val.strip()
+        if not ARCH_SET_RE.fullmatch(key):
+            sys.exit("键只能是 root、layout、allow_dirs、migrations_dir、migrations_pattern、arch_paths、config_modules、layers.<层>、deps.<类别>、checks.<检查>")
+        if key == "layout" and val and val not in ("domain", "by-type"):
+            sys.exit("layout 只能是 domain 或 by-type")
+        if key == "migrations_pattern" and val:
+            try:
+                re.compile(val)
+            except re.error as e:
+                sys.exit(f"migrations_pattern 不是合法正则：{e}")
+        elif val and not re.fullmatch(r"[@A-Za-z0-9._/*+, -]{1,200}", val):
+            sys.exit("值只许字母数字和 @ . _ / * + - , 空格")
+        ov = dict(c.get("arch_overrides") or {})
+        if val:
+            ov[key] = [x.strip() for x in val.split(",") if x.strip()] if key in ("allow_dirs", "arch_paths", "config_modules") or key.startswith(("layers.", "deps.")) else val
+        else:
+            ov.pop(key, None)
+        if ov:
+            c["arch_overrides"] = ov
+        else:
+            c.pop("arch_overrides", None)
+        _write_project_cfg(c)
+        print(f"{CODE} 架构覆盖：{key} = {val or '（已清掉，回到预设）'}。下一份任务书起生效")
+        return
+    if arg not in ARCH.NAMES:
+        sys.exit(f"架构预设只能是：{' | '.join(ARCH.NAMES)}")
+    if arg == "none":
+        c.pop("arch_preset", None)
+    else:
+        c["arch_preset"] = arg
+    _write_project_cfg(c)
+    print(f"{CODE} 架构预设：{arg}。下一份任务书起生效（只管新代码，老结构沿用、不迁移）")
+    eff = ARCH.effective({**CFG, **c}) if arg != "none" else None
+    for t in ARCH.conflict_text(eff) if eff else []:
+        print("  · 沿用现有：" + t)
+
+
 # ---------- evo log <件号> ----------
 KEY_RE = re.compile(r"^[A-Z]{2,4}-[A-Z]+-\d{3,}$")
 
@@ -2866,7 +3009,7 @@ LABELS = [("autopilot:ready", "0e8a16", "决策岗分拣完，接棒器可登记
          [(f"type:{k}", "c5def5", v) for k, v in KINDS.items()]
 
 
-def _setup_project(code, name, path, github, test_cmd, notes, goal=None, ui_preset=None):
+def _setup_project(code, name, path, github, test_cmd, notes, goal=None, ui_preset=None, arch_preset=None):
     """只写项目自己的 config.json；岗位、模型、上限、提醒都在全局 ~/.evoloop/config.json。"""
     code = code.upper()
     if not re.fullmatch(r"[A-Z]{2,4}", code):
@@ -2888,6 +3031,12 @@ def _setup_project(code, name, path, github, test_cmd, notes, goal=None, ui_pres
         notes.append(f"UI 预设 {ui_preset}：碰界面的件任务书里会带「UI 规范」，验收查依赖（evo -p {code} ui 看全表）")
         for t in UI.conflict_text(eff):
             notes.append("UI 预设与现有栈冲突，现有的赢、不迁移：" + t)
+    if arch_preset and arch_preset != "none":
+        base["arch_preset"] = arch_preset
+        eff = ARCH.effective(base)
+        notes.append(f"架构预设 {arch_preset}：碰后端路径的件任务书里会带「架构规范」，交卷查结构（evo -p {code} arch 看全表）")
+        for t in ARCH.conflict_text(eff):
+            notes.append("架构预设与现有结构不同，沿用现有、不迁移：" + t)
     if not has_origin:
         notes.append("没有 origin 远端：push_cmd 留空，合并后只在本地（之后在 config.json 补 push_cmd）")
     d = os.path.join(HOME_DIR, code); os.makedirs(os.path.join(d, "state"), exist_ok=True)
@@ -2918,10 +3067,17 @@ def _ui_arg(a):
     return v
 
 
+def _arch_arg(a):
+    v = getattr(a, "arch_preset", None)
+    if v and v not in ARCH.NAMES:
+        raise SystemExit(f"--arch-preset 只能是：{' | '.join(ARCH.NAMES)}")
+    return v
+
+
 def cmd_new(a):
     """开新项目：建仓库骨架（AGENTS / 错题本 / 规范），可选在 GitHub 建私有仓库。"""
     goal = _goal_arg(a)                   # 先校验，免得建了仓库才发现目标写得不对
-    _ui_arg(a)
+    _ui_arg(a); _arch_arg(a)
     path = os.path.abspath(a.path); os.makedirs(path, exist_ok=True)
     notes = []
     if not os.path.isdir(os.path.join(path, ".git")):
@@ -2937,13 +3093,13 @@ def cmd_new(a):
     if a.github and a.create:
         r = subprocess.run(["gh", "repo", "create", a.github, "--private", "--source", path, "--push"], capture_output=True, text=True)
         notes.append("GitHub 私有仓库已建并推送" if r.returncode == 0 else "GitHub 建仓没成功：" + r.stderr.strip()[:120])
-    _setup_project(a.code, a.name, path, a.github, a.test, notes, goal, _ui_arg(a))
+    _setup_project(a.code, a.name, path, a.github, a.test, notes, goal, _ui_arg(a), _arch_arg(a))
 
 
 def cmd_import(a):
     """导入旧项目：不动它的代码和历史，只补登记、标签和缺的文档。"""
     goal = _goal_arg(a)
-    _ui_arg(a)
+    _ui_arg(a); _arch_arg(a)
     path = os.path.abspath(a.path)
     if not os.path.isdir(os.path.join(path, ".git")):
         raise SystemExit("这个目录不是 git 仓库")
@@ -2975,7 +3131,7 @@ def cmd_import(a):
     if not os.path.exists(ai):     # 只放文件不提交（导入不动历史），要不要提交你定
         open(ai, "w", encoding="utf-8").write(open(os.path.join(KIT, "templates", "project", "AGENT_INTERFACE.md"), encoding="utf-8").read())
         notes.append("放了 AGENT_INTERFACE.md（外部 Agent 怎么读、怎么报；未提交，要用就自己提交）")
-    _setup_project(a.code, a.name, path, gh, t, notes, goal, _ui_arg(a))
+    _setup_project(a.code, a.name, path, gh, t, notes, goal, _ui_arg(a), _arch_arg(a))
 
 
 def cmd_projects(a):
@@ -3398,6 +3554,7 @@ def status_doc(s, pend):
         "stuck": sum(1 for it in s["items"].values() if it.get("stalled") or it["state"] in ("escalated", "asking")),
         "goal": CFG.get("goal") or None,
         "ui_preset": CFG.get("ui_preset") or "none",
+        "arch_preset": CFG.get("arch_preset") or "none",
         "roles": roles_doc(s),
         "stale": stale_list(s),
         "no_live_path": no_live_list(s),
@@ -3654,6 +3811,7 @@ if __name__ == "__main__":
         x = sp.add_parser(nm); x.add_argument("code"); x.add_argument("--name", required=True); x.add_argument("--path", required=True)
         x.add_argument("--github"); x.add_argument("--test"); x.add_argument("--goal", help="项目目标（一两句），写进每份任务书开头")
         x.add_argument("--ui-preset", dest="ui_preset", help="UI 栈预设：web-react | swiftui | none（默认 none）")
+        x.add_argument("--arch-preset", dest="arch_preset", help="后端/架构预设：python-fastapi | node-ts | swift-app | none（默认 none）")
         if nm == "new":
             x.add_argument("--create", action="store_true", help="在 GitHub 建私有仓库并推送")
     sp.add_parser("projects"); sp.add_parser("once")
@@ -3670,6 +3828,10 @@ if __name__ == "__main__":
     x = sp.add_parser("ui", help="UI 栈预设：show | set <预设|类别=包名> | check")
     x.add_argument("action", nargs="?", choices=["show", "set", "check"]); x.add_argument("text", nargs="*")
     x.add_argument("--json", action="store_true"); x.add_argument("--path"); x.add_argument("--base")
+    x = sp.add_parser("arch", help="后端/架构预设：show | set <预设|键=值> | check")      # 第十五轮
+    x.add_argument("action", nargs="?", choices=["show", "set", "check"]); x.add_argument("text", nargs="*")
+    x.add_argument("--json", action="store_true"); x.add_argument("--path"); x.add_argument("--base")
+    x.add_argument("--no-tools", dest="no_tools", action="store_true", help="只跑 evo 内置检查，不跑 import-linter / ruff 等外部工具")
     x = sp.add_parser("suite"); x.add_argument("command", nargs=argparse.REMAINDER)
     sp.add_parser("retro")
     x = sp.add_parser("models", help="核对施工/验收模型；-p 代号 models set|clear build|verify [模型] 改单项目覆盖")
@@ -3690,4 +3852,4 @@ if __name__ == "__main__":
         sys.exit(f"有多个项目，请加 -p <代号>：{', '.join(list_projects()) or '（还没有项目）'}")
     {"panel": cmd_panel, "new": cmd_new, "import": cmd_import, "projects": cmd_projects, "once": cmd_once, "add": cmd_add, "tick": cmd_tick, "run": cmd_run, "status": cmd_status, "approve": cmd_approve, "ship": cmd_ship, "pull": cmd_pull, "digest": cmd_digest, "retry": cmd_retry, "resume": cmd_resume, "feedback": cmd_feedback, "suite": cmd_suite, "retro": cmd_retro,
      "notify-test": cmd_notify_test, "bot": cmd_bot, "watchdog": cmd_watchdog, "models": cmd_models, "log": cmd_log,
-     "goal": cmd_goal, "ui": cmd_ui}[a.cmd](a)
+     "goal": cmd_goal, "ui": cmd_ui, "arch": cmd_arch}[a.cmd](a)

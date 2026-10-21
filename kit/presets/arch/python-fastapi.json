@@ -1,0 +1,462 @@
+{
+ "_说明": "Python / FastAPI 后端架构预设（第十五轮）。目录按领域分包（zhanymkanov/fastapi-best-practices），分层方向单向（router → service → repository → core），配置走环境变量（12-factor III，pydantic-settings）。机器检查：evo 内置检查只看新增内容；装了 import-linter / ruff 再跑它们，同样只算新增。仓库已有自己的结构（如按类型平铺）就沿用，evo 只报一次。路径都相对 root（源码根）。",
+ "name": "python-fastapi",
+ "title": "Python / FastAPI 后端",
+ "lang": "python",
+ "principles": [
+  "优先复用成熟库和成熟做法",
+  "统一规范",
+  "严格限制重复依赖",
+  "不重复造轮子",
+  "依赖方向单向",
+  "按领域分包",
+  "配置走环境变量"
+ ],
+ "sources": [
+  {
+   "name": "zhanymkanov/fastapi-best-practices",
+   "url": "https://github.com/zhanymkanov/fastapi-best-practices",
+   "license": "无许可证（只引用、不拷贝）",
+   "take": "src/<领域>/ 分包与每包固定文件名；跨领域用显式模块名导入；BaseSettings 按领域拆；Alembic 迁移静态可逆、日期_slug 命名；表名 lower_snake 单数、_at/_date 后缀；用 ruff"
+  },
+  {
+   "name": "fastapi/full-stack-fastapi-template",
+   "url": "https://github.com/fastapi/full-stack-fastapi-template",
+   "license": "MIT",
+   "take": "app/core/config.py 用 pydantic-settings；alembic；ruff 规则集 E,W,F,I,B,C4,UP；pyjwt + pwdlib"
+  },
+  {
+   "name": "seddonym/import-linter",
+   "url": "https://github.com/seddonym/import-linter",
+   "license": "BSD-2-Clause",
+   "take": "layers 契约强制依赖方向（evo 按本预设的分层自动生成契约，或用仓库自己的 .importlinter）"
+  },
+  {
+   "name": "astral-sh/ruff",
+   "url": "https://github.com/astral-sh/ruff",
+   "license": "MIT",
+   "take": "唯一的 lint + format，替代 flake8/black/isort/pylint"
+  },
+  {
+   "name": "12factor.net III. Config",
+   "url": "https://12factor.net/config",
+   "license": "MIT（heroku/12factor）",
+   "take": "随部署变化的配置放环境变量；代码里不写死口令"
+  }
+ ],
+ "root": "src",
+ "root_candidates": [
+  "src",
+  "app",
+  "backend/app",
+  "api",
+  "backend"
+ ],
+ "layout": "domain",
+ "by_type_dirs": [
+  "routers",
+  "routes",
+  "endpoints",
+  "crud",
+  "services",
+  "repositories",
+  "controllers"
+ ],
+ "layouts": {
+  "domain": {
+   "label": "按领域分包",
+   "dirs": [
+    "*",
+    "core"
+   ],
+   "domain_files": [
+    "__init__.py",
+    "router.py",
+    "schemas.py",
+    "models.py",
+    "service.py",
+    "repository.py",
+    "dependencies.py",
+    "config.py",
+    "constants.py",
+    "exceptions.py",
+    "utils.py",
+    "client.py"
+   ]
+  },
+  "by-type": {
+   "label": "按类型平铺（沿用现有）",
+   "dirs": []
+  }
+ },
+ "folders": [
+  {
+   "path": "src/",
+   "put": "源码根。main.py 建 FastAPI 应用；全局的 config.py、database.py、exceptions.py、pagination.py 放这一层"
+  },
+  {
+   "path": "src/<领域>/",
+   "put": "一个业务领域一个包（例 auth/、materials/、search/）。文件名固定：router.py 接口、schemas.py Pydantic 模型、models.py 表模型、service.py 业务逻辑、repository.py 数据访问、dependencies.py 路由依赖、config.py 本领域配置、constants.py、exceptions.py、utils.py"
+  },
+  {
+   "path": "src/<外部服务>/client.py",
+   "put": "对接外部服务（对象存储、模型 API）也按包放，client.py 封装调用"
+  },
+  {
+   "path": "tests/<领域>/",
+   "put": "测试按领域分目录，和 src/ 对应"
+  },
+  {
+   "path": "alembic/versions/",
+   "put": "数据库迁移（Alembic）；文件名 年-月-日_slug.py，静态、可回滚"
+  },
+  {
+   "path": "docs/decisions/",
+   "put": "架构决策记录（ADR，MADR 模板），文件名 NNNN-标题.md"
+  },
+  {
+   "path": "pyproject.toml",
+   "put": "依赖、ruff、import-linter 配置都写这里"
+  }
+ ],
+ "repo_dirs": [
+  "src",
+  "app",
+  "api",
+  "backend",
+  "tests",
+  "test",
+  "alembic",
+  "migrations",
+  "docs",
+  "scripts",
+  "tools",
+  "requirements",
+  "templates",
+  "static",
+  "data",
+  "assets",
+  "artifacts",
+  "web",
+  "frontend",
+  ".github",
+  ".vscode",
+  "deploy",
+  "docker"
+ ],
+ "test_dirs": [
+  "tests",
+  "tests/*",
+  "test",
+  "test/*",
+  "*/tests",
+  "*/tests/*"
+ ],
+ "layers": [
+  {
+   "name": "entry",
+   "label": "入口",
+   "match": [
+    "main.py",
+    "app.py",
+    "asgi.py"
+   ]
+  },
+  {
+   "name": "api",
+   "label": "接口层（router）",
+   "match": [
+    "*/router.py",
+    "*/routers.py",
+    "routers/*",
+    "routes/*",
+    "endpoints/*",
+    "api/routes/*",
+    "*/routers/*",
+    "*/routes/*",
+    "*/dependencies.py",
+    "dependencies.py",
+    "deps.py",
+    "api/deps.py"
+   ]
+  },
+  {
+   "name": "service",
+   "label": "业务层（service）",
+   "match": [
+    "*/service.py",
+    "*/services/*",
+    "services/*",
+    "*_service.py",
+    "service.py",
+    "*/client.py"
+   ]
+  },
+  {
+   "name": "repository",
+   "label": "数据访问层（repository）",
+   "match": [
+    "*/repository.py",
+    "repositories/*",
+    "*_repo.py",
+    "repository.py",
+    "crud.py",
+    "*/crud.py",
+    "crud/*",
+    "*/models.py",
+    "models.py",
+    "models/*"
+   ],
+   "forbid_imports": [
+    "fastapi",
+    "starlette"
+   ]
+  },
+  {
+   "name": "core",
+   "label": "基础层（config / db / schemas / 常量 / 工具）",
+   "match": [
+    "config.py",
+    "*/config.py",
+    "core/*",
+    "database.py",
+    "db.py",
+    "*/schemas.py",
+    "schemas.py",
+    "*/constants.py",
+    "constants.py",
+    "*/exceptions.py",
+    "exceptions.py",
+    "utils.py",
+    "*/utils.py"
+   ]
+  }
+ ],
+ "config_modules": [
+  "config.py",
+  "*/config.py",
+  "core/config.py",
+  "settings.py",
+  "*/settings.py"
+ ],
+ "env_reads": [
+  "os.environ",
+  "os.getenv",
+  "environ.get(",
+  "getenv("
+ ],
+ "migrations": {
+  "dir": "alembic/versions",
+  "pattern": "^\\d{4}-\\d{2}-\\d{2}_[a-z0-9_]+\\.py$",
+  "alt_dirs": [
+   "migrations",
+   "alembic/versions",
+   "db/migrations",
+   "migrations/versions"
+  ],
+  "label": "Alembic：年-月-日_slug.py"
+ },
+ "adr_dir": "docs/decisions",
+ "categories": {
+  "web": {
+   "label": "Web 框架",
+   "source": "suggested",
+   "choice": "FastAPI（uvicorn 运行）",
+   "packages": [
+    "fastapi",
+    "uvicorn",
+    "fastapi-cli"
+   ],
+   "banned": [
+    "flask",
+    "django",
+    "djangorestframework",
+    "sanic",
+    "tornado",
+    "falcon",
+    "bottle",
+    "quart",
+    "litestar",
+    "pyramid",
+    "aiohttp"
+   ]
+  },
+  "validation": {
+   "label": "数据校验",
+   "source": "suggested",
+   "choice": "Pydantic v2（FastAPI 自带）",
+   "packages": [
+    "pydantic"
+   ],
+   "banned": [
+    "marshmallow",
+    "cerberus",
+    "voluptuous",
+    "schematics",
+    "attrs-strict"
+   ]
+  },
+  "settings": {
+   "label": "配置",
+   "source": "suggested",
+   "choice": "pydantic-settings 读环境变量（或标准库 os.environ 集中在 config 模块）",
+   "packages": [
+    "pydantic-settings"
+   ],
+   "banned": [
+    "python-decouple",
+    "dynaconf",
+    "environs",
+    "django-environ",
+    "configparser2"
+   ]
+  },
+  "http": {
+   "label": "HTTP 客户端",
+   "source": "suggested",
+   "choice": "httpx（同步异步都有，测试也用它）",
+   "packages": [
+    "httpx*"
+   ],
+   "banned": [
+    "requests",
+    "aiohttp",
+    "pycurl",
+    "treq",
+    "urllib3",
+    "grequests",
+    "httplib2"
+   ]
+  },
+  "db": {
+   "label": "数据库访问",
+   "source": "suggested",
+   "choice": "SQLAlchemy 2 / SQLModel + psycopg 3；也可原生 SQL（psycopg 3）",
+   "packages": [
+    "sqlalchemy",
+    "sqlmodel",
+    "psycopg",
+    "psycopg-binary",
+    "psycopg-pool",
+    "psycopg-c",
+    "asyncpg"
+   ],
+   "banned": [
+    "psycopg2",
+    "psycopg2-binary",
+    "peewee",
+    "tortoise-orm",
+    "pony",
+    "ormar",
+    "piccolo",
+    "databases",
+    "mongoengine",
+    "records"
+   ]
+  },
+  "migrations": {
+   "label": "数据库迁移",
+   "source": "suggested",
+   "choice": "Alembic",
+   "packages": [
+    "alembic"
+   ],
+   "banned": [
+    "yoyo-migrations",
+    "aerich",
+    "caribou",
+    "sqlalchemy-migrate"
+   ]
+  },
+  "auth": {
+   "label": "令牌与密码",
+   "source": "suggested",
+   "choice": "PyJWT；密码哈希 pwdlib / bcrypt",
+   "packages": [
+    "pyjwt",
+    "pwdlib*",
+    "bcrypt",
+    "argon2-cffi"
+   ],
+   "banned": [
+    "python-jose",
+    "passlib",
+    "jwcrypto",
+    "authlib"
+   ]
+  },
+  "tests": {
+   "label": "测试",
+   "source": "suggested",
+   "choice": "pytest（异步用 anyio / pytest-asyncio + httpx.AsyncClient）",
+   "packages": [
+    "pytest",
+    "pytest-*",
+    "anyio"
+   ],
+   "banned": [
+    "nose",
+    "nose2",
+    "testify",
+    "green"
+   ]
+  },
+  "lint": {
+   "label": "代码检查与格式化",
+   "source": "suggested",
+   "choice": "ruff（check + format）",
+   "packages": [
+    "ruff"
+   ],
+   "banned": [
+    "flake8",
+    "black",
+    "isort",
+    "pylint",
+    "autopep8",
+    "yapf",
+    "pyflakes",
+    "pycodestyle",
+    "autoflake",
+    "blue"
+   ]
+  }
+ },
+ "checks": [
+  {
+   "id": "builtin",
+   "label": "evo 内置结构检查",
+   "cmd": "evo -p {CODE} arch check",
+   "tool": "",
+   "install": "",
+   "what": "新目录、向上依赖、迁移命名与编号、重复依赖、写死口令；只看本件新增"
+  },
+  {
+   "id": "import-linter",
+   "label": "import-linter 分层契约",
+   "cmd": "lint-imports --config <契约>",
+   "tool": "lint-imports",
+   "install": "pip install import-linter（或 uv add --dev import-linter）",
+   "what": "仓库有 .importlinter / [tool.importlinter] 就用它；没有就按本预设分层生成契约。改动前后各跑一次，只算新出现的违约"
+  },
+  {
+   "id": "ruff",
+   "label": "ruff",
+   "cmd": "ruff check --output-format json <改动的 .py>",
+   "tool": "ruff",
+   "install": "pip install ruff（或 uv add --dev ruff）",
+   "what": "新文件全查；老文件只算新增的行。仓库有 ruff 配置就用它，没有就用 E,W,F,I,B,UP"
+  }
+ ],
+ "ruff_select": "E,W,F,I,B,UP",
+ "rules": [
+  "只管新写的代码；老代码不整体迁移。仓库已有自己的目录结构（例如按类型平铺 routers/ + *_repo.py），新代码沿用现有结构，evo 只报一次。",
+  "红线：新开目录、新分层、换库，一律先 ask 决策岗；老板批准后写进项目 arch_overrides，并在 docs/decisions/ 补一份 ADR（MADR 模板）。自己开新目录、新分层，验收直接打回。",
+  "依赖方向单向：入口 → 接口层（router）→ 业务层（service）→ 数据访问层（repository）→ 基础层（config/db/schemas）。下层不许 import 上层；数据访问层不许 import fastapi / starlette（HTTP 的事留在接口层）。",
+  "按领域分包：新领域在源码根下建一个包，文件名用 router.py / schemas.py / models.py / service.py / repository.py / dependencies.py / config.py / constants.py / exceptions.py / utils.py；跨领域导入写显式模块名（from src.auth import service as auth_service）。",
+  "配置走环境变量：随部署变化的值（连接串、口令、密钥、外部地址）只在 config 模块里读环境变量（pydantic-settings 或集中的 os.environ），别处 import config；新变量同步写进 .env.example（占位值）。代码里不写死口令。",
+  "路由只做参数解析、调用 service、组装响应；业务逻辑进 service，SQL 进 repository。async 路由里不做阻塞 I/O（阻塞的写成同步 def 或丢线程池）。",
+  "数据库迁移只增不改：新迁移静态、可回滚，按本项目约定命名；已合并的迁移文件不再修改。表名 lower_snake 单数，时间字段 _at、日期字段 _date。",
+  "先用已选的库：HTTP 用 httpx、校验用 Pydantic、lint 用 ruff；上表覆盖不了才加新依赖，并在交卷 changes 写明为什么。"
+ ]
+}

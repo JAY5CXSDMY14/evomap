@@ -27,6 +27,9 @@
   "scope_allow": ["artifacts/"],
   "ui_preset": "swiftui",
   "_ui_preset": "REASTOCK 是原生 SwiftUI：系统组件优先、SF Symbols、原生弹簧动画，第三方 UI 库要老板批准（写进 ui_overrides）。只管新代码；仓库已有的库照旧，冲突时现有的赢（evo -p ST ui 查看）。见 kit/presets/ui/README.md。",
+  "arch_preset": "swift-app",
+  "_arch_preset": "第十五轮：REASTOCK 现有结构按类型平铺（Views/ Engine/ Data/ Core/ Models/ Resources/），沿用现有、不迁移，evo 只报一次。新代码守分层：Views → Engine/Data → Models；Engine、Data、Models 新加 import SwiftUI/AppKit 打回；新开目录先 ask 决策岗。Core（AppStore、AutoScheduler）不归层、不查。见 kit/presets/arch/README.md。",
+  "arch_overrides": {"root": "REASTOCK/Sources/REASTOCK"},
   "report_required": true,
   "git_guard": true,
   "overrides": {

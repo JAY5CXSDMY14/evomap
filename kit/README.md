@@ -176,6 +176,16 @@ Telegram 环境变量改名 `EVO_TG_TOKEN` / `EVO_TG_CHAT`，旧名 `TUBU_TG_TOK
 - **改卡片**：`evo team set <岗位> [--model M] [--thinking L] [--tool T] [--duty …] [--fallback-model M] [--fallback-tool T] [--no-fallback] [--project AB]`；先在副本上改、过安全栏（施工≠验收含组成员、magpie 通时模型必须在列表里），过了才落盘，下一次派工生效。`evo team clear <岗位> --project AB` 回到跟随全局。`evo team init [--json] [--apply]`：首次安装向导（看装了哪些 CLI、magpie 有哪些组，按「施工验收不同家、决策用最强、备用不同账号」配）。设了 `EVO_AGENT` 一律拒绝（看可以）。
 - **状态与接口**：`status --json` 新增顶层 `team`（每张卡一行、`magpie_ok`、`suggestions`、`blocked`），`roles[].fallback`，件的 `waiting` 多了 `model_blocked` / `magpie_down`；schema_version 仍是 1。面板 `GET /api/team[?code=AB]`、`POST /api/team {action: set|clear|trial|dismiss|init, role, model, thinking, tool, fallback_model, fallback_tool, no_fallback, duty, project, items}`，都要口令；实际由 `evo team …` 执行。新推送类：`model_blocked`、`magpie_down`。
 
+## 第十五轮：后端 / 架构预设（均有自动测试，`kit/tests/test_arch_preset.py` 21 个（其中 2 个要本机装 import-linter / ruff，CI 已装），全套 220 个；说明见 kit/presets/arch/README.md、docs/arch-preset.html）
+老板原话「去 github 找专业的开发文档规则……文件夹怎么放、架构怎么搭……预设到后端」。原则沿用 UI 四条精神（复用成熟库和做法、统一规范、严格限制重复依赖、不重复造轮子），加架构三条：依赖方向单向、按领域分包、配置走环境变量。预设在 `kit/presets/arch/`（`python-fastapi.json`、`node-ts.json`、`swift-app.json`），逻辑在 `kit/bin/evo_arch.py`（依赖分类复用 `evo_ui.resolve_categories`），ADR 模板固定副本 `kit/vendor/madr`（MIT 或 CC0，提交 ba75bb1）。
+- **来源**（都打开原文核实）：zhanymkanov/fastapi-best-practices（领域分包、固定文件名、迁移命名）、fastapi/full-stack-fastapi-template（pydantic-settings、ruff 规则集）、import-linter（layers 契约）、ruff、goldbergyoni/nodebestpractices 1.1–1.4（组件 + 三层、Web 框架不出入口层）、dependency-cruiser、Apple 本地 Swift 包、Swift API Design Guidelines、SwiftLint、MADR、12-factor III。
+- **项目配置**：`arch_preset`（`python-fastapi` | `node-ts` | `swift-app` | `none`，默认 none）、`arch_overrides`（`root` / `layout` / `allow_dirs` / `migrations_dir` / `migrations_pattern` / `arch_paths` / `config_modules` / `layers.<层>` / `deps.<类别>` / `checks.<检查>=off`）。`evo new/import --arch-preset …`；`evo -p AB arch [show [预设]] | set <预设> | set 键=值 | set 键= | check [--path --base --no-tools --json]`。外部 Agent 不能 set。`status --json` 加 `arch_preset`。
+- **现有结构优先**：只管新代码。源码根不同（如 `api/`）、源码根下已按类型分（`routers/` 等）、迁移目录不同（按现有文件名猜命名规则，如 `^\d{3}_…\.sql$`）、某类库已在用别的 → 沿用现有；接棒时日志 + 提醒（`arch_conflict`）各一次，变了再报；`import --arch-preset` 当场列出。
+- **任务书**：scope 落在源码根或迁移目录（或 `arch_paths`）的件，施工任务书在 UI 块后加「架构规范」（目录、分层方向、迁移、红线、每类依赖一行、ADR 模板路径），验收任务书加「架构规范检查」（跑 `evo arch check`、外部工具和安装命令）。
+- **交卷时自动查**（只看本件新增）：约定外的新目录、向上依赖（Python 解析 import 含跨行括号、TS 相对路径、Swift 本地模块）、下层用了 Web 框架 / SwiftUI、禁用库或同类第二个、迁移命名不对或编号撞、新增行写死口令（测试目录除外）→ 打回返工；新依赖没写理由、在 config 模块外读部署配置、新领域包文件名不常规、改了已有迁移、lockfile 才出现的禁用库 → 只提示（`arch_advisory`）。
+- **外部工具**（`evo arch check` 跑，接棒器不跑）：import-linter 用仓库自己的契约或按分层生成 INI 契约，改动前后各跑一次（`git worktree`）只算新违约；ruff / SwiftLint 只算新增行；dependency-cruiser 同理按分层生成 forbidden 规则。没装或工具自己报错只警告并给安装命令。
+- **档案**：ST `arch_preset: swift-app` + `arch_overrides.root = REASTOCK/Sources/REASTOCK`（按类型平铺沿用；Engine/Data/Models 新加 import SwiftUI 打回）；TB 不动，对照结论与建议 overrides 在 kit/presets/arch/README.md 最后一节（生成契约在土布现有代码上只有 `api/schemas.py → materials_repo` 一处老违约）。
+
 ## 只能在 Mac mini 上验的
 - 真施工模型会不会按「UI 规范」块选库、交卷写清新依赖理由；`npx shadcn@latest create --preset nova` / `add` 在本机网络（代理）下能不能跑通。
 - 真 Orca 的消息有没有 `id` 字段（evo 依次认 `id` / `message_id` / `messageId`；都没有就不去重）、没确认的消息会不会重投。

@@ -138,16 +138,11 @@ def _override(v):
     return None
 
 
-def effective(cfg, repo=None, present=None):
-    """返回 None（没开预设）或 {name, title, principles, rules, ui_paths, component_dir, components, aliases,
-    categories: {类别: {label, source, choice, packages, core, banned, existing, override, kept}}, conflicts: [...]}。"""
-    pre = load_preset((cfg or {}).get("ui_preset") or "none")
-    if not pre:
-        return None
-    present = repo_deps(repo or (cfg or {}).get("repo")) if present is None else present
-    ovs = (cfg or {}).get("ui_overrides") or {}
+def resolve_categories(categories, present, ovs, ov_key="ui_overrides"):
+    """按类别算「选定 / 禁用 / 现有的赢」，返回 (cats, conflicts)。UI 预设和架构预设（evo_arch，第十五轮）共用。"""
+    ovs = ovs or {}
     cats, conflicts = {}, []
-    for name, c in list(pre["categories"].items()) + [(k, None) for k in ovs if k not in pre["categories"]]:
+    for name, c in list(categories.items()) + [(k, None) for k in ovs if k not in categories]:
         c = dict(c or {"label": name, "source": "override", "choice": "", "packages": [], "banned": []})
         core = list(c.get("core") or c.get("packages") or [])
         banned = list(c.get("banned") or [])
@@ -157,7 +152,7 @@ def effective(cfg, repo=None, present=None):
             # 老板批准换库：换上的不再禁，原来选的反倒算同类第二个
             banned = [b for b in banned if not any(match(p, b) for p in ov["packages"])] + \
                      [x for x in core if not any(match(p, x) for p in ov["packages"])]
-            c.update(choice=ov["choice"] + "（老板批准，ui_overrides）", packages=ov["packages"], override=True)
+            c.update(choice=ov["choice"] + f"（老板批准，{ov_key}）", packages=ov["packages"], override=True)
             core = list(ov["packages"])
         found = sorted(p for p in present if any_match(p, banned))
         c["existing"], c["kept"] = found, False
@@ -172,6 +167,17 @@ def effective(cfg, repo=None, present=None):
             conflicts.append({"category": name, "label": c.get("label", name), "existing": found, "kept": c["kept"]})
         c["core"], c["banned"] = core, banned
         cats[name] = c
+    return cats, conflicts
+
+
+def effective(cfg, repo=None, present=None):
+    """返回 None（没开预设）或 {name, title, principles, rules, ui_paths, component_dir, components, aliases,
+    categories: {类别: {label, source, choice, packages, core, banned, existing, override, kept}}, conflicts: [...]}。"""
+    pre = load_preset((cfg or {}).get("ui_preset") or "none")
+    if not pre:
+        return None
+    present = repo_deps(repo or (cfg or {}).get("repo")) if present is None else present
+    cats, conflicts = resolve_categories(pre["categories"], present, (cfg or {}).get("ui_overrides") or {}, "ui_overrides")
     return {"name": pre["name"], "title": pre.get("title", pre["name"]), "principles": pre.get("principles") or [], "taste": pre.get("taste"),
             "rules": pre.get("rules") or [], "ui_paths": (cfg or {}).get("ui_paths") or pre.get("ui_paths") or [],
             "component_dir": pre.get("component_dir") or "", "components": pre.get("components") or [],
