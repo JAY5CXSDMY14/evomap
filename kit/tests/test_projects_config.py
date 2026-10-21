@@ -4,7 +4,8 @@ import json, os, subprocess, sys
 from conftest import KIT, state_is, sh
 
 PROJECT_KEYS = {"code", "name", "repo", "main_branch", "github_repo", "trusted_authors", "test_cmd", "push_cmd", "deploy_cmd",
-                "policy_terms", "lessons_file", "standards_file", "digest_issue", "clone"}     # 第十七轮：有远端时 import 默认 clone: true
+                "policy_terms", "lessons_file", "standards_file", "digest_issue", "clone",     # 第十七轮：有远端时 import 默认 clone: true
+                "owner_host"}                # 第十八轮：多机器，new/import 写下归属机器（租约）
 
 
 def test_two_projects_share_global_builder_cap(loop):
