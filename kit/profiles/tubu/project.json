@@ -3,6 +3,13 @@
   "code": "TB",
   "name": "土布",
   "repo": "~/Desktop/项目/土布/tubu-platform",
+  "_repo": "老板自己的工作副本：第十七轮起 evo 只读它（首次克隆的来源），不在这里 checkout/合并/推送。",
+  "clone": true,
+  "_clone": "老板 2026-10-21 决定②：evo 在 ~/.evoloop/repos/TB 自己克隆一份，合并、推送、开工作区、决策岗终端都只在那里。老板看最新代码就在工作副本里 git pull。已登记的 TB 用 evo -p TB relocate 切过去（有件在工作区里时会拒绝，等它们合并完再切）。",
+  "git_env": {
+    "HTTPS_PROXY": "socks5h://127.0.0.1:1082"
+  },
+  "_git_env": "第十七轮 L-07：git fetch/pull 和 gh 也走本机代理（以前只有 push_cmd 带代理，fetch 直连 GitHub 不通，推送一直失败）。",
   "main_branch": "main",
   "github_repo": "JAY5CXSDMY14/tubu-platform",
   "trusted_authors": [

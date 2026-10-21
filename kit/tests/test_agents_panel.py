@@ -104,7 +104,8 @@ def test_reports_wake_decider_marked_untrusted(loop):
 
 
 def test_import_drops_agent_interface_without_committing(loop):
-    repo = loop.project("AB")
+    loop.project("AB")
+    repo = loop.src("AB")                 # 第十七轮：放在老板的工作副本里（evo 的专用克隆里没有，也不提交）
     assert os.path.exists(os.path.join(repo, "AGENT_INTERFACE.md"))
     assert "AGENT_INTERFACE.md" not in loop.git(repo, "ls-files")
     path = os.path.join(loop.tmp, "fresh")

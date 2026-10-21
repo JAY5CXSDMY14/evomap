@@ -40,7 +40,8 @@ class Loop:
     # ---------- 配置 ----------
     def write_global(self, extra):
         py = sys.executable
-        g = {"limits": {"builders_total": 2, "owner_queue_pause": 5, "rework_rounds": 2, "stall_minutes": 15},
+        # push_backoff_minutes 0：老测试连着 tick 重试推送（第十七轮的退避在专门的测试里打开）
+        g = {"limits": {"builders_total": 2, "owner_queue_pause": 5, "rework_rounds": 2, "stall_minutes": 15, "push_backoff_minutes": 0},
              "roles": {"build": {"cmd": f"{py} {WORKER} build", "models": ["model-a", "model-b"], "prompt": "roles/builder.md",
                                  "boot_seconds": 0},
                        "verify": {"cmd": f"{py} {WORKER} verify", "models": ["model-a", "model-b"], "prompt": "roles/verifier.md",
@@ -61,8 +62,18 @@ class Loop:
         json.dump(c, open(self.cfg_path(code), "w"), ensure_ascii=False)
 
     # ---------- 仓库 ----------
-    def repo(self, code):
+    def src(self, code):
+        """老板的工作副本（evo import 的 --path）。"""
         return os.path.join(self.tmp, "repos", code, "work")
+
+    def clone(self, code):
+        """第十七轮：evo 的专用克隆 ~/.evoloop/repos/<代号>（有 origin 的项目 import 时默认建）。"""
+        return os.path.join(self.root, "repos", code)
+
+    def repo(self, code):
+        """evo 实际合并、推送的目录：有专用克隆就是克隆，否则是工作副本（--in-place / 没有 origin）。"""
+        c = self.clone(code)
+        return c if os.path.isdir(os.path.join(c, ".git")) else self.src(code)
 
     def remote(self, code):
         return os.path.join(self.tmp, "repos", code, "remote.git")
@@ -70,8 +81,8 @@ class Loop:
     def git(self, cwd, *a, check=True):
         return sh("git", "-C", cwd, *a, env=self.env, check=check)
 
-    def project(self, code, test_cmd=None, push=True, **cfg):
-        repo, remote = self.repo(code), self.remote(code)
+    def project(self, code, test_cmd=None, push=True, in_place=False, **cfg):
+        repo, remote = self.src(code), self.remote(code)
         os.makedirs(repo)
         self.git(repo, "init", "-q", "-b", "main")
         open(os.path.join(repo, "README.md"), "w").write(f"# {code}\n")
@@ -82,11 +93,11 @@ class Loop:
             self.git(repo, "push", "-q", "origin", "main")
         if test_cmd is None:
             test_cmd = f"echo ran >> {self.tmp}/tests-{code}.log"
-        r = self.evo("import", code, "--name", f"项目{code}", "--path", repo, "--test", test_cmd)
+        r = self.evo("import", code, "--name", f"项目{code}", "--path", repo, "--test", test_cmd, *(["--in-place"] if in_place else []))
         assert "就绪" in r.stdout, r.stdout + r.stderr
         if cfg:
             self.patch_cfg(code, **cfg)
-        return repo
+        return self.repo(code)
 
     def remote_head(self, code):
         return self.git(self.remote(code), "rev-parse", "main")

@@ -107,7 +107,7 @@ function gateCard(g, code, name){
   const opts = g.options || ["通过","打回"];
   const id = "w_" + g.id;
   const needWhy = opts.includes("打回");
-  return `<div class="card gate">${name?`<div class="proj">${esc(name)}</div>`:""}<div class="q">${esc(g.question)}</div>
+  return `<div class="card gate">${name?`<div class="proj">${esc(name)}</div>`:""}<div class="q">${esc(g.question)}</div>${g.confirm?`<div class="others">Orca 端（手机或工人）点的「${esc(g.orca_choice||"?")}」不直接算数，在这里再点一次才生效（试运行）</div>`:""}
     <div class="row">${needWhy?`<input type="text" id="${id}" placeholder="打回的话写一句，原话进返工（像用户那样说）">`:""}
     ${opts.map(o => `<button class="btn ${/打回|不做/.test(o)?"warn":""}" onclick="approve('${code}','${g.id}','${esc(o)}','${id}')">${esc(o)}</button>`).join("")}</div>
     ${g.kind==="look" && g.item ? `<div class="artifacts" data-code="${esc(code)}" data-item="${esc(g.item)}"><span class="others">产出物读取中…</span></div>` : ""}</div>`;
@@ -153,7 +153,10 @@ async function refresh(){
   const tok = (data.usage||{}).tokens;
   const nolive = data.no_live_path||[], stale = data.stale||[];
   const rolesRow = (data.roles||[]).map(r => `<span class="role role-${esc(r.status)}" title="${esc(r.why||"")}">${esc(r.name)} · ${esc(r.label)}${(r.items||[]).length?" "+r.items.length:""}</span>`).join("");
-  $("main").innerHTML = (rl ? `<div class="card" style="border-color:var(--warn)">⏸ ${rl}，到点自动恢复（不算返工）</div>` : "") +
+  $("main").innerHTML = (data.paused ? `<div class="card" style="border-color:var(--warn)">⏸ 暂停：${esc(data.paused)}（处理好后 evo -p ${esc(cur)} resume）</div>` : "") +
+    (data.main_red ? `<div class="card" style="border-color:var(--warn)">主线测试红了：在途的件先等着，不算它们返工（已登记一件修主线）</div>` : "") +
+    (data.tick_running && data.tick_running.minutes > 1 ? `<div class="others" style="margin-bottom:6px">正在接棒一轮（已 ${esc(data.tick_running.minutes)} 分钟），下面是上次存盘的状态</div>` : "") +
+    (rl ? `<div class="card" style="border-color:var(--warn)">⏸ ${rl}，到点自动恢复（不算返工）</div>` : "") +
     `<h2>岗位状态</h2><div class="roles">${rolesRow}</div>` +
     (nolive.length ? `<h2>没有活路</h2><div class="card alert nolive">${nolive.map(n => `<div><a class="ttl" href="#item=${esc(n.key)}">${esc(n.key)}</a> ${esc(n.title)} · ${esc(n.state)} · ${n.minutes} 分钟<div class="others">${esc(n.why)}（已交决策岗）</div></div>`).join("")}</div>` : "") +
     (stale.length ? `<h2>卡太久</h2><div class="card stale">${stale.map(x => `<div><a href="#item=${esc(x.key)}">${esc(x.key)}</a> ${esc(x.title)} · ${esc(x.state)} 已 ${x.hours} 小时</div>`).join("")}</div>` : "") + `
@@ -167,6 +170,8 @@ async function refresh(){
     <h2>项目目标</h2><div class="card settings"><textarea id="goal" maxlength="200" placeholder="一两句：这个项目为什么做、给谁用（写进每份任务书开头）">${esc(data.goal||"")}</textarea>
       <div class="row" style="margin-top:8px"><button class="btn ghost" onclick="saveGoal()">保存</button><span class="others">留空 = 清掉；下一份任务书起生效</span></div></div>
     <h2>模型（本项目）</h2><div class="card" id="models"><span class="others">读取中…</span></div>
+    <h2>每件上限</h2><div class="card settings">${LIMIT_KEYS.map(([k,t]) => `<div class="row"><span style="flex:1">${t}</span><input type="number" min="0" step="1" id="lim_${k}" value="${esc((data.limits||{})[k] ?? "")}" style="width:80px"></div>`).join("")}
+      <div class="row" style="margin-top:8px"><button class="btn ghost" onclick="saveLimits()">保存</button><span class="others">0 = 关；到了就暂停这件，推「继续还是不做」</span></div></div>
     <h2>用量</h2><div class="card others">${roles || "还没有派过工"}${tok ? `<br>token（magpie）：${Object.entries(tok.by_model||{}).map(([m,n]) => esc(m)+" "+n).join(" · ")}${tok.project?`；本项目 ${tok.project}`:""}` : ""}</div>
     <h2>最近动静</h2><div class="others" style="margin:-4px 0 6px">上次转动：${data.last_tick ? esc(data.last_tick.slice(5,16).replace("T"," ")) : "还没转过"}</div><div class="card log">${esc((data.log||[]).slice().reverse().join("\n")) || "（无）"}</div>`;
   loadModels(cur);
@@ -175,7 +180,8 @@ async function refresh(){
 
 // 每件一页：时间线、交卷、diff、产出物、补充反馈
 const EV_NAMES = {add:"登记", dispatch:"派工", report:"交卷", gate_open:"开闸门", gate_approve:"老板通过", gate_reject:"老板打回/不同意",
-  gate_superseded:"旧闸门作废", feedback:"老板补充反馈", rework:"返工", merge:"合并", push:"推送", ship:"上线", deploy_failed:"上线失败",
+  gate_superseded:"旧闸门作废", gate_external:"Orca 端结闸门", msg_error:"消息出错已跳过", msg_stale:"过时回报已丢", main_red:"等主线修绿",
+  decider_timeout:"决策岗卡住重叫", merge_error:"合并出错", feedback:"老板补充反馈", rework:"返工", merge:"合并", push:"推送", ship:"上线", deploy_failed:"上线失败",
   restart:"工人重启", decision:"决策岗决定", drop:"不做", state:"状态", no_live_path:"没有活路", live_again:"恢复活路"};
 async function showItem(code, key){
   const d = await api(`api/item/${code}/${encodeURIComponent(key)}`);
@@ -200,6 +206,13 @@ async function sendNote(code, item){
   const t = $("note").value.trim(); if (!t) return;
   const r = await api("api/note", {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({code, item, words: t})});
   toast(r.ok ? "记下了" : "没成功：" + r.error); if (r.ok) showItem(code, item);
+}
+// 第十七轮（老板决定③）：每件上限，写项目配置 overrides.limits（evo -p 代号 limits set …）
+const LIMIT_KEYS = [["decider_reworks","决策岗指导返工最多几次（之后转你）"],["item_hard_runs","一件最多派工几次"],["item_hard_hours","一件工人最多累计几小时"]];
+async function saveLimits(){
+  const body = {code: cur}; LIMIT_KEYS.forEach(([k]) => { const v = ($("lim_"+k)||{}).value; if (v !== "" && v != null) body[k] = Number(v); });
+  const r = await api("api/limits", {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify(body)});
+  toast(r.ok ? "上限已保存，下一轮生效" : "没成功：" + r.error);
 }
 async function saveGoal(){
   const goal = ($("goal")||{}).value || "";

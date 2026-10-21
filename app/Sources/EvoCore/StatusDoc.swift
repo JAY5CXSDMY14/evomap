@@ -22,6 +22,8 @@ public struct StatusDoc: Decodable, Equatable, Sendable {
     /// 顶层 stale / no_live_path 是件列表时的明细（数字或布尔的老格式就是空表，只有上面的件数）。
     public var staleList: [Flag]
     public var noLivePathList: [Flag]
+    /// 第十七轮：项目暂停原因（evo status 只读，暂停时也照常返回）；没暂停为 nil。
+    public var paused: String?
 
     /// 一件被点名的件：卡太久或没活路。
     public struct Flag: Decodable, Equatable, Sendable {
@@ -68,10 +70,14 @@ public struct StatusDoc: Decodable, Equatable, Sendable {
         public var kind: String?
         public var item: String?
         public var waitingSince: String?
+        /// 第十七轮：在 Orca 端被点了「通过 / 上线」等、要老板在 evo 入口再确认的闸门（试运行）。
+        public var confirm: Bool = false
+        public var orcaChoice: String?
 
         enum CodingKeys: String, CodingKey {
-            case id, question, options, kind, item
+            case id, question, options, kind, item, confirm
             case waitingSince = "waiting_since"
+            case orcaChoice = "orca_choice"
         }
 
         public init(id: String, question: String? = nil, options: [String] = [], kind: String? = nil, item: String? = nil, waitingSince: String? = nil) {
@@ -86,6 +92,8 @@ public struct StatusDoc: Decodable, Equatable, Sendable {
             kind = try c.decodeIfPresent(String.self, forKey: .kind)
             item = try c.decodeIfPresent(String.self, forKey: .item)
             waitingSince = try c.decodeIfPresent(String.self, forKey: .waitingSince)
+            confirm = (try? c.decodeIfPresent(Bool.self, forKey: .confirm)) ?? false
+            orcaChoice = try? c.decodeIfPresent(String.self, forKey: .orcaChoice)
         }
 
         /// 给人看的种类名。
@@ -96,6 +104,7 @@ public struct StatusDoc: Decodable, Equatable, Sendable {
             case "ship": return "上线"
             case "external": return "外部请求"
             case "ask": return "提问"
+            case "budget": return "上限"
             default: return "待定"
             }
         }
@@ -135,6 +144,7 @@ public struct StatusDoc: Decodable, Equatable, Sendable {
         case roles
         case generatedAt = "generated_at"
         case lastTick = "last_tick"
+        case paused
     }
 
     public init(from d: Decoder) throws {
@@ -155,6 +165,7 @@ public struct StatusDoc: Decodable, Equatable, Sendable {
         roles = ((try? c.decodeIfPresent([Lenient.Maybe<Role>].self, forKey: .roles)) ?? nil)?.compactMap(\.value).filter { !$0.role.isEmpty } ?? []
         staleList = ((try? c.decodeIfPresent([Lenient.Maybe<Flag>].self, forKey: .staleItems)) ?? nil)?.compactMap(\.value) ?? []
         noLivePathList = ((try? c.decodeIfPresent([Lenient.Maybe<Flag>].self, forKey: .noLivePath)) ?? nil)?.compactMap(\.value) ?? []
+        paused = (try? c.decodeIfPresent(String.self, forKey: .paused)) ?? nil
     }
 
     /// 这个版本的应用认得的最高 schema_version；更高的照样解析（只加字段），但界面上提示升级。

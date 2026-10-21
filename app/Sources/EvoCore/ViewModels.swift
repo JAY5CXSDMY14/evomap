@@ -173,6 +173,7 @@ public struct ProjectRow: Identifiable, Equatable, Sendable {
         tooLong = s.doc?.staleItems ?? 0
         let roles = s.doc?.roles ?? []
         roleLine = roles.isEmpty ? nil : roles.map { "\($0.name) \($0.label)" }.joined(separator: " · ")
+        if let p = s.doc?.paused, !p.isEmpty { roleLine = "暂停：\(p)" }      // 第十七轮：项目暂停时说清原因，不显示成出错
         heartbeat = beat?.level
     }
 

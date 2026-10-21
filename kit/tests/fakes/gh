@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """假 gh：记下参数。
+第十七轮：$FAKE_ORCA_DIR/GH_FAIL 存在时一律报「gh auth login」退出 4；设了 HTTPS_PROXY 就记进 gh_env.log。
 issue list：有 $FAKE_ORCA_DIR/gh_issues.json 就按 --label 过滤返回，否则 []。
 api repos/.../issues/<n>/events：取 gh_events.json 里 "<n>" 的列表，否则 []。
 api repos/.../issues/<n>/comments：取 gh_comments.json 里 "<n>" 的列表，否则 []。其它命令什么都不输出。"""
@@ -8,6 +9,11 @@ D = os.environ["FAKE_ORCA_DIR"]
 a = sys.argv[1:]
 with open(os.path.join(D, "gh.log"), "a", encoding="utf-8") as f:
     f.write(" ".join(a) + "\n")
+if os.environ.get("HTTPS_PROXY"):           # 第十七轮：看 gh 有没有带上项目代理（git_env）
+    with open(os.path.join(D, "gh_env.log"), "a", encoding="utf-8") as f:
+        f.write(os.environ["HTTPS_PROXY"] + "\n")
+if os.path.exists(os.path.join(D, "GH_FAIL")):   # 第十七轮：模拟 gh 登录失效
+    sys.stderr.write("To get started with GitHub CLI, please run:  gh auth login\n"); sys.exit(4)
 def load(n):
     p = os.path.join(D, n)
     return json.load(open(p, encoding="utf-8")) if os.path.exists(p) else None

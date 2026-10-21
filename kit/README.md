@@ -196,7 +196,24 @@ Telegram 环境变量改名 `EVO_TG_TOKEN` / `EVO_TG_CHAT`，旧名 `TUBU_TG_TOK
 - **命令**：`evo plugin list [--json] | enable <名> | disable <名> | run <名> <类型> <id> [--args --action --payload --project --item] [--json] | validate [名|目录] [--json] | install <目录> [--force]`。
 - **示例插件** `kit/plugins/example-hello/`（纯 Python 标准库）：侧栏页「你好」（文字 + 列表 + 表格 + 按钮，按钮掷骰子）、输入框 `/hello 名字`、通知渠道（追加到 `$EVO_PLUGIN_DATA/notify.log`）、件详情页按钮。
 
+## 第十七轮：修体检高危 + 老板批准的三条规矩（均有自动测试，`kit/tests/test_round17.py` 32 个；体检报告 docs/loop-audit-2026-10.md 每条已标修没修）
+体检附录里 4 段复现脚本（t_lock / t_phone / t_noid / t_red）都改成了测试，在老代码上都是红的，现在绿。
+- **L-01 常驻不再永远占锁**：`evo run` 单项目和多项目一样，每轮起子进程 `evo -p <代号> once`，锁随子进程退出释放，配置每轮重读（面板 / App 改的模型、目标、上限下一轮就生效）。锁文件旁边多一个 `state/lock.info`（谁、从几点拿着锁）。
+- **L-02 看状态只读**：`status` / `status --json` 不抢锁、不管暂停、不新建 Orca 协调终端（读不到闸门就标 `gates_stale: true`）；tick 跑着时 App、面板、Telegram 照样看得到。JSON 新增 `paused`（暂停原因）、`tick_running`（`{pid, cmd, since, minutes}`）、`gates_stale`、`main_red`、`limits`，schema 仍是 1。
+- **L-04 一条坏消息不再拖垮项目**：每条消息单独兜错，出错也记成已处理、时间线 `msg_error`、交决策岗一次（同件同错只一次）；只认「本次派工」的回报（任务号是这件当前这一岗、件正在这一岗上），迟到 / 重投的旧回报记 `msg_stale` 丢掉；真 Orca 消息没有 id 时用（任务号、类型、结果、派工号、正文指纹）合成 `syn:` 号去重；合并一件出错只把这件转交决策岗（`merge_error`），别的件、心跳照常。
+- **L-03 + 老板决定①（试运行，`orca_gate_sync` 默认开）**：每轮读 Orca 闸门结果，找出没经过 evo 就结掉的闸门（时间线 `gate_external`）。点「打回 / 不做 / 不同意 / 再等等 / 拒绝」→ 照办（打回原话写「Orca 端打回，未写原因」）；点「通过 / 上线 / 做 / 同意 / 继续」→ 不执行，推一条「确认上线 TB-FIX-012？」（Telegram 带按钮，App、面板的闸门卡片上标「Orca 端点的不直接算数」），老板在 evo 自己的入口再点才生效。合并前核对 `look_ok`（看效果闸门是老板从 evo 入口点的通过）、开工前核对 `do_ok`、上线只在 evo approve 里执行：工人调 `orca … gate-resolve` 不算数。看效果闸门在验收通过前被结掉 → 重开一个。关掉（`"orca_gate_sync": false`）= Orca 端的任何结果（含打回）都要在 evo 入口确认。**这是试运行：老板真机体验后再调。**
+- **L-06 外部命令都有超时**：`limits.timeouts`（分钟）默认 test 30、git 网络 3、git 本地 1、gh 1、push 5、deploy 20、单项目一轮 45、orca 2。自己的进程组，超时整组杀；测试超时算红，推送超时算推送未成，一轮超时推送 `tick_timeout`；`orca` 超时 / 没装转成正常报错，不再让进程直接崩。
+- **L-07 git / gh 带项目代理**：项目配置 `git_env`（例 `{"HTTPS_PROXY": "socks5h://127.0.0.1:1082"}`），没写就从 `push_cmd` 里认出代理。fetch、pull、clone、gh 全带上（土布以前只有推送带代理，fetch 直连不通）。
+- **L-05 主线红了不算件的返工**：合并前测红先在当前 main（不含本件）上跑一次，按 main 提交号缓存；main 本身红 → 这件进「等主线修绿」（`waiting: main_red`），不算轮次、不重跑；全项目只推一次 `main_red`、只登记一件 `OPS「修复主线测试变红」`（scope 整仓，它自己测红照常返工）；主线转绿自动继续。推送失败按 1、2、4…最长 30 分钟退避（`limits.push_backoff_minutes` / `push_backoff_max_minutes`）。
+- **L-08 决策岗卡住重叫**：一批超过 `limits.decide_timeout_minutes`（默认 45）没交、或工人进程没了 → 关终端、任务标失败、时间线 `decider_timeout`、下一轮重叫（这批的外部来报还回收件箱）；连续 2 次推「决策岗连续卡住」。另修：决策岗返工后再交决策岗算【新】（以前同一轮次号会被当成已交过，不再叫）。
+- **L-20 拉 issue 出错不拖垮整轮**：gh 出错、限流、输出不是 JSON 只记次数，这一轮合并、推送、心跳照做；连续 3 轮推 `intake_down`（认得出登录失效就写「gh 登录失效，在这台 Mac 上跑 gh auth login」），恢复记 `intake_up`。
+- **老板决定② evo 专用克隆**：`evo import/new` 有 origin 时默认在 `~/.evoloop/repos/<代号>` 克隆一份（本地克隆，origin 改成工作副本的 GitHub 地址，main 对齐 origin/main），配置写 `clone: true`；合并、推送、Orca 工作区、协调和决策岗终端都只在克隆里。`repo` 仍是老板的工作副本，只作只读参考 / 克隆来源，evo 不再 checkout、合并、推送它。克隆被删了下一轮自动重建。已登记的项目 `evo -p TB relocate`（有件在工作区里就拒绝，等合并完；`--force` 硬迁，这些件重做）。`--in-place` 保留老做法。`projects --json` 加 `work_repo`。profiles（tubu、st）已加 `clone: true` 和 `git_env`；`install.sh` 结尾会点名还没切的项目。
+- **老板决定③ 每件上限**：`limits.decider_reworks`（默认 2）：决策岗已指导返工 2 次，第 3 次不执行，转老板「继续 / 不做」闸门（点继续就照决策岗那条说明返工、计数清零）；`limits.item_hard_runs`（默认 12）/ `item_hard_hours`（默认 6）：一件派工到 12 次或工人累计 6 小时 → 不再派工（正在跑的不打断），推「TB-FIX-012 已烧 6 小时还没完，继续还是不做？」；继续 = 从现在起重新计数，不做 = 这件不做。0 = 关。改法：`evo [-p 代号] limits [set 键=值 …] [--json]`、面板项目页「每件上限」（`POST /api/limits`）。闸门 kind 是 `budget`，件的 `waiting` 是 `owner_budget`。App 设置页这轮没加（见下）。
+
 ## 只能在 Mac mini 上验的
+- 第十七轮：真 Orca 的 `gate-list` 会不会列出已结掉的闸门、结果字段是不是 `resolution`（evo 也认 `result`）；手机端点「打回」后 evo 照办、点「通过 / 上线」后 Telegram 收到「确认…？」并能点按钮确认（试运行，老板体验后再调）。
+- 第十七轮：TB `relocate` 后 `~/.evoloop/repos/TB` 克隆、fetch 走 `git_env` 代理能通；Orca 认新目录（`orca repo add`）；老板在工作副本里 `git pull` 能看到 evo 推上去的提交。
+- 第十七轮：launchd 常驻改成每轮起子进程后，CPU / 日志是否正常；一轮超时（45 分钟）杀掉的测试进程有没有残留。
 - 第十六轮插件：真 App 里打开示例插件后侧栏出现「你好」、`/hello` 出卡片（CI 实机演示有截图，本机再点一遍）；插件通知渠道接真推送（比如自己写一个 Bark / ntfy 插件）在免打扰时段是否按预期攒到早上。
 - 真施工模型会不会按「UI 规范」块选库、交卷写清新依赖理由；`npx shadcn@latest create --preset nova` / `add` 在本机网络（代理）下能不能跑通。
 - 真 Orca 的消息有没有 `id` 字段（evo 依次认 `id` / `message_id` / `messageId`；都没有就不去重）、没确认的消息会不会重投。

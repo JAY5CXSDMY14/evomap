@@ -49,6 +49,26 @@ final class StatusDocTests: XCTestCase {
         XCTAssertNotNil(ISOTime.parse(d.lastTick))     // 带小数秒、Z 结尾
     }
 
+    /// 第十七轮：status 只读，暂停时照常返回 paused；Orca 端点的放行类闸门带 confirm（试运行）；上限闸门 kind = budget。
+    func testRound17PausedConfirmAndBudget() throws {
+        let j = """
+        {"schema_version": 1, "project": "TB", "name": "土布", "count": {}, "stuck": 0, "log": [], "items": [],
+         "paused": "状态文件损坏，已挪到 x", "tick_running": {"pid": 1, "minutes": 3.5}, "gates_stale": false,
+         "gates": [{"id": "gate_9", "question": "确认上线 TB-FIX-012？", "options": ["上线", "再等等"], "kind": "ship", "confirm": true, "orca_choice": "上线"},
+                   {"id": "gate_10", "question": "TB-FIX-013 已烧 6 小时还没完，继续还是不做？", "options": ["继续", "不做"], "kind": "budget"}]}
+        """
+        let d = try StatusDoc.decode(j)
+        XCTAssertEqual(d.paused, "状态文件损坏，已挪到 x")
+        XCTAssertTrue(d.gates[0].confirm)
+        XCTAssertEqual(d.gates[0].orcaChoice, "上线")
+        XCTAssertFalse(d.gates[1].confirm)
+        XCTAssertEqual(d.gates[1].kindLabel, "上限")
+        let row = ProjectRow(ProjectSnapshot(code: "TB", doc: d))
+        XCTAssertEqual(row.roleLine, "暂停：状态文件损坏，已挪到 x")
+        XCTAssertNil(row.error)
+        XCTAssertNil(try StatusDoc.decode(fixture("status_tb.json")).paused)
+    }
+
     func testGarbageThrows() {
         XCTAssertThrowsError(try StatusDoc.decode("接棒暂停中：状态文件损坏"))
         XCTAssertThrowsError(try StatusDoc.decode("{\"name\": \"缺 project\"}"))

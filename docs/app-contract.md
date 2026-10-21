@@ -46,6 +46,7 @@ App 还会跑这些**写**命令（输出是给人看的文字，不是接口）
 | `projects[].name` | string | 是 | 项目名（没写就等于代号） |
 | `projects[].repo` | string? | 否 | 本机仓库目录 |
 | `projects[].github` | string? | 否 | `用户/仓库` |
+| `projects[].work_repo` | string? | 否 | 第十七轮：evo 实际合并、推送的目录（专用克隆 `~/.evoloop/repos/<代号>`）；`repo` 是老板的工作副本，evo 只读 |
 
 不带 `--json` 的纯文本输出保持不变（每行「代号 名字 仓库 GitHub」），老 App 照读。
 
@@ -57,12 +58,19 @@ App 还会跑这些**写**命令（输出是给人看的文字，不是接口）
 | `generated_at` / `last_tick` | string?（ISO 8601） | 是 / 是 | 生成时间 / 上次接棒一轮的时间（从没转过为 null） |
 | `count` | {状态: 整数} | 是 | 按内部状态计数（`building`、`built`、`verifying`、`merged`…） |
 | `stuck` | 整数 | 是 | 疑似卡住 + 交决策岗 + 有提问 |
-| `gates[]` | 对象列表 | 是 | 等老板点头的闸门：`id` string、`question` string?、`options` [string]、`kind` = `do`/`look`/`ship`/`external`/`ask`/`other`、`item` string?、`waiting_since` string? |
+| `gates[]` | 对象列表 | 是 | 等老板点头的闸门：`id` string、`question` string?、`options` [string]、`kind` = `do`/`look`/`ship`/`external`/`ask`/`budget`/`other`、`item` string?、`waiting_since` string?；第十七轮可选 `confirm` bool（Orca 端被点了放行类结果、要在 evo 入口再确认，试运行）、`orca_choice` string? |
 | `items[]` | 对象列表 | 是 | 每件：`key`、`title`、`state`（中文）、`raw`（内部状态）必有；`kind`、`waiting`、`stalled`、`look`、`round`、`manual_checks`、`state_since`、`no_live_path`、`look_gate`、`usage` 可选 |
 | `log` | [string] | 是 | 最近 15 条动静 |
 | `roles` | 列表 | 可选 | 岗位状态 `{role, name, status, label, items, why, until}` |
 | `stale` / `no_live_path` | 列表 | 可选 | 卡太久 / 没活路的件 `{key, title?, state?, reason?, hours?, minutes?}`（老格式可能是数字或布尔，App 都认） |
 | `goal`、`ui_preset`、`arch_preset`、`rate_limits`、`usage`、`decider`、`team` | — | 可选 | 见 agent-interface.md |
+| `paused` | string? | 可选 | 第十七轮：项目暂停原因；没暂停为 null。status 只读，暂停时照常返回（以前退出码非 0） |
+| `tick_running` | 对象? | 可选 | 第十七轮：正在跑的一轮 `{pid, cmd, since, minutes}`；这时返回的是上次存盘的状态 |
+| `gates_stale` | bool | 可选 | 第十七轮：这次没读到 Orca 闸门（status 不新建协调终端） |
+| `main_red` | bool | 可选 | 第十七轮：主线本身测试红，在途的件等它（件的 `waiting` = `main_red`） |
+| `limits` | {键: 数字} | 可选 | 第十七轮：每件上限 `decider_reworks` / `item_hard_runs` / `item_hard_hours`（0 = 关）；件的 `waiting` = `owner_budget` 表示上限到了在等老板 |
+
+`evo [-p 代号] limits [show | set 键=值 …] --json`（第十七轮，App 现在不读）：`{"schema_version": 1, "project": "TB" | null, "limits": {…}, "labels": {…}}`。
 
 ### 3.3 `evo -p <代号> log <件号> --json`
 

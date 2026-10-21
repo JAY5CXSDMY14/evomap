@@ -4,7 +4,7 @@ import json, os, subprocess, sys
 from conftest import KIT, state_is, sh
 
 PROJECT_KEYS = {"code", "name", "repo", "main_branch", "github_repo", "trusted_authors", "test_cmd", "push_cmd", "deploy_cmd",
-                "policy_terms", "lessons_file", "standards_file", "digest_issue"}
+                "policy_terms", "lessons_file", "standards_file", "digest_issue", "clone"}     # 第十七轮：有远端时 import 默认 clone: true
 
 
 def test_two_projects_share_global_builder_cap(loop):
@@ -52,7 +52,7 @@ def test_new_and_import_write_only_project_config(loop):
     assert os.path.exists(os.path.join(path, "docs", "LESSONS.md"))
     loop.project("IM")
     c = json.load(open(loop.cfg_path("IM")))
-    assert set(c) <= PROJECT_KEYS and c["push_cmd"] == "git push origin main"
+    assert set(c) <= PROJECT_KEYS and c["push_cmd"] == "git push origin main" and c["clone"] is True
     assert "土布" not in json.dumps(c, ensure_ascii=False)
 
 

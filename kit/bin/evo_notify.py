@@ -26,6 +26,9 @@ PUSH_KINDS |= {"model_blocked", "magpie_down"}      # 第十四轮：岗位因�
 KIND_NAMES = {"gate_waiting": "等你点头", "stalled": "卡住", "state_corrupt": "卡住", "push_failed": "推送失败",
               "rate_limited": "额度暂停", "usage_abnormal": "用量异常", "deploy_failed": "上线失败"}
 KIND_NAMES.update({"model_blocked": "岗位停了", "magpie_down": "magpie 不通", "fallback_on": "切到备用"})     # 第十四轮
+# 第十七轮：一轮超时、主线本身红、拉 issue 连续失败（含 gh 登录失效）、决策岗连续卡住
+PUSH_KINDS |= {"tick_timeout", "main_red", "intake_down", "decider_stuck"}
+KIND_NAMES.update({"tick_timeout": "一轮超时", "main_red": "主线红了", "intake_down": "拉不到 issue", "decider_stuck": "决策岗卡住"})
 ENV_ALIASES = {"EVO_TG_TOKEN": "TUBU_TG_TOKEN", "EVO_TG_CHAT": "TUBU_TG_CHAT", "TUBU_TG_TOKEN": "EVO_TG_TOKEN",
                "TUBU_TG_CHAT": "EVO_TG_CHAT"}
 
@@ -384,6 +387,9 @@ class Bot:
             if text in ("/status", "状态"):
                 rc, out = self.run_evo(["status"])
                 return self.say(out[-3500:] or "（空）")
+            if aw and text and T.now() - float(aw.get("since") or 0) > 600:
+                self.st["await"] = None                  # 第十七轮 L-24：等原话超过 10 分钟作废，免得随手一句话被当成打回原话
+                return self.say(f"刚才那次打回（{aw.get('code')} 的 {aw.get('gate')}）等原话超过 10 分钟，已作废；要打回请再点一次按钮。")
             if aw and text:
                 self.st["await"] = None
                 words = None if text in ("跳过", "/skip") else text

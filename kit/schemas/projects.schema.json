@@ -41,6 +41,13 @@
               "string",
               "null"
             ]
+          },
+          "work_repo": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "第十七轮：evo 实际合并、推送的目录（专用克隆 ~/.evoloop/repos/<代号>；--in-place 的项目同 repo）。repo 是老板的工作副本，evo 只读"
           }
         }
       }

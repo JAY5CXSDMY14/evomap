@@ -73,6 +73,7 @@
 | `items[].no_live_path` | 这件此刻有没有活路的判断（`true` = 没有，正在计时；到阈值才进顶层 `no_live_path`）。第十二轮新增 |
 | `team` | 岗位卡片摘要：`{"cards": [{"role","name","tool","models","thinking","status","label","until"}], "magpie_ok", "suggestions": 新模型建议条数, "blocked": {岗位: 停下的原因}}`；`roles[].fallback`（额度满但备用接上了）；`items[].waiting` 多了 `model_blocked`（等换模型）、`magpie_down`（等 magpie）。第十四轮新增，详细见 `evo team --json` |
 | `items[].look_gate` | 这件的看效果闸门号（没有为 `null`）。第十二轮新增 |
+| `paused` / `tick_running` / `gates_stale` / `main_red` / `limits` | 第十七轮：status 改为只读（不抢锁、暂停时照常返回 `paused` 原因、不新建协调终端）；`tick_running` 是正在跑的一轮；`main_red` 主线本身测试红；`limits` 每件上限。`gates[].kind` 多了 `budget`（上限到了：继续 / 不做），`gates[].confirm` 表示 Orca 端被点了放行类结果、要老板在 evo 入口确认；`items[].waiting` 多了 `main_red`、`owner_budget` |
 
 第十二轮只加字段，`schema_version` 仍是 1。
 
@@ -171,6 +172,8 @@
 | 改项目目标 | `evo goal set/clear` 在设了 `EVO_AGENT` 时拒绝；面板改要口令 |
 | 改模型 / 岗位卡片 | `evo team set/clear/trial/init/dismiss` 在设了 `EVO_AGENT` 时拒绝；`POST /api/team` 要口令且同样拒绝 |
 | 上线 | `evo ship` 同上；上线还要老板点「上线」闸门 |
+| 在 Orca 里直接结闸门 | 第十七轮：工人 / 外部 Agent 调 `orca orchestration gate-resolve` 点「通过 / 上线 / 做 / 同意 / 继续」不算数，evo 只推一条「确认…？」等老板在 evo 入口点；点「打回 / 不做」会照办（试运行，`orca_gate_sync`） |
+| 改每件上限 / 迁目录 | `evo limits set`、`evo relocate` 在设了 `EVO_AGENT` 时拒绝；`POST /api/limits` 要口令 |
 | 自己给 issue 打 `autopilot:ready` | 不可信作者的 issue 要查打标签的人 |
 | 红线请求 | 转老板闸门 |
 | webhook 写入 | 不存在 |

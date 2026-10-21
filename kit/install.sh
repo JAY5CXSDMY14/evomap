@@ -131,8 +131,18 @@ PL
     info "没设 EVO_TG_TOKEN / EVO_TG_CHAT：Telegram 按钮机器人（evo bot）不装"
   fi
 fi
+# 第十七轮（老板决定②）：已登记、还在老板工作副本里合并的项目，提示切到 evo 专用克隆
+for cfg in "${EVO_HOME:-$HOME/.evoloop/projects}"/*/config.json; do
+  [ -f "$cfg" ] || continue
+  code=$(basename "$(dirname "$cfg")")
+  if ! grep -q '"clone": *true' "$cfg"; then
+    info "$code 还在你的工作副本里合并：$KIT/bin/evo -p $code relocate 切到 ~/.evoloop/repos/$code（之后 evo 不碰你的副本）"
+  fi
+done
 echo "完成。下一步登记项目（安装脚本不登记项目）："
 echo "  新项目：$KIT/bin/evo new AB --name 名字 --path 目录 [--github 用户/仓库 --create]"
-echo "  旧项目：$KIT/bin/evo import TB --name 土布 --path 旧仓库"
+echo "  旧项目：$KIT/bin/evo import TB --name 土布 --path 旧仓库   （有远端时 evo 在 ~/.evoloop/repos/TB 自己克隆一份，只在那里合并推送；不要就加 --in-place）"
+echo "  已登记的老项目切到专用克隆：$KIT/bin/evo -p TB relocate"
+echo "  每件上限：$KIT/bin/evo limits   （决策岗返工 2 次、派工 12 次、累计 6 小时；面板「每件上限」可改）"
 echo "  看进度：$KIT/bin/evo status"
 echo "  试提醒：$KIT/bin/evo notify-test"

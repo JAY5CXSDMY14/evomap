@@ -252,6 +252,7 @@
               "ship",
               "external",
               "ask",
+              "budget",
               "other"
             ]
           },
@@ -267,6 +268,17 @@
               "null"
             ],
             "description": "ISO 8601 时间，带时区"
+          },
+          "confirm": {
+            "type": "boolean",
+            "description": "第十七轮：在 Orca 端被点了放行类结果、等老板在 evo 入口确认的闸门（试运行）"
+          },
+          "orca_choice": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "第十七轮：Orca 端点的是哪个选项"
           }
         }
       }
@@ -369,6 +381,36 @@
         "object",
         "null"
       ]
+    },
+    "paused": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "第十七轮：项目暂停原因（state/PAUSED 的内容）；没暂停为 null"
+    },
+    "tick_running": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "description": "第十七轮：正在跑的一轮（锁被占）：pid、cmd、since、minutes；没有为 null",
+      "additionalProperties": true
+    },
+    "gates_stale": {
+      "type": "boolean",
+      "description": "第十七轮：这次没读到 Orca 闸门（status 只读，不新建协调终端）"
+    },
+    "main_red": {
+      "type": "boolean",
+      "description": "第十七轮：主线本身测试红了，在途的件等它（不算返工）"
+    },
+    "limits": {
+      "type": "object",
+      "description": "第十七轮：每件上限 decider_reworks / item_hard_runs / item_hard_hours（0 = 关）",
+      "additionalProperties": {
+        "type": "number"
+      }
     }
   },
   "additionalProperties": true
