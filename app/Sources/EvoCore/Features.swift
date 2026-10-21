@@ -347,10 +347,11 @@ public extension FeatureRegistry {
         }
     }
 
-    /// 设置页「功能」卡片里的行：有设置的排前面（老板最常改），其余按 id。老 evo 没有列表 → 空。
+    /// 设置页「功能」卡片里的行：管侧栏页的排最前（开关一拨侧栏就变），再是有设置的（老板常改），其余按 id。老 evo 没有列表 → 空。
     var settingsRows: [FeatureInfo] {
         guard let l = list else { return [] }
-        return l.features.filter { $0.settings?.fields.isEmpty == false } + l.features.filter { $0.settings?.fields.isEmpty != false }
+        func rank(_ f: FeatureInfo) -> Int { f.hasPage ? 0 : (f.settings?.fields.isEmpty == false ? 1 : 2) }
+        return l.features.enumerated().sorted { (rank($0.element), $0.offset) < (rank($1.element), $1.offset) }.map(\.element)
     }
 
     /// 给人看的一句汇总：「12 个功能，开着 11 个」。

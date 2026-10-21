@@ -111,6 +111,8 @@ except Exception:
 PY
 }
 waitpt() { local p; for _ in $(seq 1 40); do p=$(pt "$1"); [ -n "$p" ] && { echo "$p"; return 0; }; sleep 0.25; done; return 1; }
+# 等控件停稳（滚动 / 展开动画结束）：连续两次读到同一坐标才算（最多 6 秒）
+waitstable() { local a b; a=$(pt "$1"); for _ in $(seq 1 20); do sleep 0.35; b=$(pt "$1"); [ -n "$b" ] && [ "$a" = "$b" ] && return 0; a=$b; done; return 1; }
 geo() { python3 -c "import json,sys;print(json.load(open('$GEO')).get('$1',''))" 2>/dev/null; }
 shot() { screencapture -x -C "$OUT/shots/$1.png" && echo "  📸 $1"; }
 click() {
@@ -247,12 +249,14 @@ drive() {
   if evo_front; then paste_text "/hello 老板"; fi; sleep 0.5
   click composer-send || fails=$((fails+1)); waitpt chat-card >/dev/null || note "  ✗ 没看到 /hello 的回话卡片"; sleep 1.4; shot 09g-plugin-hello
   # v0.7.0 功能开关：设置 → 功能，关掉「团队 / 模型协调」→ 侧栏「团队」消失（真 evo feature off team）
-  click win-sidebar-settings || fails=$((fails+1)); waitpt settings-feature-team >/dev/null; sleep 1.6
+  click win-sidebar-settings || fails=$((fails+1)); waitpt settings-feature-team >/dev/null; sleep 1.6; waitstable settings-feature-team
   click settings-feature-team || fails=$((fails+1)); sleep 2.6; shot 09h-features-team-off
   if [ -n "$(pt win-sidebar-team)" ]; then note "  ✗ 关了 team，侧栏「团队」还在"; fails=$((fails+1)); else note "  ✓ 侧栏「团队」已消失"; fi
   python3 "$EVO_REAL_EVO" feature list 2>&1 | grep -E "team|预设" | sed 's/^/    evo: /' | tee -a "$HOW"
   # v0.7.0 自动表单：展开「每件上限」，派工次数填 2000（schema 最大 1000）→ 红字；再填 30 → 存好
-  click feature-expand-item-caps || fails=$((fails+1)); sleep 1.6
+  click feature-expand-item-caps || fails=$((fails+1)); sleep 1.2
+  waitpt feature-field-item-caps-item_hard_runs >/dev/null; sleep 0.8; waitstable feature-field-item-caps-item_hard_runs || note "  ⚠ 表单还在动"
+  note "    表单输入框位置：$(pt feature-field-item-caps-item_hard_runs)"
   click feature-field-item-caps-item_hard_runs || fails=$((fails+1)); sleep 0.3
   if evo_front; then key kd:cmd t:a ku:cmd; paste_text "2000"; sleep 0.3; key kp:return; fi
   waitpt feature-error-item-caps-item_hard_runs >/dev/null || { note "  ✗ 没出红字"; fails=$((fails+1)); }; sleep 0.8; shot 09i-feature-form-error

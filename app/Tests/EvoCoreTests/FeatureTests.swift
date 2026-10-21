@@ -62,13 +62,15 @@ final class FeatureTests: XCTestCase {
         XCTAssertTrue(old.summary.contains("没有功能开关"))
     }
 
-    func testSettingsRowsPutConfigurableFirst() throws {
+    func testSettingsRowsPagesThenConfigurable() throws {
         let r = FeatureRegistry(try list())
         let rows = r.settingsRows
         XCTAssertEqual(rows.count, 12)
-        let firstPlain = rows.firstIndex { $0.settings?.fields.isEmpty != false }!
-        XCTAssertTrue(rows[..<firstPlain].allSatisfy { $0.settings?.fields.isEmpty == false })
-        XCTAssertTrue(rows[firstPlain...].allSatisfy { $0.settings?.fields.isEmpty != false })
+        XCTAssertEqual(rows.prefix(2).map(\.id), ["plugins", "team"])          // 管侧栏页的在最前
+        let rest = Array(rows.dropFirst(2))
+        let firstPlain = rest.firstIndex { $0.settings?.fields.isEmpty != false }!
+        XCTAssertTrue(rest[..<firstPlain].allSatisfy { $0.settings?.fields.isEmpty == false })
+        XCTAssertTrue(rest[firstPlain...].allSatisfy { $0.settings?.fields.isEmpty != false && !$0.hasPage })
         XCTAssertTrue(r.summary.hasPrefix("12 个功能，开着 11 个"))
     }
 

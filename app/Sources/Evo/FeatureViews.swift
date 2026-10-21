@@ -103,9 +103,7 @@ extension AppState {
 
     func toggleFeatureExpanded(_ id: String) {
         withAnimation(Motion.or(Motion.softSpring)) { expandedFeature = expandedFeature == id ? nil : id }
-        if expandedFeature == id {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { [weak self] in self?.scrollTarget = "feature-\(id)" }
-        }
+        if expandedFeature == id { scrollTarget = "feature-\(id)" }     // 内容区滚到这个功能（DetailArea 的 ScrollViewReader）
     }
 
     /// 错误卡片上的「重试」：只重读这一页要的东西。

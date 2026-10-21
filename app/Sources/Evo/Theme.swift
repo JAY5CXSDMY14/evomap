@@ -197,7 +197,7 @@ struct PillToggleStyle: ToggleStyle {
                 configuration.label.foregroundStyle(Theme.textPrimary)
                 Spacer(minLength: 8)
                 ZStack(alignment: configuration.isOn ? .trailing : .leading) {
-                    Capsule().fill(configuration.isOn ? Theme.accent : Theme.border).frame(width: 34, height: 20)
+                    Capsule().fill(configuration.isOn ? Theme.accent : Theme.textSecondary.opacity(0.35)).frame(width: 34, height: 20)   // 关着的底色：深色卡片上也看得清（0.7.0）
                     Circle().fill(.white).frame(width: 16, height: 16).padding(2).shadow(color: .black.opacity(0.15), radius: 1, y: 1)
                 }
                 .animation(Motion.or(Motion.spring), value: configuration.isOn)
