@@ -250,7 +250,10 @@ drive() {
   click composer-send || fails=$((fails+1)); waitpt chat-card >/dev/null || note "  ✗ 没看到 /hello 的回话卡片"; sleep 1.4; shot 09g-plugin-hello
   # v0.7.0 功能开关：设置 → 功能，关掉「团队 / 模型协调」→ 侧栏「团队」消失（真 evo feature off team）
   click win-sidebar-settings || fails=$((fails+1)); waitpt settings-feature-team >/dev/null; sleep 1.6; waitstable settings-feature-team
-  click settings-feature-team || fails=$((fails+1)); sleep 2.6; shot 09h-features-team-off
+  click settings-feature-team || fails=$((fails+1))
+  for _ in $(seq 1 24); do [ -z "$(pt win-sidebar-team)" ] && break; sleep 0.5; done
+  note "    探点文件 $(( $(date +%s) - $(stat -f %m "$GEO" 2>/dev/null || echo 0) )) 秒前更新"
+  sleep 1.2; shot 09h-features-team-off
   if [ -n "$(pt win-sidebar-team)" ]; then note "  ✗ 关了 team，侧栏「团队」还在"; fails=$((fails+1)); else note "  ✓ 侧栏「团队」已消失"; fi
   python3 "$EVO_REAL_EVO" feature list 2>&1 | grep -E "team|预设" | sed 's/^/    evo: /' | tee -a "$HOW"
   # v0.7.0 自动表单：展开「每件上限」，派工次数填 2000（schema 最大 1000）→ 红字；再填 30 → 存好
@@ -283,6 +286,7 @@ drive() {
   click composer-send || fails=$((fails+1)); sleep 3.6; shot 13-composer-reply
   open_popover || fails=$((fails+1)); sleep 1.8; shot 14-popover-dark
   popover_open && click status-item; sleep 0.6
+  grep -E "feature|watch:" "$OUT/app.log" | tail -20 | sed 's/^/    app: /' | tee -a "$HOW"
   note "真鼠标驱动完成，失败 $fails 处；最后状态：$(geo selection) · 卡片 $(geo cards) · 深色 $(geo dark)"
   [ $fails -le 6 ]
 }

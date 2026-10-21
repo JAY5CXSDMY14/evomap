@@ -26,6 +26,7 @@ extension AppState {
         if r.ok, let m = ContractCheck.check(r.out, command: .featureList).message {
             features = nil; featureNote = m; contractWarning = m; return
         }
+        DemoLog.note("feature list code=\(r.code) team=\((try? FeatureList.decode(r.out))?.feature("team")?.state ?? "?")")
         if r.ok, let l = try? FeatureList.decode(r.out) {
             features = l; featureNote = nil
             for f in l.features where featureForms[f.id] != nil { featureForms[f.id]?.sync(f) }
@@ -51,8 +52,11 @@ extension AppState {
     func setFeatureEnabled(_ id: String, _ on: Bool) {
         guard !featureBusy.contains(id) else { return }
         featureBusy.insert(id)
+        let t0 = Date()
+        DemoLog.note("feature \(on ? "on" : "off") \(id) 开始")
         Task {
             let r = await Shell.evo(FeatureCommand.toggle(id, on: on), timeout: 30)
+            DemoLog.note("feature \(id) 返回 code=\(r.code) \(String(format: "%.1f", Date().timeIntervalSince(t0)))s \(r.tail.prefix(120))")
             featureBusy.remove(id)
             let name = features?.feature(id)?.name ?? id
             flash = r.ok ? "功能「\(name)」\(on ? "打开了" : "关掉了")" : "没成：\(r.tail.prefix(100))"
@@ -150,6 +154,15 @@ extension AppState {
     }
 }
 
+/// CI 演示时（EVO_UITEST_GEOMETRY 设了）往 stderr 记一行带时间的日志，进 app.log；平时不记。
+enum DemoLog {
+    static func note(_ s: String) {
+        guard UIProbe.enabled else { return }
+        let f = DateFormatter(); f.dateFormat = "HH:mm:ss.SSS"
+        FileHandle.standardError.write(Data("[\(f.string(from: Date()))] \(s)\n".utf8))
+    }
+}
+
 // MARK: - evo watch --json 子进程（断线自动重连；连不上时 AppState 照旧轮询）
 
 @MainActor
@@ -203,6 +216,7 @@ final class WatchClient {
         pending = Data(pending[pending.index(after: nl)...])
         let text = String(decoding: whole, as: UTF8.self)
         let events = parser.feed(text)
+        if !events.isEmpty { DemoLog.note("watch: " + events.map(\.event).joined(separator: ",")) }
         let st = AppState.shared
         st.watchLink.received(max(1, text.split(separator: "\n").count))
         guard events.contains(where: \.triggersRefresh) else { return }

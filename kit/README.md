@@ -211,7 +211,17 @@ CI（提交 771cd41）：kit-tests run 39554195257 全套 272 个全绿（`-n au
 - **老板决定② evo 专用克隆**：`evo import/new` 有 origin 时默认在 `~/.evoloop/repos/<代号>` 克隆一份（本地克隆，origin 改成工作副本的 GitHub 地址，main 对齐 origin/main），配置写 `clone: true`；合并、推送、Orca 工作区、协调和决策岗终端都只在克隆里。`repo` 仍是老板的工作副本，只作只读参考 / 克隆来源，evo 不再 checkout、合并、推送它。克隆被删了下一轮自动重建。已登记的项目 `evo -p TB relocate`（有件在工作区里就拒绝，等合并完；`--force` 硬迁，这些件重做）。`--in-place` 保留老做法。`projects --json` 加 `work_repo`。profiles（tubu、st）已加 `clone: true` 和 `git_env`；`install.sh` 结尾会点名还没切的项目。
 - **老板决定③ 每件上限**：`limits.decider_reworks`（默认 2）：决策岗已指导返工 2 次，第 3 次不执行，转老板「继续 / 不做」闸门（点继续就照决策岗那条说明返工、计数清零）；`limits.item_hard_runs`（默认 12）/ `item_hard_hours`（默认 6）：一件派工到 12 次或工人累计 6 小时 → 不再派工（正在跑的不打断），推「TB-FIX-012 已烧 6 小时还没完，继续还是不做？」；继续 = 从现在起重新计数，不做 = 这件不做。0 = 关。改法：`evo [-p 代号] limits [set 键=值 …] [--json]`、面板项目页「每件上限」（`POST /api/limits`）。闸门 kind 是 `budget`，件的 `waiting` 是 `owner_budget`。App 设置页这轮没加（见下）。
 
+## 第十八轮：模块化（内核 + 功能包）+ 自维护 + 多机器（均有自动测试，`kit/tests/test_round18.py` 25 个；说明见 docs/architecture.md、docs/self-maintenance.md、docs/multi-machine.md）
+CI：kit-tests run 39561803019（提交 ed7832b）全套绿；两个待定项锁进测试后 run 39564269038（提交 90543c7）全套 297 个全绿（8 分钟）。本地全套 294 过、3 跳过（Linux 沙箱）。
+- **内核 + 功能包**（照 magpie `internal/pluginrt`）：`evo_rt.py` 运行时（manifest、服务、槽位、on/off、「在用」保护、settings schema）、`evo_bus.py` 事件总线（每个订阅者单独兜错、超时，落 `~/.evoloop/events.jsonl`）。12 个功能迁出到 `kit/features/<id>/`：ui-preset、arch-preset、notify-telegram、notify-email、notify-webhook、item-caps、orca-gate-sync、deploy、digest、github、team、plugins（第十六轮外部插件挂成「第三方」层，`evo_api 1.0` / `schema_version 1` 不变）。内核不 import 任何功能包，边界测试守着。
+- **命令**：`evo feature list|on|off|set|preset|dump [--json]`（开关存 `~/.evoloop/features.yml`）、`evo watch --json`（每行一个事件，15 秒 `watch.ping`）、`evo selfcheck [--json]`、`evo self-upgrade <提交>`、`evo -p X claim [--force]`。
+- **自维护**：`install.sh --apply` 装成 `~/.evoloop/releases/<提交>` + `current` 软链（跑着的 evo 和仓库代码分开；`--dev` 照旧跑仓库）；自升级 = 装旁边 → 新版自检 → 等一轮结束 → 切软链 → 再自检（失败立刻切回）；独立看门狗 `kit/selfmaint/evo-guard.sh`（launchd 每分钟，观察 10 分钟，没心跳 / 自检失败就切回上一版并推送）。EV（`self_maintained: true`）改内核 / 锁 / 闸门 / 权限 / 自升级 / 岗位规则 / 安全类功能包 → 老板闸门；改 `kit/selfmaint/` → 直接打回。
+- **多机器**：项目归属 `owner_host` + 远端租约 `refs/evo/owner/<机器>`（每轮最多 10 分钟查一次），归别的机器就拒绝动状态，`claim --force` 转移；`~/.evoloop/machine.yml` 的 `name`、`model_prefix`、`aliases`。
+- **两个待定项按推荐默认**：①推送渠道 Telegram / 邮件关掉不受「在用」保护（维持现状；webhook 配了算在用）——改法见 docs/architecture.md「在用」保护；②远端租约默认开，全局 `"lease_remote": false` 关，项目里写的优先——见 docs/multi-machine.md 第 7 节。
+- 111ca61 的唯一失败：`new` / `import` 现在写 `owner_host`，老测试的项目配置白名单没认它（ed7832b 修）。
+
 ## 只能在 Mac mini 上验的
+- 第十八轮：真机 `install.sh --apply` 后 `current` 软链、launchd 常驻跑 current、看门狗 `com.evoloop.guard` 每分钟一次；真 `evo self-upgrade` 等一轮结束再切、观察期内杀掉常驻后看门狗 10 分钟内切回；两台真 Mac（Air + mini）同一项目的远端租约互斥、GitHub 接受推 `refs/evo/owner/*`；mini 的 magpie 分组前缀 `model_prefix` 派工是否认得。
 - 第十七轮：真 Orca 的 `gate-list` 会不会列出已结掉的闸门、结果字段是不是 `resolution`（evo 也认 `result`）；手机端点「打回」后 evo 照办、点「通过 / 上线」后 Telegram 收到「确认…？」并能点按钮确认（试运行，老板体验后再调）。
 - 第十七轮：TB `relocate` 后 `~/.evoloop/repos/TB` 克隆、fetch 走 `git_env` 代理能通；Orca 认新目录（`orca repo add`）；老板在工作副本里 `git pull` 能看到 evo 推上去的提交。
 - 第十七轮：launchd 常驻改成每轮起子进程后，CPU / 日志是否正常；一轮超时（45 分钟）杀掉的测试进程有没有残留。

@@ -160,6 +160,15 @@ app/
 |---|---|
 | ![插件页](docs/mac-demo/09e-plugin-page.png) | ![/hello](docs/mac-demo/09g-plugin-hello.png) |
 
+### v0.7.0 功能开关 + 事件流 + 错误边界（kit 第十八轮）
+- **侧栏跟着功能走**：启动读 `evo feature list --json`；功能包 `team` 关了侧栏「团队」消失，`plugins` 关了「插件」整组消失，正选着就退回「等你处理」。老 evo 没有 `feature` 命令 → 照旧全显示。
+- **设置 → 功能**：每个功能一个开关（状态角标：开着 / 关着 / 出错 / 等服务；「在用」的关不掉，灰着写原因）。管侧栏页的排最前，再是有设置的。点「设置（N 项）」展开**按 settings schema 自动画的表单**：boolean → 开关、enum → 一排按钮、integer / number → 数字框带范围、string → 文本框。先在 App 里按 schema 校验（红字），合格才跑 `evo feature set`；evo 拒了把原话挂在字段下。
+- **订阅 `evo watch --json`**：有事件去抖 1.2 秒刷新；事件流活着时只做 2 分钟兜底轮询；45 秒没收到一行就当断了，回到 30 秒轮询，并按 5/10/20/40/60 秒退避重连。设置 → evo 里一行写着现在是连上还是轮询。
+- **每页错误边界**：团队页、项目页、件详情读不出来 → 只这一页画「出错了」卡片（原因、重试、返回），侧栏和别的页照常；等你处理、卡太久不整页挡；设置页永远能开。（SwiftUI 没有异常式边界，这里按「这页的数据读没读出来」判断。）
+- 纯逻辑 `Sources/EvoCore/Features.swift`，测试 `Tests/EvoCoreTests/FeatureTests.swift`（14 个，样例 `Fixtures/feature_list.json` 是真 evo 的输出）；界面 `Sources/Evo/FeatureViews.swift`。组件截图多 `features-*.png`、`page-error-*.png`。
+- CI 实机演示多三步：设置 → 关掉「团队 / 模型协调」（真 evo `feature off team`）→ 侧栏「团队」消失；展开「每件上限」填 2000 → 红字「不能大于 1000」，再填 30 → 存好；假 evo 的 `log` 弄坏 → 件详情出错误卡片 → 修好点重试。截 `09h`–`09l`。假 evo 把 `feature`、`watch` 转给包里的真 evo，另有 `_demo break|fix log`。
+- 结果：Swift 测试 88 个（74 → 88）；app CI __APPRUN__。
+
 ### 动效和无障碍
 
 - 按钮、胶囊按下压到 0.92、松手弹过头到 1.04 再回来（`spring(response: 0.3, dampingFraction: 0.55)`）；卡片依次弹入；批过的卡片缩小飞走；「等你处理」数字变了会晃一下；状态胶囊换状态时弹一下。
