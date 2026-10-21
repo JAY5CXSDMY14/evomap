@@ -198,6 +198,7 @@ Telegram 环境变量改名 `EVO_TG_TOKEN` / `EVO_TG_CHAT`，旧名 `TUBU_TG_TOK
 
 ## 第十七轮：修体检高危 + 老板批准的三条规矩（均有自动测试，`kit/tests/test_round17.py` 32 个；体检报告 docs/loop-audit-2026-10.md 每条已标修没修）
 体检附录里 4 段复现脚本（t_lock / t_phone / t_noid / t_red）都改成了测试，在老代码上都是红的，现在绿。
+CI（提交 771cd41）：kit-tests run 39554195257 全套 272 个全绿（`-n auto` 并行，8 分钟）；app run 39554195281 绿（EvoCore 74 个测试，App 0.6.1）。
 - **L-01 常驻不再永远占锁**：`evo run` 单项目和多项目一样，每轮起子进程 `evo -p <代号> once`，锁随子进程退出释放，配置每轮重读（面板 / App 改的模型、目标、上限下一轮就生效）。锁文件旁边多一个 `state/lock.info`（谁、从几点拿着锁）。
 - **L-02 看状态只读**：`status` / `status --json` 不抢锁、不管暂停、不新建 Orca 协调终端（读不到闸门就标 `gates_stale: true`）；tick 跑着时 App、面板、Telegram 照样看得到。JSON 新增 `paused`（暂停原因）、`tick_running`（`{pid, cmd, since, minutes}`）、`gates_stale`、`main_red`、`limits`，schema 仍是 1。
 - **L-04 一条坏消息不再拖垮项目**：每条消息单独兜错，出错也记成已处理、时间线 `msg_error`、交决策岗一次（同件同错只一次）；只认「本次派工」的回报（任务号是这件当前这一岗、件正在这一岗上），迟到 / 重投的旧回报记 `msg_stale` 丢掉；真 Orca 消息没有 id 时用（任务号、类型、结果、派工号、正文指纹）合成 `syn:` 号去重；合并一件出错只把这件转交决策岗（`merge_error`），别的件、心跳照常。

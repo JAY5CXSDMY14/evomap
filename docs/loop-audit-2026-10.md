@@ -9,6 +9,11 @@ source: kit 第十五轮（069d8c5）
 
 能跑的都跑了：用 kit/tests 的假 Orca 夹具写了 4 段复现脚本（见文末附录），其中 4 条问题已实测复现。各测试文件单独跑都是绿的，但在 2 核沙箱里每个文件要 80 秒或更久，全套无法在 2 分钟里跑完（见 L-28）。
 
+```callout ok 第十七轮（提交 771cd41）修复状态
+已修 14 条：L-01、L-02、L-03、L-04、L-05、L-06、L-07、L-08、L-11、L-17、L-18、L-20、L-24、L-25。部分修 3 条：L-16、L-28、L-29。未修 13 条：L-09、L-10、L-12、L-13、L-14、L-15、L-19、L-21、L-22、L-23、L-26、L-27、L-30（原因写在每条的「状态」里；低危表格里写在编号旁）。
+老板拍板的三个问题已按推荐落实：①Orca 端结闸门（试运行，`orca_gate_sync`）②专用克隆 ③每件上限。
+```
+
 ## A 结论
 ```callout warn 主路径没问题，卡点在「常驻 + 真 Orca + 真网络」三处
 单元测试查的是「一轮 tick 做对没有」，高危问题都在测试没模拟的地方。
@@ -41,6 +46,7 @@ source: kit 第十五轮（069d8c5）
 - **修法**：`cmd_run` 一律每轮起子进程 `evo -p <代号> once`（多项目分支已有现成写法）。锁随子进程退出自动释放，配置每轮重新读。另外把 `lock()` 改成上下文管理器，`cmd_tick` 结束就释放。补测试：起常驻，同时 `approve` 必须在 5 秒内返回。
 - **工作量**：S
 - **拍板**：不用
+- **状态（第十七轮）**：已修（771cd41）：`evo run` 每轮起子进程，锁随一轮释放、配置每轮重读；测试 test_run_single_project_releases_lock / test_run_rereads_config_each_round
 
 ### L-02 只读命令也抢写锁：tick 期间 App、面板、bot 读不到状态
 - **类型**：确定的 bug
@@ -50,6 +56,7 @@ source: kit 第十五轮（069d8c5）
 - **修法**：`status`、`digest` 打印、bot 查闸门全部改用 `read_state_ro()`；闸门列表用 `s["coord"]` 只读查询，查不到就标 `gates_stale: true`，不新建终端。status JSON 加 `paused`（原因文本）和 `tick_running`（锁被占且持有多久），schema 仍为 1，只加字段。App 收到 `paused` 显示「暂停：原因」，不显示出错。
 - **工作量**：S–M
 - **拍板**：不用
+- **状态（第十七轮）**：已修（771cd41）：status 只读，不抢锁、不管暂停、不建协调终端；JSON 加 paused / tick_running / gates_stale；App 0.6.1 显示「暂停：原因」
 
 ### L-03 绕过 evo 结的闸门，evo 不看结果：打回照样合并
 - **类型**：确定的 bug（假 Orca 实测；真 Orca 解锁规则待真机确认）
@@ -67,6 +74,7 @@ source: kit 第十五轮（069d8c5）
   4. 补测试：手机端打回、手机端不做、手机端上线三条。
 - **工作量**：M
 - **拍板**：**要**（产品体验 + 线上）。问题：Orca 端点「通过 / 上线」算不算数？推荐：打回、不做照办；通过、上线不自动执行，推一条「请在 Telegram / App / 面板确认」，因为工人也能调 orca 命令。
+- **状态（第十七轮）**：已修（771cd41，试运行）：按老板决定①，`orca_gate_sync` 默认开；打回 / 不做照办，通过 / 上线 / 做 / 同意 / 继续推「确认…？」在 evo 入口再点；合并核对 look_ok、开工核对 do_ok
 
 ### L-04 一条消息处理出错，整个项目每轮崩（毒消息）
 - **类型**：确定的 bug（已实测）
@@ -81,6 +89,7 @@ source: kit 第十五轮（069d8c5）
   5. `merge_one`、`do_push` 按件套异常隔离，失败的件转 `escalated` 并写明原因，不影响别的件和心跳。
 - **工作量**：S–M
 - **拍板**：不用
+- **状态（第十七轮）**：已修（771cd41）：每条消息单独兜错、记账隔离、交决策岗一次；只认本次派工的回报；无 id 合成 syn: 号；合并出错只转这一件
 
 ### L-05 远端主线红了，在途的件全被当成自己的错返工
 - **类型**：确定的 bug（已实测）
@@ -95,6 +104,7 @@ source: kit 第十五轮（069d8c5）
   5. `waiting` 加 `main_red`，App 和面板显示「等主线修绿」。
 - **工作量**：M
 - **拍板**：不用
+- **状态（第十七轮）**：已修（771cd41）：main 本身红 → 等主线修绿（不算轮次），只推一次 main_red、只登记一件 OPS 修主线；推送失败 1、2、4…30 分钟退避。没做「远端没变就不重测」（会挡住环境修好后的恢复，退避已够省）
 
 ### L-06 外部命令几乎都不设超时，一处卡住全机停
 - **类型**：确定的 bug
@@ -104,6 +114,7 @@ source: kit 第十五轮（069d8c5）
 - **修法**：加 `limits.timeouts`（建议默认：test 30 分钟、git 网络 3 分钟、git 本地 1 分钟、gh 1 分钟、push 5 分钟、deploy 20 分钟、单项目一轮 45 分钟）。统一用 `start_new_session=True` 起子进程，超时就杀整个进程组。`orca()` 捕获 `TimeoutExpired` 和 `FileNotFoundError` 并转成 SystemExit。超时按「这一步失败」处理：测试超时算红，推送超时算推送未成，once 超时记一次并推送 `tick_timeout`。
 - **工作量**：M
 - **拍板**：不用
+- **状态（第十七轮）**：已修（771cd41）：limits.timeouts，所有外部命令进程组超时；测试超时算红，推送超时算推送未成，一轮超时推 tick_timeout；orca 超时转成正常报错
 
 ### L-07 TB 的 fetch 不走代理，国内直连 GitHub 推不上去
 - **类型**：真机才能验证的风险（代码事实确定，影响看 Mac mini 网络）
@@ -113,6 +124,7 @@ source: kit 第十五轮（069d8c5）
 - **修法**：项目配置加 `git_env`（例如 `{"HTTPS_PROXY": "socks5h://127.0.0.1:1082"}`），所有 git 网络操作和 gh 调用都带上；或在 `evo import` 时检测 push_cmd 里的代理，提示写进仓库的 `http.proxy`。`evo doctor`（见 L-19）里加一项「fetch 能不能通」。
 - **工作量**：S
 - **拍板**：不用
+- **状态（第十七轮）**：已修（771cd41，真机待验）：项目 git_env（没写就从 push_cmd 认代理），fetch / pull / clone / gh 都带；TB、ST 档案已加。evo doctor 没做（见 L-19）
 
 ## C 中严重度（14 条）
 
@@ -124,6 +136,7 @@ source: kit 第十五轮（069d8c5）
 - **修法**：`limits.decide_timeout_minutes`（默认 45）：超时就关终端、任务标 failed、记 `decider_timeout`、推一次「决策岗卡住」，`decide.last` 清零让下一轮重叫；同一批连续超时 2 次再转老板。决策岗工人也走 `worker-show` 死活检查。
 - **工作量**：S
 - **拍板**：不用
+- **状态（第十七轮）**：已修（771cd41）：决策岗超过 decide_timeout_minutes（45）或工人没了 → 关掉重叫，连续 2 次推 decider_stuck；顺带修了决策岗返工后再交不算【新】
 
 ### L-09 Orca 重启或协调终端丢失后，在途任务可能全部变成孤儿
 - **类型**：真机才能验证的风险
@@ -133,6 +146,7 @@ source: kit 第十五轮（069d8c5）
 - **修法**：状态里记 `run_id`。重建协调终端后，先核对已知任务号能否查到。查不到就整项目 `PAUSED`（写清原因）并推一次，不让无活路检查逐件报警；查得到就继续。真机上按 README 第 15 节补测「关掉 Orca 再打开」。
 - **工作量**：M
 - **拍板**：不用
+- **状态（第十七轮）**：未修：要先在真机确认 Orca 的 task-list 是否按 run 隔离；下一轮配真机演练
 
 ### L-10 Orca 丢了 worker_done 时不对账
 - **类型**：真机才能验证的风险
@@ -142,6 +156,7 @@ source: kit 第十五轮（069d8c5）
 - **修法**：`check_stalls` 发现任务已是 completed / failed，但本次派工的回报没处理过。这时用 `task-show` / `dispatch-show` 取结果正文，合成一条消息走 `handle_msg`（受 L-04 的派工核对保护），时间线记 `reconciled`。
 - **工作量**：S–M
 - **拍板**：不用
+- **状态（第十七轮）**：未修：要真 Orca 的 task-show / dispatch-show 结果格式；假 Orca 测不到，下一轮配真机
 
 ### L-11 交决策岗可以无限循环，用量只提醒不拦
 - **类型**：确定的 bug
@@ -151,6 +166,7 @@ source: kit 第十五轮（069d8c5）
 - **修法**：`limits.decider_reworks`（默认 2），超了自动转 `ask_owner`；`limits.item_hard_runs` / `item_hard_minutes`（默认 0 = 关）：超了把件转「等你：继续还是不做」闸门，不再派工。
 - **工作量**：S
 - **拍板**：**要**（花钱）。推荐：决策岗返工最多 2 次后转老板；单件派工超过 12 次或工人累计 6 小时，暂停等老板点「继续」。
+- **状态（第十七轮）**：已修（771cd41）：按老板决定③，decider_reworks 2 / item_hard_runs 12 / item_hard_hours 6，到了转老板「继续 / 不做」；面板「每件上限」、evo limits 可改
 
 ### L-12 上线批次和实际部署的代码不一致，也没有回滚
 - **类型**：确定的 bug（TB 现在 `deploy_cmd` 为空，暂不触发）
@@ -160,6 +176,7 @@ source: kit 第十五轮（069d8c5）
 - **修法**：建上线闸门时记 `ship_sha`（要求等于已推送的远端提交）；部署时在临时 worktree 里检出这个提交，传环境变量 `EVO_SHIP_SHA`；部署成功后把提交号是 `ship_sha` 祖先的件全部标已上线。加可选的 `rollback_cmd` 和 `evo rollback [批次]`（同样走老板闸门），以及可选的 `healthcheck_cmd`（失败只推送，回不回滚由老板点）。
 - **工作量**：M
 - **拍板**：**要**（线上变更），可以等 TB 真有部署时再定；推荐先只做 `ship_sha`，回滚做成老板手动点。
+- **状态（第十七轮）**：未修：TB 的 deploy_cmd 还是空的，报告也说等真有部署再定
 
 ### L-13 推送会丢：通道都失败不重试，早间汇总先删后发
 - **类型**：确定的 bug
@@ -169,6 +186,7 @@ source: kit 第十五轮（069d8c5）
 - **修法**：加 `retry.jsonl` 队列：投递失败的要推事件按 1、5、30 分钟重试，超过 6 小时并进下一次汇总；`held` 改成发送成功后再删（失败就改名回去）。闸门提醒分级：5 分钟、2 小时，之后每天早报再带一次；暂停新施工时单独推一次「等你的已有 N 件，新施工已暂停」。
 - **工作量**：M
 - **拍板**：不用
+- **状态（第十七轮）**：未修：工作量 M（推送重试队列、早间汇总发成功再删），排下一轮
 
 ### L-14 早报承诺和实现不符
 - **类型**：确定的 bug（文档与行为不一致）
@@ -178,6 +196,7 @@ source: kit 第十五轮（069d8c5）
 - **修法**：08:30 固定发一条「早报」，全部项目合起来。内容：等你点头的件和按钮、可收菜、卡住或没活路、昨日合并数、额度暂停。再附夜里攒下的事件；全空就不发。复用 `status_doc`，不另写统计。
 - **工作量**：S–M
 - **拍板**：不用（发送时间和内容沿用已批的 08:30 汇总）
+- **状态（第十七轮）**：未修：固定早报要动汇总格式，排下一轮
 
 ### L-15 主动暂停也会被报「接棒器停了」
 - **类型**：确定的 bug
@@ -187,6 +206,7 @@ source: kit 第十五轮（069d8c5）
 - **修法**：加 `evo pause [--all|-p 代号] [原因]` / `evo resume`，写 `~/.evoloop/PAUSED` 或项目 `PAUSED`；App 的暂停改为调用它（再 bootout 也行）。看门狗跳过暂停中的项目，status 里给出暂停原因；项目 `PAUSED` 时看门狗的消息写明原因。
 - **工作量**：S
 - **拍板**：不用
+- **状态（第十七轮）**：未修：evo pause / resume 要和 App 的暂停按钮一起改，排下一轮
 
 ### L-16 工人能冒充老板：EVO_AGENT 只是约定
 - **类型**：确定的 bug（被利用要靠提示词注入，属于真机风险）
@@ -196,6 +216,7 @@ source: kit 第十五轮（069d8c5）
 - **修法**：`launch` 在工人命令前加 `env EVO_AGENT=worker:<岗位>:<件号>`；`approve` / `ship` / `team set` / `goal set` 再要求「老板凭据」：面板口令（App 从钥匙串取后用 `--owner-token` 传）或 Telegram 已认证的 bot 进程，命令行交互时允许在 TTY 上确认。决策岗贴 `autopilot:ready` 时，在 issue 里留 `<!-- evo-decider -->` 评论作为记录。
 - **工作量**：M
 - **拍板**：不用（只收紧权限，不改老板的操作方式：App、Telegram、面板照常可用）
+- **状态（第十七轮）**：部分修（771cd41）：「工人在 Orca 里直接结闸门」这条路被 L-03 堵住（放行类不算数）；evo approve 要老板凭据（owner-token）、工人环境带 EVO_AGENT 没做，下一轮
 
 ### L-17 外部 Agent 借 evo feedback 开的 issue 被当成可信
 - **类型**：确定的 bug
@@ -205,6 +226,7 @@ source: kit 第十五轮（069d8c5）
 - **修法**：`cmd_pull` 里正文以 `AGENT_MARK` 开头或带 `agent-report` 标签，一律按不可信处理（加横幅）。补一条测试。
 - **工作量**：S
 - **拍板**：不用
+- **状态（第十七轮）**：已修（771cd41）：cmd_pull 认 AGENT_MARK / agent-report，按不可信加横幅
 
 ### L-18 evo 和决策岗都在老板自己的工作副本里动手
 - **类型**：确定的 bug（设计层面）
@@ -214,6 +236,7 @@ source: kit 第十五轮（069d8c5）
 - **修法**：`evo import` 默认另建专用克隆 `~/.evoloop/repos/<代号>`（老板的工作副本只读不碰）；决策岗终端开在只读的独立 worktree（`--detach`），岗位规则里写明决策岗不改文件。已登记的 TB 加一个迁移命令 `evo -p TB relocate`。
 - **工作量**：M
 - **拍板**：**要**（产品体验：以后 evo 的改动在专用克隆里，老板的桌面副本要自己 pull）。推荐：要。
+- **状态（第十七轮）**：已修（771cd41）：按老板决定②，evo 在 ~/.evoloop/repos/<代号> 专用克隆里合并、推送、开工作区和决策岗终端；老板工作副本只读；evo relocate 迁移。决策岗终端没另开只读 detached worktree（在克隆里，不碰老板副本）
 
 ### L-19 kit 自身没有版本：App 和常驻进程可能跑两版代码
 - **类型**：确定的 bug
@@ -223,6 +246,7 @@ source: kit 第十五轮（069d8c5）
 - **修法**：加 `kit/VERSION`，`evo version --json`，status JSON 里加 `kit_version` 和 `kit_path`；App 发现和常驻进程版本不一致就提示「用包里的版本重装常驻」。状态加 `schema` 字段，读到更高的版本就拒绝写入。install.sh 增加 `com.evoloop.watchdog`（StartInterval 300，不依赖 Telegram）。加 `evo doctor`：一次查 python、git、gh 登录、fetch 能不能通、Orca、magpie、launchd 三个常驻、版本是否一致。
 - **工作量**：M
 - **拍板**：不用
+- **状态（第十七轮）**：未修：kit 版本号、evo doctor、看门狗 launchd 常驻是一组 M 的活，排下一轮
 
 ### L-20 拉取入口出错会拖垮整轮，gh 失效时没有提醒
 - **类型**：确定的 bug
@@ -232,6 +256,7 @@ source: kit 第十五轮（069d8c5）
 - **修法**：`cmd_pull` 整体包在 try 里；检查 `returncode`，失败计数，连续 3 轮失败推一次 `intake_down`（恢复后记 `intake_up`）；`cmd_tick` 无论 pull 成败都要跑。
 - **工作量**：S
 - **拍板**：不用
+- **状态（第十七轮）**：已修（771cd41）：拉 issue 出错不拖垮整轮；连续 3 轮推 intake_down（认出 gh 登录失效会写明），恢复记 intake_up
 
 ### L-21 停滞阈值 15 分钟对真模型偏短
 - **类型**：真机才能验证的风险
@@ -241,20 +266,21 @@ source: kit 第十五轮（069d8c5）
 - **修法**：先在真机确认 Orca 心跳频率。不管有没有心跳，都把「终端输出在变」算作活着（每轮对 `terminal_tail` 取哈希，变了就刷新 `last_seen`）；默认 `stall_minutes` 改 30。
 - **工作量**：S
 - **拍板**：不用
+- **状态（第十七轮）**：未修：先在真机看 Orca 心跳频率再调阈值
 
 ## D 低严重度（9 条）
 
 | 编号 | 环节 | 现象 | 证据 | 修法 | 工作量 |
 |---|---|---|---|---|---|
-| L-22 | 日志与可观测性 | `s["log"]` 只留 200 行，推送失败每 30 秒一行就能刷满；夜审和晚间汇总按 `s["log"]` 取当天事件会漏。`state/logs`、`outbox.jsonl`、`timeline.jsonl`、`~/.evoloop/logs/*.log` 都没有轮转 | `kit/bin/evo:248`、`:2890-2893`、`:2910-2912` | 夜审和汇总改读 timeline；同一句日志连续重复只记次数；日志按天轮转，保留 14 天 | S |
-| L-23 | 来源 | `gh issue list --limit 50`：已登记、没上线的 issue 仍开着且带 `autopilot:ready`，超过 50 件后新 issue 永远拉不到 | `kit/bin/evo:2766-2767` | 登记后贴 `evo:registered` 标签，查询加 `-label:evo:registered`；或分页 | S |
-| L-24 | 推送通知 | bot 打回后等原话没有过期，几小时后随手一句话会被当成原话；`run_evo` 超时抛异常让 bot 进程退出，那次按钮丢失也没回话 | `kit/bin/evo_notify.py:361-366`、`kit/bin/evo:3405-3407` | 等原话 10 分钟过期；捕获超时，回「evo 正忙，稍后再点」 | S |
-| L-25 | 老板闸门 | 自动收菜在 08:20 遇到主线红就当天不再试（先写了 `auto_ship_day`） | `kit/bin/evo:3729-3735` | 只有建成闸门或「已有闸门」时才记当天 | S |
-| L-26 | 并发 | App「立即 tick」和常驻进程同时转不同项目时，`other_projects_load` 不加锁，整机施工上限可能多 1 | `kit/bin/evo:1938-1940` | 整机施工名额用 `~/.evoloop/slots.lock` 分配 | S |
-| L-27 | 施工 | 模型写成单个 magpie 组名时，返工「换一个施工模型」不起作用 | `kit/bin/evo:557-563` | 文档写明；或返工时改用卡片的 fallback | S |
-| L-28 | 测试覆盖 | 2 核沙箱单个测试文件要 80 秒或更久，全套约 220 个无法在 2 分钟内跑完；没有并行 | 本次实测（`/tmp/pt/*.log`） | 加 pytest-xdist；把慢的端到端测试标 `slow`，提交前先跑快集 | S |
-| L-29 | 崩溃安全 | `save()` 写临时文件不 fsync，断电后可能出现空文件，被判损坏进入暂停 | `kit/bin/evo:238-243` | `flush` + `os.fsync`；保留 `state.json.prev`，损坏时先自动用上一版并推送 | S |
-| L-30 | 来源 | 拓扑图里的「CI 与线上报警 → issue」还没有接入代码 | `docs/loop-topology.md` B 段 | 加 `evo intake ci --run <url>` 或 GitHub Actions 失败时用 `gh issue create` 贴 `type:ops` | S–M |
+| L-22（未修：低危，留后） | 日志与可观测性 | `s["log"]` 只留 200 行，推送失败每 30 秒一行就能刷满；夜审和晚间汇总按 `s["log"]` 取当天事件会漏。`state/logs`、`outbox.jsonl`、`timeline.jsonl`、`~/.evoloop/logs/*.log` 都没有轮转 | `kit/bin/evo:248`、`:2890-2893`、`:2910-2912` | 夜审和汇总改读 timeline；同一句日志连续重复只记次数；日志按天轮转，保留 14 天 | S |
+| L-23（未修：低危，留后） | 来源 | `gh issue list --limit 50`：已登记、没上线的 issue 仍开着且带 `autopilot:ready`，超过 50 件后新 issue 永远拉不到 | `kit/bin/evo:2766-2767` | 登记后贴 `evo:registered` 标签，查询加 `-label:evo:registered`；或分页 | S |
+| L-24（已修（771cd41）：等原话 10 分钟过期；bot 调 evo 超时回「evo 正忙」不退出） | 推送通知 | bot 打回后等原话没有过期，几小时后随手一句话会被当成原话；`run_evo` 超时抛异常让 bot 进程退出，那次按钮丢失也没回话 | `kit/bin/evo_notify.py:361-366`、`kit/bin/evo:3405-3407` | 等原话 10 分钟过期；捕获超时，回「evo 正忙，稍后再点」 | S |
+| L-25（已修（771cd41）：只在建成闸门或已有闸门时记当天；主线红先不收，转绿当天还能收（主线测试按提交号缓存 30 分钟）） | 老板闸门 | 自动收菜在 08:20 遇到主线红就当天不再试（先写了 `auto_ship_day`） | `kit/bin/evo:3729-3735` | 只有建成闸门或「已有闸门」时才记当天 | S |
+| L-26（未修：低危，留后） | 并发 | App「立即 tick」和常驻进程同时转不同项目时，`other_projects_load` 不加锁，整机施工上限可能多 1 | `kit/bin/evo:1938-1940` | 整机施工名额用 `~/.evoloop/slots.lock` 分配 | S |
+| L-27（未修：低危，只是文档提示，留后） | 施工 | 模型写成单个 magpie 组名时，返工「换一个施工模型」不起作用 | `kit/bin/evo:557-563` | 文档写明；或返工时改用卡片的 fallback | S |
+| L-28（部分修（771cd41）：CI 用 pytest-xdist `-n auto` 并行；没分 slow 快集） | 测试覆盖 | 2 核沙箱单个测试文件要 80 秒或更久，全套约 220 个无法在 2 分钟内跑完；没有并行 | 本次实测（`/tmp/pt/*.log`） | 加 pytest-xdist；把慢的端到端测试标 `slow`，提交前先跑快集 | S |
+| L-29（部分修（771cd41）：save() 写完 flush + fsync；没做 state.json.prev 自动回退（改变「损坏就暂停等人」的约定，要另议）） | 崩溃安全 | `save()` 写临时文件不 fsync，断电后可能出现空文件，被判损坏进入暂停 | `kit/bin/evo:238-243` | `flush` + `os.fsync`；保留 `state.json.prev`，损坏时先自动用上一版并推送 | S |
+| L-30（未修：CI 报警进 issue 是新功能，留后） | 来源 | 拓扑图里的「CI 与线上报警 → issue」还没有接入代码 | `docs/loop-topology.md` B 段 | 加 `evo intake ci --run <url>` 或 GitHub Actions 失败时用 `gh issue create` 贴 `type:ops` | S–M |
 
 ## E 测试覆盖缺口
 ```callout info 假 Orca 是同步的，所以「时序」一类问题都测不到
