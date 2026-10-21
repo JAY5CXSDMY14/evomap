@@ -1,0 +1,20 @@
+{
+  "id": "orca-gate-sync",
+  "api": "^1",
+  "version": "1.0.0",
+  "name": "Orca 闸门同步",
+  "sub": "Orca 端（手机 / 工人）结的闸门：打回类照办，放行类转成在 evo 入口再确认",
+  "essential": true,
+  "requires": ["state", "orca"],
+  "provides": [],
+  "parts": [
+    {"slot": "settings", "key": "orca-gate-sync"}
+  ],
+  "settings": {
+    "type": "object",
+    "x-order": ["execute_negative"],
+    "properties": {
+      "execute_negative": {"type": "boolean", "title": "Orca 端点「打回 / 不做」直接照办", "description": "关掉后 Orca 端的任何结果都要在 evo 入口确认；项目配置 orca_gate_sync 写了以它为准。放行类结果永远不直接算数", "default": true}
+    }
+  }
+}
