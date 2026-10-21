@@ -39,6 +39,9 @@ defaults write $BUNDLE mateCharacter ball
 defaults write $BUNDLE appearance light
 defaults delete $BUNDLE "NSWindow Frame Evo.main" 2>/dev/null || true
 mkdir -p "$HOME/.evoloop"
+# runner 默认可能开着「减弱动态效果」（调度球就只画静态帧、不跟鼠标）：记下来，试着关掉；关不掉应用也会因 EVO_DEMO_MOTION=1 照样动
+note "减弱动态效果（录屏前）：$(defaults read com.apple.universalaccess reduceMotion 2>&1 | tail -1)"
+defaults write com.apple.universalaccess reduceMotion -bool false 2>/dev/null || true
 # CI 上关掉免打扰（不然半夜跑的录屏里角色在睡觉）；本机跑不动你的配置
 if [ -n "${CI:-}" ] || [ ! -f "$HOME/.evoloop/config.json" ]; then echo '{"notify": {"quiet_hours": {}}}' > "$HOME/.evoloop/config.json"; fi
 
@@ -82,7 +85,7 @@ APP_PID=""
 launch() {   # $@ = 额外环境变量
   pkill -x Evo 2>/dev/null; sleep 1
   rm -f "$GEO"
-  env "$@" EVO_UITEST_GEOMETRY="$GEO" "$APP/Contents/MacOS/Evo" >> "$OUT/app.log" 2>&1 &
+  env "$@" EVO_DEMO_MOTION=1 EVO_UITEST_GEOMETRY="$GEO" "$APP/Contents/MacOS/Evo" >> "$OUT/app.log" 2>&1 &
   APP_PID=$!
   for _ in $(seq 1 60); do [ -s "$GEO" ] && grep -q status-item "$GEO" && break; sleep 0.25; done
   sleep 4    # 等第一轮 status 读完、角色加载
@@ -156,7 +159,7 @@ gaze_note() { note "    眼睛（mate-gaze）：$(geo mate-gaze | tr -d '\n ')";
 eyes_demo() {
   local m; m=$(waitpt win-mate) || { note "  ✗ 找不到调度球（win-mate）"; return 1; }
   local cx=${m%,*} cy=${m#*,} r a x y i
-  note "  调度球中心 $m（球径 58，感应半径约 174）"
+  note "  调度球中心 ${m}（球径 58，感应半径约 174）"
   key -e 400 "m:$((cx+620)),$((cy+380))"; sleep 1.4; shot 03a-eyes-far; gaze_note
   # 慢慢移近：从右下远处走到右侧 70 点
   for i in 1 2 3 4 5 6 7 8; do

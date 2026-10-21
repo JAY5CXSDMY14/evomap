@@ -244,6 +244,10 @@ struct MateLiveRep: View, Animatable {
 /// 给 CI 演示看「眼睛真的在跟」：最近一次注视目标（UIProbe 写进几何 JSON 的 mate-gaze）。
 enum MateGazeProbe {
     static var last: EyeFollow.Result = .rest
+    /// 收到过多少次鼠标位置（证明监听在工作）。
+    static var events = 0
+    /// 演示录屏专用：CI 的 runner 默认开着「减弱动态效果」，录屏时设 EVO_DEMO_MOTION=1 照样动（平时不起作用）。
+    static let forceMotion = ProcessInfo.processInfo.environment["EVO_DEMO_MOTION"] == "1"
 }
 
 /// 界面里用这个。截图（ImageRenderer 画不了 WKWebView）时换成预先拍好的静态图。
@@ -272,7 +276,7 @@ struct MateView: View {
     @State private var blinkTick = 0
     @State private var lastEmotion: MateEmotion?
 
-    private var still: Bool { reduceMotion || forceStill }
+    private var still: Bool { (reduceMotion && !MateGazeProbe.forceMotion) || forceStill }
     /// 小号实例（列表里的 26～30 点）不呼吸不弹，省得一屏都在动。
     private var lively: Bool { !still && size >= 40 }
 
@@ -326,6 +330,7 @@ struct MateView: View {
 
     private func pointer(_ p: CGPoint?) {
         let r = EyeFollow.compute(center: (0, 0), diameter: Double(size), pointer: p.map { (Double($0.x), Double($0.y)) })
+        if followMouse { MateGazeProbe.events += 1 }
         guard EyeFollow.changedEnough(r, target) else { return }
         let wasNear = target.near
         target = r

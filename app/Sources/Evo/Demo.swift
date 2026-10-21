@@ -67,7 +67,10 @@ enum UIProbe {
         let g = MateGazeProbe.last
         out["mate-gaze"] = ["x": (g.x * 100).rounded() / 100, "y": (g.y * 100).rounded() / 100,
                             "inRange": g.inRange ? 1 : 0, "near": g.near ? 1 : 0,
-                            "distance": g.distance.isFinite ? g.distance.rounded() : -1]
+                            "distance": g.distance.isFinite ? g.distance.rounded() : -1,
+                            "events": MateGazeProbe.events,
+                            "reduceMotion": NSWorkspace.shared.accessibilityDisplayShouldReduceMotion ? 1 : 0,
+                            "forceMotion": MateGazeProbe.forceMotion ? 1 : 0]
         out["dark"] = NSApp.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua ? 1 : 0
         if let data = try? JSONSerialization.data(withJSONObject: out, options: [.sortedKeys, .prettyPrinted]) {
             try? data.write(to: URL(fileURLWithPath: path), options: .atomic)
