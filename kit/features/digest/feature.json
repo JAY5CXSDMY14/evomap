@@ -1,0 +1,23 @@
+{
+  "id": "digest",
+  "api": "^1",
+  "version": "1.0.0",
+  "name": "早报和每晚汇总",
+  "sub": "夜里要推的事攒到早上一条发；每晚汇总今天的动静（可贴日报 issue）",
+  "essential": false,
+  "requires": ["notify", "state"],
+  "provides": ["digest"],
+  "parts": [
+    {"slot": "cli", "key": "digest"},
+    {"slot": "settings", "key": "digest"}
+  ],
+  "one": "攒着 1 件还没进早报",
+  "many": "攒着 {n} 件还没进早报",
+  "settings": {
+    "type": "object",
+    "x-order": ["nightly_email"],
+    "properties": {
+      "nightly_email": {"type": "boolean", "title": "每晚汇总也发邮件", "description": "要邮件推送开着；全局配置 notify.email.nightly 写了以它为准", "default": true}
+    }
+  }
+}

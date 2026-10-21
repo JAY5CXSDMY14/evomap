@@ -103,6 +103,7 @@ class Notifier:
         self.outbox = os.path.join(root, "outbox.jsonl")
         self.held = os.path.join(root, "held.jsonl")
         self.channel_list = lambda: []        # 第十八轮：内核接上功能包的 notify.channel 槽位
+        self.hold_ok = lambda: True           # 第十八轮：早报功能（digest）关着时内核设成 False：夜里不攒，直接推
 
     # -- 通道配置 --
     def channels(self):
@@ -137,7 +138,7 @@ class Notifier:
         if ev["level"] != "push":
             self.plugins(ev, push=False)                  # 第十六轮：events=all 的插件渠道
             return ev
-        if self.is_quiet():
+        if self.is_quiet() and self.hold_ok():
             _append(self.held, ev)                        # 免打扰：攒到早上汇总
             return ev
         self.deliver(ev)

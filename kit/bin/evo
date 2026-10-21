@@ -232,6 +232,7 @@ K = _Kernel()
 BUS = BUSMOD.Bus(EVENTS_PATH, CODE if HAS_PROJECT else None)
 RT = RTMOD.Runtime(FEATURES_DIR, EVO_ROOT, K, BUS)
 NOTE.channel_list = lambda: [v for _, _, v in hook("notify.channel")]     # 推送渠道是功能包（Telegram / 邮件 / webhook）
+NOTE.hold_ok = lambda: svc("digest") is not None                          # 早报功能关着：夜里不攒，直接推
 _RT_READY = []
 
 
@@ -3071,23 +3072,6 @@ def cmd_resume(a):
         print(f"{CODE} 没有暂停")
 
 
-def cmd_digest(a):
-    """每晚汇总：今天合并了什么、什么在等老板、什么卡住了。可贴到 daily-report issue。"""
-    s = load(); today = TM.local().strftime("%m-%d")
-    done = [l for l in s["log"] if l.startswith(today) and ("已合并" in l or "老板" in l)]
-    stuck = [f"{k} {it['title']}" for k, it in s["items"].items() if it.get("stalled") or it["state"] in ("escalated", "asking")]
-    ready = [f"{k} {it['title']}" for k, it in s["items"].items() if it["state"] == "merged"]
-    text = "\n".join(["## 今日动静"] + (done or ["（无）"]) + ["## 可收菜（已合并待上线）"] + (ready or ["（无）"]) +
-                     ["## 卡住或交决策岗"] + (stuck or ["（无）"]))
-    print(text)
-    if a and a.post and CFG.get("github_repo") and CFG.get("digest_issue"):
-        gh_run("issue", "comment", str(CFG["digest_issue"]), "-R", CFG["github_repo"], "-b", text)
-    if stuck or ready:
-        notify("digest_nightly", "今晚汇总", text, ready=len(ready), stuck=len(stuck))
-        if CFG.get("notify", {}).get("email", {}).get("nightly", True) and "email" in NOTE.channels() and svc("mail.send"):
-            svc("mail.send")(f"[evo] {CODE} 今晚汇总：可收菜 {len(ready)}，卡住 {len(stuck)}", text)
-
-
 def cmd_retro(a):
     """每晚错题本：把今天的返工、打回原话、合并受阻、卡住、交决策岗整理成材料，
     作为一件普通的「文档件」走施工→验收→合并→推送，由施工岗按 roles/retro.md 更新错题本。"""
@@ -3120,7 +3104,9 @@ def nightly():
     save(st)
     if day.date() != TM.local().date():
         log(st, f"补跑 {day.strftime('%m-%d')} 的夜审（当时错过了）"); save(st)
-    cmd_retro(argparse.Namespace(day=day)); cmd_digest(argparse.Namespace(post=True))
+    cmd_retro(argparse.Namespace(day=day))
+    if svc("digest"):                                   # 第十八轮：每晚汇总是功能包 digest
+        svc("digest").nightly(post=True)
 
 
 AUDIT_NOTE = ("例行：本周跑一次 ponytail-audit（整仓体检，按优先级排先修哪个；规则见官方仓库固定提交下的 skills/ponytail-audit/SKILL.md，"
@@ -3154,9 +3140,8 @@ def nightly_due(done, now, at):
 
 def flush_digest():
     try:
-        n = NOTE.flush_digest()
-        if n:
-            print(f"早间汇总已发：{n} 件")
+        if svc("digest"):                               # 第十八轮：早报是功能包 digest（关着就不攒、夜里直接推）
+            svc("digest").morning()
     except Exception as e:
         print(f"早间汇总没发出去：{e}", file=sys.stderr)
 
@@ -4342,7 +4327,6 @@ if __name__ == "__main__":
     x = sp.add_parser("retry"); x.add_argument("key"); sp.add_parser("resume")
     x = sp.add_parser("relocate", help="改用 evo 专用克隆 ~/.evoloop/repos/<代号>（老板的工作副本以后不碰）")
     x.add_argument("--force", action="store_true")
-    x = sp.add_parser("digest"); x.add_argument("--post", action="store_true")
     x = sp.add_parser("plugin", help="插件：list | enable <名> | disable <名> | run <名> <类型> <id> | validate [名|目录] | install <目录>")   # 第十六轮
     x.add_argument("action", choices=["list", "enable", "disable", "run", "validate", "install"])
     x.add_argument("target", nargs="?"); x.add_argument("kind", nargs="?"); x.add_argument("cid", nargs="?")
@@ -4383,6 +4367,6 @@ if __name__ == "__main__":
         sys.exit(f"有多个项目，请加 -p <代号>：{', '.join(list_projects()) or '（还没有项目）'}")
     if a.cmd in FEATURE_CMDS:
         sys.exit(FEATURE_CMDS[a.cmd][0](a) or 0)
-    {"panel": cmd_panel, "new": cmd_new, "import": cmd_import, "projects": cmd_projects, "once": cmd_once, "add": cmd_add, "tick": cmd_tick, "run": cmd_run, "status": cmd_status, "approve": cmd_approve, "ship": cmd_ship, "pull": cmd_pull, "digest": cmd_digest, "retry": cmd_retry, "resume": cmd_resume, "feedback": cmd_feedback, "suite": cmd_suite, "retro": cmd_retro,
+    {"panel": cmd_panel, "new": cmd_new, "import": cmd_import, "projects": cmd_projects, "once": cmd_once, "add": cmd_add, "tick": cmd_tick, "run": cmd_run, "status": cmd_status, "approve": cmd_approve, "ship": cmd_ship, "pull": cmd_pull, "retry": cmd_retry, "resume": cmd_resume, "feedback": cmd_feedback, "suite": cmd_suite, "retro": cmd_retro,
      "notify-test": cmd_notify_test, "watchdog": cmd_watchdog, "models": cmd_models, "log": cmd_log,
      "goal": cmd_goal, "relocate": cmd_relocate}[a.cmd](a)
