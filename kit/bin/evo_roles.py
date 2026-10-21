@@ -8,8 +8,37 @@ import os, re, shlex
 # 各工具的命令模板（向导用；{model} 为空时连同前面的参数一起去掉）。真机参数名见 docs/model-coordination.md「只能在 Mac mini 上验」。
 TOOL_CMDS = {"claude": "claude --model {model}",
              "codex": "codex --model {model} -c model_reasoning_effort={thinking}",
-             "dsh": "dsh --model {model}",
+             "dsh": "dsh --profile headless -",        # Air 试跑 10-21：dsh 没有 --model、没有交互界面；headless 一次性跑完，任务书从 stdin 读，模型用 DSH 里设的默认
              "pi": "pi --model {model} --thinking {thinking}"}
+
+# 一次性工具：没有交互界面，不能事后把任务书打进去 → 接棒器把任务书写成文件，用「命令 < 文件」启动
+ONESHOT_TOOLS = {"dsh"}
+# 这些工具不认 per-run 模型参数，模型在工具自己的设置里选（团队页显示「工具默认」）
+NO_MODEL_FLAG = {"dsh"}
+
+
+def is_oneshot(rc):
+    rc = rc or {}
+    return bool(rc.get("oneshot")) if "oneshot" in rc else tool_of(rc) in ONESHOT_TOOLS
+
+
+_FAIL_PAT = re.compile(r"command not found|no such file or directory|error: --|unknown option|unrecognized (option|argument)|"
+                       r"is required|usage: |bquote>|dquote>|quote>", re.I)
+_PROMPT_PAT = re.compile(r"^\S+@\S+.*[%$#]\s*$")
+
+
+def launch_failed(tail):
+    """工人刚启动几秒后的终端尾部：命令报错立刻退回 shell，或者 shell 把任务书当命令执行了 → 返回那几行；正常返回 None。"""
+    lines = [l.rstrip() for l in (tail or "").splitlines() if l.strip()]
+    if not lines:
+        return None
+    last = lines[-6:]
+    if any(_FAIL_PAT.search(l) for l in last):
+        return "\n".join(last)
+    if len(lines) >= 2 and _PROMPT_PAT.match(lines[-1]) and re.match(r"^\S+@\S+.*[%$#] \S", lines[-2]):
+        return "\n".join(last)          # 敲完命令立刻又回到提示符：命令没跑起来
+    return None
+
 
 def tool_of(rc):
     rc = rc or {}

@@ -1098,14 +1098,59 @@ def start_worker(s, key, it, role):
     log(s, f"{key} 开始{'施工' if role == 'build' else '验收'}（{model}）")
 
 
+def launch_check(h, title, cmd):
+    """Air 试跑 10-21：dsh --model 直接报错退回 shell，evo 却记成派工成功、还把任务书逐行喂给 zsh。"""
+    bad = R.launch_failed(terminal_tail(h))
+    if bad:
+        orca("terminal", "close", "--terminal", h, ok=False)
+        raise SystemExit(f"工人命令没跑起来（{title}：{cmd}）。终端最后几行：\n{bad[-600:]}")
+
+
+def claude_trust(path):
+    """claude 第一次进一个文件夹会问「信任吗」，后台没人点会一直停着。工作区是 evo 自己建的，替它记成已信任。"""
+    p = os.path.expanduser("~/.claude.json")
+    try:
+        j = json.load(open(p)) if os.path.exists(p) else {}
+        pr = j.setdefault("projects", {}).setdefault(os.path.realpath(path), {})
+        if pr.get("hasTrustDialogAccepted"):
+            return
+        pr["hasTrustDialogAccepted"] = True
+        tmp = p + ".evo.tmp"
+        with open(tmp, "w") as f:
+            json.dump(j, f, ensure_ascii=False, indent=2)
+        os.replace(tmp, p)
+    except Exception as e:
+        print(f"没能替 claude 记下信任 {path}：{e}")
+
+
 def launch(c, path, title, rc, model, tid):
     """开终端、起工人命令、派工。返回 (终端句柄, 派工号)。"""
     res, _ = orca("terminal", "create", "--worktree", f"path:{path}", "--title", title)
     h = res["terminal"]["handle"]
-    cmd = R.render_cmd(rc["cmd"], model_alias(model), rc.get("thinking"))      # {model} / {thinking}；空值连参数一起去掉；第十八轮：按本机前缀改名
+    base = rc["cmd"]
+    if R.tool_of(rc) == "dsh" and "--profile" not in base and " headless" not in base:
+        base = R.TOOL_CMDS["dsh"]              # 旧配置里的「dsh --model {model}」跑不起来，按新写法改
+        print(f"岗位命令 {rc['cmd']} 是旧写法，改用 {base}（模型以 DSH 自己设置的默认为准）")
+    cmd = R.render_cmd(base, model_alias(model), rc.get("thinking"))      # {model} / {thinking}；空值连参数一起去掉；第十八轮：按本机前缀改名
     print(f"开工人终端 {title} → {h}：{cmd}")
+    if R.tool_of(rc) == "claude":
+        claude_trust(path)                     # Air 试跑 10-21：新工作区里 claude 停在「信任这个文件夹吗」上没人点
+    if R.is_oneshot(rc):
+        # 一次性工具（dsh headless）：先建派工、拿任务书，写成文件，再「命令 < 文件」启动；不往 shell 里打任务书
+        d, _ = orca("orchestration", "dispatch", "--from", c, "--task", tid, "--to", h)
+        pre, _ = orca("orchestration", "dispatch-show", "--from", c, "--task", tid, "--preamble", ok=False)
+        text = (pre.get("preamble") or "").replace("ctx_preview", d["dispatch"]["id"])
+        pdir = os.path.join(STATE_DIR, "prompts"); os.makedirs(pdir, exist_ok=True)
+        pf = os.path.join(pdir, f"{title}.md")
+        with open(pf, "w", encoding="utf-8") as f:
+            f.write(text)
+        orca("terminal", "send", "--terminal", h, "--text", f"{cmd} < {shlex.quote(pf)}", "--enter", ok=False)
+        time.sleep(rc.get("boot_seconds", 3))
+        launch_check(h, title, cmd)
+        return h, d["dispatch"]["id"]
     orca("terminal", "send", "--terminal", h, "--text", cmd, "--enter", ok=False)
     time.sleep(rc.get("boot_seconds", 3))
+    launch_check(h, title, cmd)                # 先确认工人命令真的起来了，再派工；不然任务书会被当成 shell 命令执行
     d, j = orca("orchestration", "dispatch", "--from", c, "--task", tid, "--to", h, "--inject", ok=False)
     if not j.get("ok"):
         if (j.get("error") or {}).get("code") != "inject_rejected":
