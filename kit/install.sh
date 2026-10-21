@@ -135,7 +135,15 @@ else
   cp "$KIT/config.global.example.json" "$EVO_DIR/config.json" && ok "已放全局配置 $EVO_DIR/config.json（按本机改模型名）"
 fi
 if [ $HAVE_ORCA = 1 ]; then
-  orca skills install --skill orca-cli --skill orchestration >/dev/null 2>&1 && ok "Orca 技能已装" || warn "Orca 技能没装上（Orca 开着再重跑）"
+  # Air 试跑 10-21：装技能要 Node 22+（skills 包用 fs/promises.glob）；PATH 里是 node 20 时会失败，原来的提示误导成「Orca 没开」
+  NODE_MAJOR=$(node -p 'process.versions.node.split(".")[0]' 2>/dev/null || echo 0)
+  if [ "${NODE_MAJOR:-0}" -lt 22 ] 2>/dev/null; then
+    warn "Orca 技能要 Node 22 以上，PATH 里的 node 是 $(node --version 2>/dev/null || echo 没有)：装/切到 Node 22 后重跑 --apply（例 brew install node）"
+  elif OUT=$(orca skills install --skill orca-cli --skill orchestration 2>&1); then
+    ok "Orca 技能已装"
+  else
+    warn "Orca 技能没装上：$(printf '%s' "$OUT" | grep -v '^\s*at ' | tail -n 2 | tr '\n' ' ')"
+  fi
 else
   warn "没有 orca，跳过 Orca 技能"
 fi
