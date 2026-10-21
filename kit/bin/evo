@@ -1103,6 +1103,7 @@ def launch(c, path, title, rc, model, tid):
     res, _ = orca("terminal", "create", "--worktree", f"path:{path}", "--title", title)
     h = res["terminal"]["handle"]
     cmd = R.render_cmd(rc["cmd"], model_alias(model), rc.get("thinking"))      # {model} / {thinking}；空值连参数一起去掉；第十八轮：按本机前缀改名
+    print(f"开工人终端 {title} → {h}：{cmd}")
     orca("terminal", "send", "--terminal", h, "--text", cmd, "--enter", ok=False)
     time.sleep(rc.get("boot_seconds", 3))
     d, j = orca("orchestration", "dispatch", "--from", c, "--task", tid, "--to", h, "--inject", ok=False)
@@ -1114,6 +1115,9 @@ def launch(c, path, title, rc, model, tid):
         pre, _ = orca("orchestration", "dispatch-show", "--from", c, "--task", tid, "--preamble")
         text = (pre.get("preamble") or "").replace("ctx_preview", d["dispatch"]["id"])
         orca("terminal", "send", "--terminal", h, "--text", text, "--enter")
+    _, tj = orca("terminal", "show", "--terminal", h, ok=False)       # Air 试跑 10-21：evo 记了「已派工」，Orca 里却没有这个终端
+    if not tj.get("ok"):
+        raise SystemExit(f"工人终端 {title}（{h}）派工后就不在了：{tj.get('error')}")
     return h, d["dispatch"]["id"]
 
 
@@ -2344,6 +2348,10 @@ def check_stalls(s):
             it["stalled"] = True
             why = "工人进程不在了" if gone else f"{int(idle)} 分钟没有任何回报"
             log(s, f"{k} 疑似卡住：{why}"); notify("stalled", "疑似卡住", f"{it['title']}：{why}", item=k)
+            # Air 试跑 10-21：标了卡住之后 20 分钟没人管。技术问题交决策岗看一次（retry / rework / drop），不用等老板
+            s.setdefault("decide_inbox", []).append({"todo": True, "issue": None, "item": k, "title": f"{k} 疑似卡住",
+                "note": f"{why}（派工 {d.get('id')}，终端 {d.get('terminal')}，已自动重启 {d.get('restarts', 0)} 次）。"
+                        f"请判断：retry 重新派工 / rework 改说明再派 / drop 不做；判断不了再交老板"})
 
 
 def restart_worker(s, k, it, role):
@@ -2938,6 +2946,9 @@ def run_once_child(code):
     if r.returncode == 124:
         _emit_for(code or CODE, "tick_timeout", "接棒一轮超时", f"{code or CODE} 一轮超过 {int(tmo('tick') / 60)} 分钟，已杀掉；下一轮重来。"
                   "多半是测试、git 或某个工人命令卡住了")
+    if r.returncode == 0 and (r.stdout or "").strip():           # Air 试跑 10-21：子进程的「最近动静」以前被吞掉，autopilot.log 永远 0 字节
+        for line in r.stdout.strip().splitlines()[-40:]:
+            print(f"[{code or CODE}] {line}")
     return r.returncode, (r.stderr or r.stdout)[-300:]
 
 
