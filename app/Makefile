@@ -9,6 +9,15 @@
 #   make clean
 # 可选：SIGN="Developer ID Application: …" 换正式证书；SIGN= 跳过签名；UNIVERSAL=1 出 arm64+x86_64 通用包
 VERSION := $(shell tr -d '[:space:]' < VERSION)
+# xcode-select 指向 CommandLineTools（没有 SwiftUI 宏插件）时，自动借用装着的 Xcode / Xcode-beta；
+# 不改系统设置。自己指定 DEVELOPER_DIR=… 则以你的为准。
+ifeq ($(origin DEVELOPER_DIR),undefined)
+  _EVO_DEVDIR := $(shell scripts/dev-dir.sh)
+  ifneq ($(_EVO_DEVDIR),)
+    export DEVELOPER_DIR := $(_EVO_DEVDIR)
+    $(info 用 $(_EVO_DEVDIR) 编译（命令行工具里没有 SwiftUI 宏插件）)
+  endif
+endif
 SIGN ?= -
 OUT := build
 ifeq ($(UNIVERSAL),1)

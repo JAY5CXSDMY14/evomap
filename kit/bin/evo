@@ -2962,8 +2962,11 @@ def _setup_project(code, name, path, github, test_cmd, notes, goal=None, ui_pres
     json.dump(base, open(os.path.join(d, "config.json"), "w", encoding="utf-8"), ensure_ascii=False, indent=2)
     if github and svc("github"):
         svc("github").ensure_labels(github)
-    r = subprocess.run(ORCA + ["repo", "add", "--path", os.path.abspath(work), "--json"], capture_output=True, text=True)
-    notes.append("已登记到 Orca（手机端能看到）" if '"ok":true' in r.stdout.replace(" ", "") else "Orca 登记没成功，装好 Orca 后重跑 orca repo add")
+    r = run_cmd(ORCA + ["repo", "add", "--path", os.path.abspath(work), "--json"], timeout=30, extra_env=False)
+    if r.returncode == 127:
+        notes.append(f"没装 Orca，先不登记；装好后跑：orca repo add --path {os.path.abspath(work)}")
+    else:
+        notes.append("已登记到 Orca（手机端能看到）" if '"ok":true' in (r.stdout or "").replace(" ", "") else "Orca 登记没成功，装好 Orca 后重跑 orca repo add")
     print(f"项目 {code}「{name}」就绪：{d}/config.json")
     for n in notes:
         print("  · " + n)

@@ -175,3 +175,13 @@ def test_install_check_only_changes_nothing_then_apply_is_idempotent(loop):
     r = subprocess.run(["bash", inst, "--apply", "--link"], env=loop.env, capture_output=True, text=True)
     assert r.returncode == 0 and "不覆盖" in r.stdout
     assert json.load(open(g)) == {"nightly_at": "22:00"}
+
+
+def test_new_without_orca_installed_does_not_crash(loop):
+    # Air 试跑 10-21：没装 Orca 时 import 末尾直接抛 FileNotFoundError；现在应正常收尾并说明怎么补登记
+    loop.write_global({"orca": "orca-not-installed-xyz"})
+    path = os.path.join(loop.tmp, "noorca")
+    r = loop.evo("new", "NO", "--name", "无 Orca", "--path", path)
+    assert r.returncode == 0, r.stderr
+    assert "Traceback" not in r.stderr and "没装 Orca" in r.stdout
+    assert os.path.exists(loop.cfg_path("NO"))
