@@ -8,6 +8,7 @@ from test_agents_panel import req
 from test_round11 import start_panel
 
 sys.path.insert(0, os.path.join(KIT, "bin"))
+sys.path.insert(0, os.path.join(KIT, "features", "team"))   # 第十八轮：团队搬成功能包
 import evo_team as TEAM     # noqa: E402
 
 PY = sys.executable

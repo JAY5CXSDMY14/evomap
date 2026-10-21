@@ -1,0 +1,16 @@
+{
+  "id": "team",
+  "api": "^1",
+  "version": "1.0.0",
+  "name": "团队 / 模型协调",
+  "sub": "岗位卡片、magpie 健康检查、额度满切备用、模型成绩和建议；团队页",
+  "essential": true,
+  "requires": ["state", "config", "notify"],
+  "provides": ["team"],
+  "parts": [
+    {"slot": "page", "key": "team", "title": "团队", "icon": "person.3"},
+    {"slot": "cli", "key": "team"},
+    {"slot": "cli", "key": "models"},
+    {"slot": "status", "key": "team"}
+  ]
+}
