@@ -4,7 +4,7 @@ import SwiftUI
 import WebKit
 import EvoCore
 
-// 表情角色：调度球（默认）/ 云宝 / 亮亮，跑 aora-bot 的表情引擎（Resources/vendor，版权见 vendor/NOTICE.md）。
+// 表情角色：调度球（默认）/ 云宝 / 亮亮，跑 aora-bot 的表情引擎（Resources/vendor，版权见 VENDOR-NOTICE.md）。
 // 透明 WKWebView 读本地宿主页 Resources/mate/index.html，不联网（规则表挡掉所有 http/https）。
 // Swift 调 evoMate.set(编号, 撒花)、evoMate.look(x, y, 眼睛放大)、evoMate.blink(连眨)。
 // v0.5.0「灵动」：表情交给引擎画，身体的呼吸 / 点击挤压回弹 / 状态弹跳 / 很近时一缩，以及眼睛跟鼠标的弹簧，

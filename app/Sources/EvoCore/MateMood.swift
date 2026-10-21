@@ -4,7 +4,7 @@ import Foundation
 // 编号是引擎的对外契约（emotion-ball/js/emotions.js、mood-mates/src/data/emotions.js 两边同一张表，永不重排）：
 //   00-09 生命周期 · 10-29 情绪反应 · 30-49 代理工作状态
 
-/// 可选角色。调度球是默认（形象来自 aora-bot emotion-ball 的 blob 球）（只许自用，见 Resources/vendor/NOTICE.md）；云宝 / 亮亮来自 mood-mates，可买商业许可。
+/// 可选角色。调度球是默认（形象来自 aora-bot emotion-ball 的 blob 球）（只许自用，见 Resources/VENDOR-NOTICE.md）；云宝 / 亮亮来自 mood-mates，可买商业许可。
 public enum MateCharacter: String, CaseIterable, Sendable {
     case ball      // 调度球（emotion-ball，blob 造型）
     case nimbo     // 云宝（mood-mates）

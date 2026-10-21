@@ -29,9 +29,11 @@ rm -rf "$APP/Contents/Resources/evo/tests" "$APP/Contents/Resources/evo/mock"
 find "$APP/Contents/Resources/evo" \( -name '__pycache__' -o -name '*.pyc' -o -name '.DS_Store' -o -name '.pytest_cache' \) -prune -exec rm -rf {} +
 chmod +x "$APP/Contents/Resources/evo/bin/evo" "$APP/Contents/Resources/evo/install.sh"
 echo "$VERSION" > "$APP/Contents/Resources/evo/APP_VERSION"
-# 表情角色：宿主页 + 第三方引擎（调度球 / 云宝 / 亮亮，许可见 Resources/vendor/NOTICE.md；只许自用，不得公开分发）
+# 表情角色：宿主页 + 第三方引擎（调度球 / 云宝 / 亮亮，许可见 Resources/VENDOR-NOTICE.md；引擎由 scripts/fetch-vendor.sh 构建时下载，不进仓库；只许自用，不得公开分发）
 cp -R Resources/mate "$APP/Contents/Resources/mate"
+[ -f Resources/vendor/.rev ] || "$(dirname "$0")/fetch-vendor.sh"
 cp -R Resources/vendor "$APP/Contents/Resources/vendor"
+rm -f "$APP/Contents/Resources/vendor/.rev"
 # 应用图标「调度球」（scripts/make-icon.py 用代码画的，原创；Info.plist 的 CFBundleIconFile 指向它）
 cp Resources/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
 # bin/ 设成只读：launchd 常驻直接用包里的 evo 时，python 写不进 __pycache__ 就静默跳过，

@@ -28,6 +28,7 @@ test:
 	swift test
 
 app: build
+	scripts/fetch-vendor.sh
 	scripts/assemble-app.sh "$(BINDIR)/Evo" $(OUT) "$(SIGN)"
 
 dmg: app
@@ -46,6 +47,7 @@ install: app
 
 # 界面截图：debug 编译后用 --snapshots 跑一次（不碰 evo，画完就退出）
 snapshots:
+	scripts/fetch-vendor.sh
 	swift build
 	rm -rf $(OUT)/snapshots
 	"$$(swift build --show-bin-path)/Evo" --snapshots $(OUT)/snapshots

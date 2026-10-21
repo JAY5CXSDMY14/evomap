@@ -6,14 +6,11 @@ v0.6.1（kit 第十七轮）：项目暂停时卡片写「暂停：原因」，�
 
 v0.6.0 起**能装插件**：丢一个文件夹进 `~/.evoloop/plugins/`，侧栏多一页、输入框多一个 `/命令`、通知多一个渠道，不用改 App（见下面 v0.6.0 和 `../docs/plugins.md`）；App 读 evo 的 JSON 接口都带版本号（`../docs/app-contract.md`）。
 
-v0.3.0 起有了**真正的 Mac 窗口**（Claude 桌面版的样子：左侧栏、宽内容区、底部钉着输入框、统一标题栏和工具栏），菜单栏弹窗变成紧凑的速览；吉祥物换成 aora-bot 表情引擎的球形角色，v0.5.0 起叫 **调度球**（可切 云宝 / 亮亮）。实机截图和录屏见 `docs/mac-demo/`。
+v0.3.0 起有了**真正的 Mac 窗口**（Claude 桌面版的样子：左侧栏、宽内容区、底部钉着输入框、统一标题栏和工具栏），菜单栏弹窗变成紧凑的速览；吉祥物换成 aora-bot 表情引擎的球形角色，v0.5.0 起叫 **调度球**（可切 云宝 / 亮亮）。实机截图和录屏在 CI 构件 mac-demo / snapshots 里（含第三方角色形象，不进公开仓库）。
 
 > **⚠️ 角色许可：只许自用。** 默认角色调度球的形象来自 sam70361/aora-bot 的 emotion-ball（固定版本 e3b6148）。它的**球形视觉形象只许个人学习研究、非商业使用，永远不给商业授权**，所以带调度球的 Evo **不得公开分发**（不发 Release、不放公开下载、不卖）。
 > 哪天要分发：先在设置里换成 mood-mates 的云宝 / 亮亮并**向作者买商业许可**（1251579308@qq.com），或换成我们自己的角色。许可原文和 NOTICE 在 `Resources/vendor/`。
 
-| 主窗口（浅色） | 主窗口（深色） |
-|---|---|
-| ![主窗口](docs/mac-demo/03-window.png) | ![深色](docs/mac-demo/11-dark-item.png) |
 
 **全部用命令行维护**：Swift Package Manager + Makefile，没有 Xcode 工程，不用打开 Xcode。
 
@@ -76,8 +73,8 @@ app/
     AppState / Panel / Notifier / Shell   轮询、面板窗口、通知、跑命令
   Tests/EvoCoreTests/    单元测试 + Fixtures/ 样例 JSON
   scripts/mac-demo.sh    实机演示：真鼠标点一遍 + 截图 + 录屏；scripts/demo/ 是假 evo 和假状态
-  docs/screenshots/      make snapshots 出的组件截图
-  docs/mac-demo/         CI 在真 macOS 桌面上拍的整屏截图（mp4 不进仓库，在构件 mac-demo 里）
+  docs/screenshots/      make snapshots 出的组件截图（本机，不进仓库）
+  docs/mac-demo/         CI 在真 macOS 桌面上拍的整屏截图（本机 / 构件 mac-demo，不进仓库）
 ```
 
 改逻辑尽量放 EvoCore 并补测试；`Sources/Evo` 只做界面和系统调用。
@@ -137,13 +134,7 @@ app/
 - 纯逻辑在 `Sources/EvoCore/MateMotion.swift`（`EyeFollow.compute`：球心 + 球径 + 鼠标 → 偏移向量、在不在范围、是不是很近；眨眼间隔；状态 → 身体动作），有测试。
 - CI 实机演示多一段：鼠标从右下远处慢慢移近调度球 → 绕一圈 → 贴近 → 移开，截 `03a-eyes-far`、`03b-eyes-near-right`、`03c-eyes-circle-left`、`03d-eyes-circle-below`、`03e-eyes-very-near`、`03f-eyes-away`，每张旁边在 `HOW.txt` 记下应用报出的注视值（`mate-gaze`：x、y、在不在范围、是不是很近）；图标拍 `15-dock`、`15b-dock-strip`（Dock 那一条）、`16-finder-icon`，再用 `sips` 把包里的 icns 读成 `AppIcon-from-icns.png`。
 
-| 眼睛：远 → 右边近处 → 绕到左边 → 下方 → 贴近 → 移开（CI 实机截图） |
-|---|
-| ![眼睛跟鼠标](docs/mac-demo/03-eyes-strip.png) |
 
-| Dock 里的新图标 | Finder 里的 Evo.app |
-|---|---|
-| ![Dock](docs/mac-demo/15b-dock-strip.png) | ![Finder](docs/mac-demo/16-finder-icon.png) |
 
 注意：GitHub 的 macOS runner 默认开着「减弱动态效果」，调度球在那上面只画静态帧；演示脚本会先 `defaults write com.apple.universalaccess reduceMotion -bool false`，并用 `EVO_DEMO_MOTION=1`（只给录屏用）让应用忽略这个设置。
 
@@ -156,9 +147,6 @@ app/
 - 纯逻辑在 `Sources/EvoCore/Plugins.swift`（plugin list / run 解码、卡片模型、`/命令` 匹配、命令行拼装、三态）和 `Contract.swift`，测试 `Tests/EvoCoreTests/PluginTests.swift`（样例 `Fixtures/plugin_*.json` 是真 evo 的输出）。界面在 `Sources/Evo/PluginViews.swift`；组件截图 `make snapshots` 多一张 `plugin-light/dark.png`。
 - CI 实机演示多一段：用包里的真 evo 装示例插件 `example-hello`（`evo plugin install` + `enable`，插件目录在临时目录）→ 侧栏点「你好」→ 点卡片上的「掷骰子」→ 输入框打 `/hello 老板`，截 `09e-plugin-page`、`09f-plugin-button`、`09g-plugin-hello`。假 evo（`scripts/demo/fake-evo.py`）把 `plugin` 子命令转给真 evo，所以演示的是真的插件机制。
 
-| 侧栏「插件」→ 示例插件页（CI 实机） | 输入框 `/hello 老板` 的回话卡片 |
-|---|---|
-| ![插件页](docs/mac-demo/09e-plugin-page.png) | ![/hello](docs/mac-demo/09g-plugin-hello.png) |
 
 ### v0.7.0 功能开关 + 事件流 + 错误边界（kit 第十八轮）
 - **侧栏跟着功能走**：启动读 `evo feature list --json`；功能包 `team` 关了侧栏「团队」消失，`plugins` 关了「插件」整组消失，正选着就退回「等你处理」。老 evo 没有 `feature` 命令 → 照旧全显示。

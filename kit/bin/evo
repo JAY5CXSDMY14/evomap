@@ -190,6 +190,9 @@ def clone_dir(code, cfg=None):
 def apply_clone(cfg, code):
     """第十七轮 · 老板决定②：项目配置 clone: true 时，evo 只在自己的克隆里合并、推送、开工作区；
     配置里的 repo（老板的工作副本）只当只读参考和首次克隆的来源，记在 owner_repo。"""
+    for k in ("repo", "policy_terms"):  # 配置里可写 ~/…（公开仓库里的样板不带真实用户名）
+        if isinstance(cfg.get(k), str) and cfg[k].startswith("~"):
+            cfg[k] = os.path.expanduser(cfg[k])
     if cfg.get("clone") and cfg.get("repo") and code:
         cfg["owner_repo"] = cfg["repo"]
         cfg["repo"] = clone_dir(code, cfg)

@@ -1,0 +1,21 @@
+# 机密：永远不提交
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.mobileprovision
+secrets/
+**/secrets.*
+# 第三方表情引擎：构建时由 app/scripts/fetch-vendor.sh 下载（许可只许自用，不得再分发）
+app/Resources/vendor/
+# 截图含第三方角色形象：只放 CI 构件和本机
+app/docs/mac-demo/
+app/docs/screenshots/
+# 构建产物
+app/.build/
+app/build/
+__pycache__/
+.pytest_cache/
+.DS_Store
