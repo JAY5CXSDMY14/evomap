@@ -176,6 +176,13 @@ drive() {
   click win-gate-0-send || fails=$((fails+1)); sleep 2.2; shot 07-rejected
   click win-sidebar-project-TB || fails=$((fails+1)); sleep 2.0; shot 08-project
   click win-item-0 || fails=$((fails+1)); sleep 2.6; shot 09-item-timeline
+  # v0.4.0 团队页：岗位卡片 → 输入框「把验收换成 group/evo-verify」→ 确认卡 → 确认
+  click win-sidebar-team || fails=$((fails+1)); sleep 2.6; shot 09b-team
+  click composer-field || fails=$((fails+1)); sleep 0.4
+  if evo_front; then paste_text "把验收换成 group/evo-verify"; fi; sleep 0.5
+  click composer-send || fails=$((fails+1)); waitpt team-confirm-yes >/dev/null; sleep 1.2; shot 09c-team-confirm
+  click team-confirm-yes || fails=$((fails+1)); sleep 2.4; shot 09d-team-changed
+  click win-sidebar-project-TB || true; sleep 1.0; click win-item-0 || true; sleep 1.6
   if evo_front; then
     key kd:cmd t:k ku:cmd; sleep 1.0
     if [ -n "$(pt palette-field)" ]; then paste_text "深色"; sleep 1.0; shot 10-palette; key kp:return; else note "  ✗ ⌘K 面板没出来"; fails=$((fails+1)); fi
@@ -188,7 +195,7 @@ drive() {
   open_popover || fails=$((fails+1)); sleep 1.8; shot 14-popover-dark
   popover_open && click status-item; sleep 0.6
   note "真鼠标驱动完成，失败 $fails 处；最后状态：$(geo selection) · 卡片 $(geo cards) · 深色 $(geo dark)"
-  [ $fails -le 3 ]
+  [ $fails -le 4 ]
 }
 
 demo_mode() {

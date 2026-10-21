@@ -218,6 +218,9 @@ struct SidebarView: View {
                     SidebarRow(symbol: "hourglass", title: "卡太久", badge: state.stuckEntries.count, accentBadge: false,
                                selected: current == .stale) { go(.stale) }
                         .uiProbe("win-sidebar-stale")
+                    SidebarRow(symbol: "person.3", title: "团队", badge: state.team?.attention ?? 0, accentBadge: false,
+                               selected: current == .team) { go(.team) }
+                        .uiProbe("win-sidebar-team")
                 }
                 .padding(.horizontal, 8)
             }
@@ -368,6 +371,7 @@ struct DetailArea: View {
                         case .project(let c): ProjectPane(state: state, code: c, width: width)
                         case .item(let p, let k): ItemPane(state: state, project: p, key: k, width: width)
                         case .stale: StalePane(state: state)
+                        case .team: TeamPane(state: state, width: width)
                         case .settings: SettingsView(state: state, embedded: true).frame(maxWidth: .infinity)
                         }
                     }
@@ -863,6 +867,9 @@ struct ComposerDock: View {
                 .frame(maxHeight: 200)
                 .fixedSize(horizontal: false, vertical: true)
             }
+            if let ch = state.pendingTeam {
+                TeamConfirmCard(state: state, change: ch)
+            }
             ComposerView(state: state)
                 .uiProbe("win-composer")
         }
@@ -874,6 +881,7 @@ struct ComposerDock: View {
                 .ignoresSafeArea()
         )
         .animation(Motion.or(Motion.softSpring), value: state.chat)
+        .animation(Motion.or(Motion.pop), value: state.pendingTeam)
     }
 }
 #endif

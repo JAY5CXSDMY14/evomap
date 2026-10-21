@@ -494,6 +494,9 @@ final class NavigationTests: XCTestCase {
         XCTAssertEqual(SidebarItem.project("TB").title { $0 == "TB" ? "土布" : nil }, "TB · 土布")
         XCTAssertEqual(SidebarItem.project("ZZ").title { _ in nil }, "ZZ")
         XCTAssertEqual(i.title { _ in nil }, "TB-UX-003")
+        XCTAssertEqual(SidebarItem.team.title { _ in nil }, "团队")
+        XCTAssertEqual(SidebarItem.team.parent, .inbox)
+        XCTAssertEqual(SidebarItem.team.sidebarHighlight, .team)
     }
 
     func testStuckEntries() throws {
@@ -538,7 +541,9 @@ final class NavigationTests: XCTestCase {
         XCTAssertLessThan(DemoScript.steps.firstIndex(of: .approve)!, DemoScript.steps.firstIndex(of: .rejectWords)!)
         XCTAssertLessThan(DemoScript.steps.firstIndex(of: .palette)!, DemoScript.steps.firstIndex(of: .dark)!)
         XCTAssertEqual(DemoScript.shotName(.popover), "02-popover.png")
-        XCTAssertEqual(DemoScript.shotName(.done), "13-done.png")
+        XCTAssertEqual(DemoScript.shotName(.done), "14-done.png")
+        XCTAssertEqual(DemoScript.shotName(.team), "09-team.png")          // v0.4.0：时间线之后看团队页
+        XCTAssertLessThan(DemoScript.steps.firstIndex(of: .item)!, DemoScript.steps.firstIndex(of: .team)!)
         XCTAssertGreaterThan(DemoScript.totalSeconds, 15)
         XCTAssertLessThan(DemoScript.totalSeconds, 60)
     }
@@ -548,5 +553,129 @@ final class NavigationTests: XCTestCase {
         XCTAssertEqual(e.first?.action, .openWindow)
         XCTAssertEqual(Fuzzy.filter(e, query: "深色", text: \.searchText).first?.action, .toggleAppearance)
         XCTAssertEqual(e.firstIndex { $0.action == .togglePause }, 3)
+    }
+}
+
+
+// MARK: - v0.4.0 团队页（evo team --json、状态灯、成绩、换模型意图、确认卡、向导提案）
+
+final class TeamTests: XCTestCase {
+    func doc() throws -> TeamDoc { try TeamDoc.decode(fixture("team.json")) }
+
+    func testDecodeTeamDoc() throws {
+        let d = try doc()
+        XCTAssertTrue(d.magpieOK)
+        XCTAssertEqual(d.groups, ["group/evo-build", "group/evo-verify"])
+        XCTAssertEqual(d.cards.map(\.role), ["build", "verify", "decide"])
+        XCTAssertEqual(d.suggestions, ["qwen3-coder-plus"])
+        XCTAssertEqual(d.thinkingLevels.last, "max")
+        let b = try XCTUnwrap(d.card("build"))
+        XCTAssertEqual(b.tool, "codex")
+        XCTAssertEqual(b.models, ["gpt-5-codex"])
+        XCTAssertEqual(b.thinking, "medium")
+        XCTAssertEqual(b.fallback?.models, ["group/evo-build"])
+        XCTAssertEqual(b.status.code, "fallback")
+        XCTAssertEqual(b.stats["gpt-5-codex"]?.items, 14)
+        XCTAssertEqual(b.stats["group/evo-build"]?.verifyRejectRate, 0.45)
+        XCTAssertEqual(b.usageRuns, 19)
+        XCTAssertNil(b.switchTo)
+        let v = try XCTUnwrap(d.card("verify"))
+        XCTAssertEqual(v.switchTo, "group/evo-verify")
+        XCTAssertTrue(v.recommendation.contains("才生效"))
+        XCTAssertEqual(v.stats["claude-sonnet-4.5"]?.escapeRate, 0.2)
+        // 缺字段、坏卡片都不连累整张
+        let thin = try TeamDoc.decode(#"{"cards":[{"role":"build"},{"bad":1}],"magpie":{"ok":false}}"#)
+        XCTAssertEqual(thin.cards.count, 1)
+        XCTAssertEqual(thin.cards[0].name, "施工")
+        XCTAssertEqual(thin.cards[0].status.label, "可用")
+        XCTAssertFalse(thin.magpieOK)
+        XCTAssertEqual(thin.thinkingLevels, TeamDoc.defaultThinking)
+    }
+
+    func testLightsAndText() throws {
+        XCTAssertEqual(TeamLight.of("ok"), .green)
+        XCTAssertEqual(TeamLight.of("fallback"), .amber)
+        XCTAssertEqual(TeamLight.of("rate_limited"), .amber)
+        XCTAssertEqual(TeamLight.of("retired"), .red)
+        XCTAssertEqual(TeamLight.of("magpie_down"), .red)
+        XCTAssertEqual(TeamLight.of("not_logged_in"), .red)
+        XCTAssertEqual(TeamLight.of("off"), .gray)
+        var cal = Calendar(identifier: .gregorian); cal.timeZone = TimeZone(identifier: "Asia/Shanghai")!
+        let now = ISO8601DateFormatter().date(from: "2026-10-21T02:00:00Z")!          // 上海 10:00
+        let s = TeamCard.Status(code: "rate_limited", label: "额度满", until: "2026-10-21T17:00:00+08:00")
+        XCTAssertEqual(TeamLight.text(s, now: now, calendar: cal), "额度满 · 17:00 恢复")
+        let tomorrow = TeamCard.Status(code: "rate_limited", label: "额度满", until: "2026-10-22T09:30:00+08:00")
+        XCTAssertEqual(TeamLight.text(tomorrow, now: now, calendar: cal), "额度满 · 10-22 09:30 恢复")
+        XCTAssertEqual(TeamLight.text(TeamCard.Status(code: "ok", label: "可用"), now: now, calendar: cal), "可用")
+        let d = try doc()
+        XCTAssertEqual(d.attention, 1)                       // 没有红灯，只有一条新模型建议
+    }
+
+    func testStatsLines() throws {
+        let d = try doc()
+        XCTAssertEqual(d.card("build")!.stats["gpt-5-codex"]!.line(role: "build"),
+                       "14 件 · 验收打回 21% · 每件返工 0.4 轮 · 看效果打回 10% · 22 分钟/件 · 没活路 1 次")
+        XCTAssertEqual(d.card("verify")!.stats["claude-sonnet-4.5"]!.line(role: "verify"), "验了 21 次 · 打回 6 · 漏放 3（20%）")
+        XCTAssertEqual(ModelStats().line(role: "build"), "还没有数据")
+        XCTAssertEqual(ModelStats(items: 2, reworkPerItem: 1).line(role: "build"), "2 件 · 每件返工 1 轮")
+        XCTAssertEqual(d.card("build")!.modelLine, "codex · gpt-5-codex")
+        XCTAssertEqual(d.card("build")!.fallbackLine, "备用：dsh · group/evo-build")
+        XCTAssertEqual(d.card("build")!.usageLine, "本周 19 次 · 426 分钟（codex）")
+        XCTAssertNil(d.card("decide")!.fallbackLine)
+    }
+
+    func testModelOptionsAndBadges() throws {
+        let d = try doc()
+        let o = d.modelOptions(for: d.card("verify")!)
+        XCTAssertEqual(o.first, "claude-sonnet-4.5")                 // 现在用的排第一
+        XCTAssertTrue(o.contains("group/evo-verify") && o.contains("qwen3-coder-plus"))
+        XCTAssertEqual(Set(o).count, o.count)                          // 不重复
+        XCTAssertEqual(d.badge(project: "TB", role: "build"), "跟随全局")
+        XCTAssertEqual(d.badge(project: "ST", role: "build"), "本项目专用")
+        XCTAssertEqual(d.badge(project: "ST", role: "verify"), "跟随全局")
+        XCTAssertEqual(d.badge(project: "ZZ", role: "build"), "跟随全局")
+        XCTAssertEqual(d.projects.first { $0.code == "EV" }?.overrides["verify"]?.trialModel, "kimi-k2")
+        XCTAssertEqual(d.projects.first { $0.code == "ST" }?.overrides["build"]?.thinking, "max")
+    }
+
+    func testIntentParse() {
+        let a = TeamIntent.parse("把验收换成 group/evo-verify")
+        XCTAssertEqual(a, TeamChange(role: "verify", value: "group/evo-verify"))
+        XCTAssertEqual(TeamIntent.parse("施工模型改成 gpt-5-codex")?.role, "build")
+        XCTAssertEqual(TeamIntent.parse("把决策岗换成claude-opus-4.1")?.value, "claude-opus-4.1")
+        XCTAssertEqual(TeamIntent.parse("本项目把施工换成 claude-opus-4.1", currentProject: "ST")?.project, "ST")
+        XCTAssertNil(TeamIntent.parse("本项目把施工换成 x"))                                   // 没有当前项目
+        XCTAssertEqual(TeamIntent.parse("ST 的施工换成 glm-5", projects: ["TB", "ST"])?.project, "ST")
+        XCTAssertNil(TeamIntent.parse("ZZ 的施工换成 glm-5", projects: ["TB", "ST"]))          // 没这个项目
+        XCTAssertNil(TeamIntent.parse("把验收换成 x;rm -rf ~"))                                // 模型名不安全
+        XCTAssertNil(TeamIntent.parse("注册页在手机上按钮太挤了"))                              // 普通反馈不拦
+        XCTAssertNil(TeamIntent.parse("把老板换成 x"))
+        XCTAssertTrue(TeamChange.validModel("group/evo-build"))
+        XCTAssertFalse(TeamChange.validModel("-rf"))
+        XCTAssertFalse(TeamChange.validModel("模型"))
+    }
+
+    func testChangeArgsAndConfirmText() {
+        let g = TeamChange(role: "verify", value: "group/evo-verify")
+        XCTAssertEqual(g.args, ["team", "set", "verify", "--model", "group/evo-verify"])
+        XCTAssertTrue(g.confirmText(current: "claude-sonnet-4.5").hasPrefix("把验收从 claude-sonnet-4.5 换成 group/evo-verify？全局"))
+        XCTAssertTrue(g.confirmText(current: nil).contains("下一次派工生效，正在跑的不打断"))
+        let p = TeamChange(role: "build", value: "claude-opus-4.1", project: "ST")
+        XCTAssertEqual(p.args, ["team", "set", "build", "--model", "claude-opus-4.1", "--project", "ST"])
+        XCTAssertTrue(p.confirmText(current: nil).contains("只改 ST（本项目专用）"))
+        let t = TeamChange(role: "verify", kind: .thinking, value: "high")
+        XCTAssertEqual(t.args, ["team", "set", "verify", "--thinking", "high"])
+        XCTAssertTrue(t.confirmText(current: "medium").contains("思考档位从 medium 调到 high"))
+        let tr = TeamChange(role: "verify", kind: .trial, value: "kimi-k2", project: "EV")
+        XCTAssertEqual(tr.args, ["team", "trial", "verify", "kimi-k2", "--project", "EV"])
+        XCTAssertNotEqual(g.id, p.id)
+    }
+
+    func testProposal() throws {
+        let p = try TeamProposal.decode(#"{"cards":{"build":{"tool":"dsh","via":"magpie","models":["group/evo-build"],"thinking":"medium","fallback":{"tool":"codex","models":[]}},"decide":{"tool":"claude","models":[],"thinking":"high"}},"notes":["没找到能验收的工具"],"magpie":{"ok":true,"groups":["group/evo-build"]}}"#)
+        XCTAssertEqual(p.lines, ["施工：dsh · group/evo-build · 思考 medium，备用 codex", "决策：claude · 工具默认模型 · 思考 high"])
+        XCTAssertEqual(p.notes, ["没找到能验收的工具"])
+        XCTAssertTrue(p.magpieOK)
+        XCTAssertEqual(try TeamProposal.decode("{}").cards.count, 0)
     }
 }

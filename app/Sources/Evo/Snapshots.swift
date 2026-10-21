@@ -79,6 +79,14 @@ enum Snapshots {
             render(SettingsView(state: main), width: 520, dark: dark, name: "settings-\(sfx)", out: out)
             // 5 向导
             render(SetupView(model: sampleSetup()), width: 620, dark: dark, name: "wizard-\(sfx)", out: out)
+            // 5b 团队页（v0.4.0）：岗位卡片 + 各项目跟随全局 / 本项目专用 + 确认卡
+            let tm = AppState.preview(snaps: snaps, beats: beats(snaps))
+            tm.team = sampleTeam
+            render(VStack(alignment: .leading, spacing: 14) {
+                       TeamPane(state: tm, width: 900)
+                       TeamConfirmCard(state: tm, change: TeamChange(role: "verify", value: "group/evo-verify"))
+                   }.padding(24),
+                   width: 948, dark: dark, name: "team-\(sfx)", out: out)
             // 6 角色表情（球球 / 云宝 / 亮亮）+ 菜单栏小脸
             render(VStack(spacing: 0) {
                        ForEach(MateCharacter.allCases, id: \.self) { c in MateSheetStatic(character: c) }
@@ -100,6 +108,50 @@ enum Snapshots {
         MainWindowController.shared.window?.close()
         print("snapshots → \(out.path)")
     }
+
+    /// 团队页样例（和 Tests/EvoCoreTests/Fixtures/team.json、scripts/demo/team.json 同一份）。
+    static var sampleTeam: TeamDoc? { try? TeamDoc.decode(teamJSON) }
+
+    static let teamJSON = """
+{"schema_version": 1, "generated_at": "2026-10-21T09:12:00+08:00", "project": null, "health_at": "2026-10-21T09:10:00+08:00",
+ "magpie": {"ok": true, "url": "http://127.0.0.1:3425/v1/models",
+            "models": ["group/evo-build", "group/evo-verify", "glm-5", "deepseek-v4", "kimi-k2", "qwen3-coder-plus"],
+            "groups": ["group/evo-build", "group/evo-verify"], "retired": []},
+ "clis": {"claude": {"installed": true, "path": "/opt/homebrew/bin/claude", "logged_in": true},
+          "codex": {"installed": true, "path": "/opt/homebrew/bin/codex", "logged_in": true},
+          "dsh": {"installed": true, "path": "/Users/boss/.local/bin/dsh", "logged_in": null},
+          "pi": {"installed": false, "path": null, "logged_in": null}},
+ "cards": [
+  {"role": "build", "name": "施工", "tool": "codex", "via": "cli", "models": ["gpt-5-codex"], "thinking": "medium", "account": "codex",
+   "duty": "按任务书写代码和测试，交 JSON 报告", "configured": true,
+   "fallback": {"tool": "dsh", "via": "magpie", "models": ["group/evo-build"], "thinking": "medium", "account": "dsh"},
+   "status": {"code": "fallback", "label": "用备用中", "why": "额度满", "until": "2026-10-21T13:00:00+08:00"},
+   "warnings": [],
+   "stats": {"gpt-5-codex": {"items": 14, "runs": 19, "merged": 12, "verify_reject_rate": 0.21, "rework_per_item": 0.36, "look_reject_rate": 0.1, "minutes_per_item": 22.4, "no_live_path": 1},
+             "group/evo-build": {"items": 6, "runs": 11, "merged": 5, "verify_reject_rate": 0.45, "rework_per_item": 0.83, "look_reject_rate": 0.2, "minutes_per_item": 31.0, "no_live_path": 0}},
+   "recommendation": {"text": "gpt-5-codex 目前成绩最好（或差别不大），不用换。", "switch_to": null},
+   "usage_week": {"runs": 19, "minutes": 425.5}, "scope": "global"},
+  {"role": "verify", "name": "验收", "tool": "claude", "via": "cli", "models": ["claude-sonnet-4.5"], "thinking": "high", "account": "claude",
+   "duty": "换一个模型从头核对：跑命令、看证据、不过就打回", "configured": true,
+   "fallback": {"tool": "dsh", "via": "magpie", "models": ["group/evo-verify"], "thinking": "high", "account": "dsh"},
+   "status": {"code": "ok", "label": "可用"},
+   "warnings": [],
+   "stats": {"claude-sonnet-4.5": {"runs": 21, "passes": 15, "rejects": 6, "escaped": 3, "escape_rate": 0.2, "minutes_per_run": 6.5},
+             "group/evo-verify": {"runs": 9, "passes": 7, "rejects": 2, "escaped": 0, "escape_rate": 0.0, "minutes_per_run": 8.1}},
+   "recommendation": {"text": "建议验收换成 group/evo-verify：它放过去又被你看效果打回的只有 0%，现在的 claude-sonnet-4.5 是 20%（各验了 9 / 21 次）。点「换成 group/evo-verify」才生效。", "switch_to": "group/evo-verify"},
+   "usage_week": {"runs": 23, "minutes": 160.0}, "scope": "global"},
+  {"role": "decide", "name": "决策", "tool": "claude", "via": "cli", "models": ["claude-opus-4.1"], "thinking": "high", "account": "claude",
+   "duty": "只做技术决定（重试、返工、拆分、问老板）；四类红线回老板", "configured": true, "fallback": null,
+   "status": {"code": "ok", "label": "可用"}, "warnings": [], "stats": {},
+   "recommendation": {"text": "决策岗不比成绩：用最强的模型。", "switch_to": null},
+   "usage_week": {"runs": 23, "minutes": 160.0}, "scope": "global"}],
+ "suggestions": [{"model": "qwen3-coder-plus", "at": "2026-10-21T08:40:00+08:00"}],
+ "usage_week": {"codex": {"runs": 19, "minutes": 425.5}, "claude": {"runs": 23, "minutes": 160.0}, "dsh": {"runs": 4, "minutes": 88.0}},
+ "thinking_levels": ["off", "low", "medium", "high", "max"],
+ "projects": [{"code": "TB", "name": "土布", "overrides": {}},
+              {"code": "ST", "name": "选股", "overrides": {"build": {"models": ["claude-opus-4.1"], "tool": "claude", "thinking": "max"}}},
+              {"code": "EV", "name": "Evo 应用", "overrides": {"verify": {"models": ["kimi-k2"], "trial": {"model": "kimi-k2", "base": ["claude-sonnet-4.5"], "items": 5}}}}]}
+"""
 
     static func sampleSetup() -> SetupModel {
         typealias C = SetupModel.Check

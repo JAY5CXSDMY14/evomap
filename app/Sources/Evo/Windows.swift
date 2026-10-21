@@ -213,7 +213,9 @@ final class SetupModel: ObservableObject {
     @Published var output = ""
     @Published var running: String?
     @Published var link = false
-    @Published var step = 0            // 0 检查环境 → 1 安装常驻 → 2 完成
+    @Published var step = 0            // 0 检查环境 → 1 安装常驻 → 2 定岗位（v0.4.0）→ 3 完成
+    @Published var proposal: TeamProposal?     // evo team init --json：按本机装了什么、magpie 有什么组给的岗位卡片
+    @Published var proposalNote: String?
     var preset = false                 // 截图用：不真的去检查
 
     init() {}
@@ -259,6 +261,24 @@ final class SetupModel: ObservableObject {
             let (_, r) = try await URLSession.shared.data(for: URLRequest(url: u, timeoutInterval: 3))
             return (r as? HTTPURLResponse).map { (200..<500).contains($0.statusCode) } ?? false
         } catch { return false }
+    }
+
+    func loadProposal() async {
+        if preset { return }
+        running = "看看这台 Mac 上装了哪些工具、magpie 有哪些组…"
+        let r = await Shell.evo(["team", "init", "--json"], timeout: 60)
+        if r.ok, let p = try? TeamProposal.decode(r.out) { proposal = p; proposalNote = nil }
+        else { proposalNote = r.ok ? "看不懂 evo 的回答：\(r.out.prefix(80))" : r.tail }
+        running = nil
+    }
+
+    func applyProposal() async -> Bool {
+        running = "写入岗位卡片…"
+        let r = await Shell.evo(["team", "init", "--apply"], timeout: 60)
+        running = nil
+        proposalNote = r.ok ? nil : r.tail
+        AppState.shared.refresh()
+        return r.ok
     }
 
     func install(apply: Bool) async {
@@ -330,7 +350,37 @@ struct SetupView: View {
                     .disabled(model.running != nil)
                 }
                 .staggeredAppear(2)
-                StepCard(index: 3, title: "开始用", current: model.step == 2, done: false) {
+                StepCard(index: 3, title: "定岗位：谁施工、谁验收、谁拍板", current: model.step == 2, done: model.step > 2) {
+                    if let p = model.proposal {
+                        VStack(alignment: .leading, spacing: 6) {
+                            ForEach(p.lines, id: \.self) { l in
+                                Label(l, systemImage: "person.crop.circle").font(Theme.body(12.5)).foregroundStyle(Theme.textPrimary)
+                            }
+                        }
+                        ForEach(p.notes, id: \.self) { n in Hint(text: n, color: Theme.warning) }
+                    } else if let n = model.proposalNote {
+                        Hint(text: n, color: Theme.danger)
+                    } else {
+                        HStack(spacing: 8) { Spinner(); Text("看看装了哪些工具…").foregroundStyle(Theme.textSecondary) }
+                    }
+                    Hint(text: "施工和验收用不同的模型；决策用最强的。以后在主窗口「团队」页随时换，下一次派工生效。")
+                    HStack(spacing: 8) {
+                        Button("跳过") { withAnimation(Motion.or(Motion.pop)) { model.step = 3 } }
+                            .buttonStyle(BouncyStyle(kind: .ghost, compact: true))
+                        Button { Task { await model.loadProposal() } } label: { Label("再看一遍", systemImage: "arrow.clockwise") }
+                            .buttonStyle(BouncyStyle(kind: .secondary, compact: true))
+                        Spacer()
+                        Button("就这样") {
+                            Task { if await model.applyProposal() { withAnimation(Motion.or(Motion.pop)) { model.step = 3 } } }
+                        }
+                        .buttonStyle(BouncyStyle(kind: .primary))
+                        .disabled(model.proposal?.cards.isEmpty ?? true)
+                    }
+                    .disabled(model.running != nil)
+                }
+                .staggeredAppear(3)
+                .task(id: model.step) { if model.step == 2 && model.proposal == nil { await model.loadProposal() } }
+                StepCard(index: 4, title: "开始用", current: model.step == 3, done: false) {
                     Hint(text: "点菜单栏上的小陶就能看到等你处理的事；⌘K 打开命令面板。")
                     HStack {
                         Spacer()
@@ -342,7 +392,7 @@ struct SetupView: View {
                         .keyboardShortcut(.defaultAction)
                     }
                 }
-                .staggeredAppear(3)
+                .staggeredAppear(4)
             }
             .padding(22)
         }

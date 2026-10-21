@@ -44,6 +44,56 @@ def status(s, code):
     return doc
 
 
+TEAM = os.path.join(os.path.dirname(os.path.abspath(__file__)), "team.json")
+ROLE = {"build": "施工", "verify": "验收", "decide": "决策"}
+
+
+def team(s, argv):
+    """evo team --json / set <岗位> --model X [--thinking L] [--project P] / dismiss X / init --json|--apply。改动记在状态文件 team_changes。"""
+    act = argv[0] if argv and not argv[0].startswith("-") else "show"
+    ch = s.setdefault("team_changes", {})
+    def opt(name):
+        return argv[argv.index(name) + 1] if name in argv and argv.index(name) + 1 < len(argv) else None
+    if act == "show":
+        d = json.load(open(TEAM, encoding="utf-8"))
+        for c in d["cards"]:
+            o = ch.get(c["role"]) or {}
+            if o.get("model"):
+                c["models"] = [o["model"]]
+                if c["recommendation"].get("switch_to") == o["model"]:
+                    c["recommendation"] = {"text": f"刚换成 {o['model']}，攒够 5 次再比。", "switch_to": None}
+            if o.get("thinking"):
+                c["thinking"] = o["thinking"]
+        if s.get("team_dismissed"):
+            d["suggestions"] = []
+        out(d); return 0
+    if act == "set":
+        role = argv[1]
+        time.sleep(0.6)
+        o = ch.setdefault(role, {})
+        if opt("--model"):
+            o["model"] = opt("--model")
+        if opt("--thinking"):
+            o["thinking"] = opt("--thinking")
+        save(s)
+        where = f"{opt('--project')} 本项目专用" if opt("--project") else "全局"
+        print(f"{ROLE.get(role, role)}（{where}）：{o.get('model') or '原模型'}。下一次派工生效，正在跑的不打断。")
+        return 0
+    if act == "dismiss":
+        s["team_dismissed"] = True; save(s); print("已收起"); return 0
+    if act == "trial":
+        print(f"{ROLE.get(argv[1], argv[1])}在 {opt('--project')} 试用 {argv[2]}，满 5 件给你对比。"); return 0
+    if act == "init":
+        if "--apply" in argv:
+            print(json.dumps({"ok": True, "applied": ["build", "verify", "decide"], "notes": []})); return 0
+        out({"cards": {"build": {"tool": "codex", "models": [], "thinking": "medium", "fallback": {"tool": "dsh", "models": ["group/evo-build"]}},
+                       "verify": {"tool": "claude", "models": [], "thinking": "high", "fallback": {"tool": "dsh", "models": ["group/evo-verify"]}},
+                       "decide": {"tool": "claude", "models": [], "thinking": "high"}},
+             "notes": [], "magpie": {"ok": True, "groups": ["group/evo-build", "group/evo-verify"]}})
+        return 0
+    print("假 evo team：不认得 " + " ".join(argv), file=sys.stderr); return 1
+
+
 def main(argv):
     s = load()
     code = None
@@ -104,6 +154,8 @@ def main(argv):
         time.sleep(0.8); print(f"{code}-FEAT-005 已登记"); return 0
     if cmd in ("tick", "ship"):
         time.sleep(1.5); print("转了一轮"); return 0
+    if cmd == "team":                    # v0.4.0 团队页：岗位卡片（scripts/demo/team.json）+ 换模型
+        return team(s, argv[1:])
     if cmd == "watchdog":
         print("都在转"); return 0
     if cmd == "panel":

@@ -28,6 +28,9 @@ final class AppState: ObservableObject {
     @Published var logErrors: [String: String] = [:]
     @Published var appearance: String = UserDefaults.standard.string(forKey: "appearance") ?? "system"   // system / light / dark
     @Published var demoReject: (id: String, words: String)?   // 演示模式：让某张卡展开打回输入框并填好原话
+    @Published var team: TeamDoc?                  // v0.4.0 团队页：evo team --json
+    @Published var teamError: String?
+    @Published var pendingTeam: TeamChange?        // 等你点「确认换」的换模型（卡片下拉框 / 输入框「把验收换成 X」）
     var popoverShown = false                       // 菜单栏弹窗开着吗（开主窗口时顺手收起）
     var previewQuiet: Bool?                        // 截图用：固定「是不是免打扰」
     private var reactionToken = UUID()
@@ -196,6 +199,7 @@ final class AppState: ObservableObject {
         if MateMap.mergedIncreased(old: mergedCounts, new: merged) { react(.merged) }
         mergedCounts = merged
         if Launchd.installed { loopRunning = await Launchd.isLoaded() } else { loopRunning = nil }
+        await loadTeam()
         lastRefresh = Date()
     }
 
@@ -274,6 +278,15 @@ final class AppState: ObservableObject {
     // MARK: 输入框
 
     func send(mode: ComposerMode, project: String, text: String, look: Bool) -> String? {
+        // v0.4.0：「把验收换成 X」不发给 evo feedback，先出确认卡，点了才 evo team set
+        if let ch = TeamIntent.parse(text, currentProject: project.isEmpty ? nil : project, projects: codes) {
+            chat.append(ChatLine(text: text.trimmingCharacters(in: .whitespacesAndNewlines), mine: true))
+            chat.append(ChatLine(text: ch.confirmText(current: team?.card(ch.role)?.models.first) + " 点下面确认。", mine: false))
+            trimChat()
+            pendingTeam = ch
+            react(.replied)
+            return nil
+        }
         switch Composer.command(mode: mode, project: project, text: text, look: look) {
         case .failure(let e): return e.message
         case .success(let args):
@@ -291,7 +304,7 @@ final class AppState: ObservableObject {
         }
     }
 
-    private func trimChat() { if chat.count > 6 { chat.removeFirst(chat.count - 6) } }
+    func trimChat() { if chat.count > 6 { chat.removeFirst(chat.count - 6) } }
 
     func focus(digit: Int) {
         guard let c = Shortcuts.project(forDigit: digit, codes: codes) else { return }

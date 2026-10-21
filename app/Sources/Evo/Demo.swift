@@ -168,6 +168,8 @@ enum DemoRunner {
             if case .project(let c) = st.windowSelection ?? .inbox, let k = st.snapshot(c)?.doc?.items.first?.key {
                 withAnimation(Motion.or(Motion.softSpring)) { st.windowSelection = .item(project: c, key: k) }
             }
+        case .team:
+            withAnimation(Motion.or(Motion.softSpring)) { st.windowSelection = .team }
         case .palette:
             PaletteController.shared.show()
             PaletteController.shared.model.query = "深色"

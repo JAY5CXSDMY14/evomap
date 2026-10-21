@@ -8,6 +8,7 @@ public enum SidebarItem: Hashable, Sendable {
     case project(String)
     case item(project: String, key: String)
     case stale
+    case team             // v0.4.0：岗位卡片（工具·模型·思考档位·备用·成绩）
     case settings
 
     /// 详情页标题。
@@ -17,6 +18,7 @@ public enum SidebarItem: Hashable, Sendable {
         case .project(let c): return projectName(c).map { "\(c) · \($0)" } ?? c
         case .item(_, let k): return k
         case .stale: return "卡太久"
+        case .team: return "团队"
         case .settings: return "设置"
         }
     }
@@ -116,6 +118,7 @@ public enum DemoScript {
         case rejectSend
         case project          // 侧栏选项目
         case item             // 打开一件的时间线
+        case team             // 侧栏「团队」：岗位卡片
         case palette          // ⌘K
         case dark             // 命令面板里切深色
         case composer         // 输入框发一句，看回话
@@ -136,6 +139,7 @@ public enum DemoScript {
         case .rejectSend: return 2.0
         case .project: return 2.2
         case .item: return 2.6
+        case .team: return 2.6
         case .palette: return 1.8
         case .dark: return 2.4
         case .composer: return 3.2
