@@ -38,6 +38,9 @@ jobs:
           test -f build/Evo.app/Contents/Resources/mate/index.html
           test -f build/Evo.app/Contents/Resources/vendor/emotion-ball/js/engine.js
           test -f build/Evo.app/Contents/Resources/vendor/NOTICE.md
+          test -f build/Evo.app/Contents/Resources/AppIcon.icns
+          plutil -p build/Evo.app/Contents/Info.plist | grep -q '"CFBundleIconFile" => "AppIcon"'
+          sips -g pixelWidth -g pixelHeight build/Evo.app/Contents/Resources/AppIcon.icns
           ! grep -rE "fonts\.googleapis|fonts\.gstatic" build/Evo.app/Contents/Resources/mate build/Evo.app/Contents/Resources/vendor
           du -sh build/Evo.app build/Evo.dmg
       - name: 自带 evo 能跑（空的 EVO_HOME）

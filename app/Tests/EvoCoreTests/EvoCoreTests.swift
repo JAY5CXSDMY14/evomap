@@ -679,3 +679,102 @@ final class TeamTests: XCTestCase {
         XCTAssertEqual(try TeamProposal.decode("{}").cards.count, 0)
     }
 }
+
+// v0.5.0 调度球：改名、眼睛跟鼠标、灵动动作
+final class MateMotionTests: XCTestCase {
+    func testRenamedToDispatchBall() {
+        XCTAssertEqual(MateCharacter.ball.label, "调度球")
+        XCTAssertEqual(MateCharacter.default, .ball)
+        XCTAssertFalse(MateCharacter.allCases.map(\.label).contains("球球"))
+        XCTAssertFalse(MateCharacter.ball.licensable)
+    }
+
+    func testEyeFollowOutOfRangeRestsCentered() {
+        // 球径 58 → 感应半径 174；鼠标在 200 点外
+        let r = EyeFollow.compute(center: (100, 100), diameter: 58, pointer: (300, 100))
+        XCTAssertFalse(r.inRange)
+        XCTAssertFalse(r.near)
+        XCTAssertEqual(r.x, 0); XCTAssertEqual(r.y, 0)
+        XCTAssertEqual(r.distance, 200, accuracy: 0.001)
+        XCTAssertEqual(EyeFollow.compute(center: (0, 0), diameter: 58, pointer: nil), .rest)
+        XCTAssertEqual(EyeFollow.compute(center: (0, 0), diameter: 0, pointer: (1, 1)), .rest)
+        XCTAssertEqual(EyeFollow.compute(center: (0, 0), diameter: 58, pointer: (.nan, 1)), .rest)
+    }
+
+    func testEyeFollowPointsTowardPointer() {
+        // 右边 150 点（在 174 范围里、超过看到底的 69.6）：x 拉满、y 为 0
+        let right = EyeFollow.compute(center: (0, 0), diameter: 58, pointer: (150, 0))
+        XCTAssertTrue(right.inRange); XCTAssertFalse(right.near)
+        XCTAssertEqual(right.x, 1, accuracy: 1e-9); XCTAssertEqual(right.y, 0, accuracy: 1e-9)
+        // 左上（y 向下为正）：方向 (-1, -1)/√2，幅度 1
+        let ul = EyeFollow.compute(center: (0, 0), diameter: 58, pointer: (-100, -100))
+        XCTAssertEqual(ul.x, -1 / 2.0.squareRoot(), accuracy: 1e-9)
+        XCTAssertEqual(ul.y, -1 / 2.0.squareRoot(), accuracy: 1e-9)
+        XCTAssertEqual((ul.x * ul.x + ul.y * ul.y).squareRoot(), 1, accuracy: 1e-9)
+        // 下方近处：幅度随距离增长（34.8 / 69.6 = 0.5）
+        let down = EyeFollow.compute(center: (0, 0), diameter: 58, pointer: (0, 34.8))
+        XCTAssertEqual(down.y, 0.5, accuracy: 1e-9); XCTAssertEqual(down.x, 0, accuracy: 1e-9)
+        XCTAssertTrue(down.near)
+    }
+
+    func testEyeFollowRangeBoundaryAndNear() {
+        let d = 40.0
+        XCTAssertTrue(EyeFollow.compute(center: (0, 0), diameter: d, pointer: (d * EyeFollow.rangeFactor, 0)).inRange)
+        XCTAssertFalse(EyeFollow.compute(center: (0, 0), diameter: d, pointer: (d * EyeFollow.rangeFactor + 0.1, 0)).inRange)
+        XCTAssertTrue(EyeFollow.compute(center: (0, 0), diameter: d, pointer: (0, d * EyeFollow.nearFactor)).near)
+        XCTAssertFalse(EyeFollow.compute(center: (0, 0), diameter: d, pointer: (0, d * EyeFollow.nearFactor + 0.1)).near)
+        // 正中心：在范围里、很近，但眼睛居中
+        let c = EyeFollow.compute(center: (5, 5), diameter: d, pointer: (5, 5))
+        XCTAssertTrue(c.inRange); XCTAssertTrue(c.near); XCTAssertEqual(c.x, 0); XCTAssertEqual(c.y, 0)
+        // 范围因子可调
+        XCTAssertTrue(EyeFollow.compute(center: (0, 0), diameter: d, pointer: (190, 0), rangeFactor: 5).inRange)
+        XCTAssertEqual(EyeFollow.rangeFactor, 3)
+    }
+
+    func testEyeFollowAlwaysNormalized() {
+        for (px, py) in [(1.0, 0.0), (3, 4), (-60, 20), (100, -170), (-0.7, 0.2), (120, 120)] {
+            let r = EyeFollow.compute(center: (0, 0), diameter: 58, pointer: (px, py))
+            XCTAssertLessThanOrEqual((r.x * r.x + r.y * r.y).squareRoot(), 1 + 1e-9)
+            if r.inRange, r.distance > 0.5 {
+                XCTAssertEqual(r.x.sign == .minus, px < 0, "(\(px), \(py))")
+            }
+        }
+    }
+
+    func testChangedEnough() {
+        let a = EyeFollow.Result(x: 0.5, y: 0.5, inRange: true, near: false, distance: 50)
+        var b = a; b.x = 0.51
+        XCTAssertFalse(EyeFollow.changedEnough(a, b))
+        b.x = 0.6
+        XCTAssertTrue(EyeFollow.changedEnough(a, b))
+        var c = a; c.near = true
+        XCTAssertTrue(EyeFollow.changedEnough(a, c))
+        XCTAssertTrue(EyeFollow.changedEnough(a, .rest))
+    }
+
+    func testBlinkIntervalAndKicks() {
+        XCTAssertEqual(MateMotion.nextBlink(0), 2.6, accuracy: 1e-9)
+        XCTAssertEqual(MateMotion.nextBlink(1), 6.5, accuracy: 1e-9)
+        XCTAssertEqual(MateMotion.nextBlink(-3), 2.6, accuracy: 1e-9)
+        XCTAssertTrue(MateMotion.doubleBlink(0.1)); XCTAssertFalse(MateMotion.doubleBlink(0.5))
+        XCTAssertEqual(MateMotion.kick(from: nil, to: .done), .none)
+        XCTAssertEqual(MateMotion.kick(from: .error, to: .error), .none)
+        XCTAssertEqual(MateMotion.kick(from: .thinking, to: .done), .hop(height: 10))
+        XCTAssertEqual(MateMotion.kick(from: .standby, to: .error), .shake)
+        XCTAssertEqual(MateMotion.kick(from: .standby, to: .listening), .perk)
+        XCTAssertEqual(MateMotion.kick(from: .standby, to: .thinking), .nod)
+        XCTAssertEqual(MateMotion.kick(from: .standby, to: .sleep), .sink)
+        XCTAssertEqual(MateMotion.kick(from: .sleep, to: .standby), .hop(height: 5))
+        // 每个表情切过去都有定义（不崩、不是 none）
+        for e in MateEmotion.allCases where e != .standby { XCTAssertNotEqual(MateMotion.kick(from: .standby, to: e), .none, e.id) }
+        XCTAssertLessThan(MateMotion.pressSquash.y, 1); XCTAssertGreaterThan(MateMotion.pressSquash.x, 1)
+        XCTAssertLessThan(MateMotion.nearShrink, 1); XCTAssertGreaterThan(MateMotion.nearEyeBoost, 1)
+    }
+
+    func testBridgeLookAndBlink() {
+        XCTAssertEqual(MateBridge.look(0.5, -0.25), "window.evoMate && window.evoMate.look(0.500, -0.250, 1.000)")
+        XCTAssertEqual(MateBridge.look(3, .nan, boost: 9), "window.evoMate && window.evoMate.look(1.200, 0.000, 1.600)")
+        XCTAssertEqual(MateBridge.blink(), "window.evoMate && window.evoMate.blink(false)")
+        XCTAssertEqual(MateBridge.blink(double: true), "window.evoMate && window.evoMate.blink(true)")
+    }
+}

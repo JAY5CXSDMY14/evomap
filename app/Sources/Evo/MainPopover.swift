@@ -130,6 +130,7 @@ struct HeaderView: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .center, spacing: 12) {
                 MateView(emotion: state.mateEmotion, celebrate: state.mateCelebrate, size: 50, followMouse: true)
+                    .uiProbe("pop-mate")
                 VStack(alignment: .leading, spacing: 2) {
                     if isStatic || now != nil { titleText(now ?? Date()) } else {
                         TimelineView(.everyMinute) { ctx in titleText(ctx.date) }

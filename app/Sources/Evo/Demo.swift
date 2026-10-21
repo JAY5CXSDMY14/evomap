@@ -64,6 +64,10 @@ enum UIProbe {
         out["selection"] = String(describing: AppState.shared.windowSelection ?? .inbox)
         out["cards"] = AppState.shared.allCards.count
         out["active"] = NSApp.isActive ? 1 : 0
+        let g = MateGazeProbe.last
+        out["mate-gaze"] = ["x": (g.x * 100).rounded() / 100, "y": (g.y * 100).rounded() / 100,
+                            "inRange": g.inRange ? 1 : 0, "near": g.near ? 1 : 0,
+                            "distance": g.distance.isFinite ? g.distance.rounded() : -1]
         out["dark"] = NSApp.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua ? 1 : 0
         if let data = try? JSONSerialization.data(withJSONObject: out, options: [.sortedKeys, .prettyPrinted]) {
             try? data.write(to: URL(fileURLWithPath: path), options: .atomic)

@@ -151,6 +151,51 @@ tcc_grant() {
   sleep 2
 }
 
+# ---------- v0.5.0 调度球：眼睛跟鼠标（远 → 慢慢靠近 → 绕一圈 → 贴近 → 离开）----------
+gaze_note() { note "    眼睛（mate-gaze）：$(geo mate-gaze | tr -d '\n ')"; }
+eyes_demo() {
+  local m; m=$(waitpt win-mate) || { note "  ✗ 找不到调度球（win-mate）"; return 1; }
+  local cx=${m%,*} cy=${m#*,} r a x y i
+  note "  调度球中心 $m（球径 58，感应半径约 174）"
+  key -e 400 "m:$((cx+620)),$((cy+380))"; sleep 1.4; shot 03a-eyes-far; gaze_note
+  # 慢慢移近：从右下远处走到右侧 70 点
+  for i in 1 2 3 4 5 6 7 8; do
+    x=$((cx + 620 - i * 550 / 8)); y=$((cy + 380 - i * 380 / 8))
+    key -e 220 "m:$x,$y"; sleep 0.12
+  done
+  key -e 300 "m:$((cx+70)),$((cy-10))"; sleep 1.0; shot 03b-eyes-near-right; gaze_note
+  # 绕一圈（半径 95 点，每 30° 一步），停在左下拍一张
+  r=95
+  for a in 0 30 60 90 120 150 180 210 240 270 300 330 360; do
+    read -r x y < <(python3 -c "import math;a=math.radians($a);print(round($cx+$r*math.cos(a)), round($cy-$r*math.sin(a)))")
+    key -e 160 "m:$x,$y"; sleep 0.1
+    if [ "$a" = 180 ]; then sleep 0.9; shot 03c-eyes-circle-left; gaze_note; fi
+    if [ "$a" = 270 ]; then sleep 0.9; shot 03d-eyes-circle-below; gaze_note; fi
+  done
+  # 贴近：惊喜（眼睛微放大、身体一缩）
+  key -e 300 "m:$((cx+18)),$((cy-12))"; sleep 0.9; shot 03e-eyes-very-near; gaze_note
+  # 离开：眼睛弹回居中
+  key -e 700 "m:$((cx+700)),$((cy+300))"; sleep 1.4; shot 03f-eyes-away; gaze_note
+}
+
+icon_shots() {   # 应用图标：Dock（主窗口开着时 Dock 有 Evo）+ Finder 里的 Evo.app
+  local sw sh
+  sw=$(python3 -c "import json;print(int(json.load(open('$GEO'))['screen']['w']))" 2>/dev/null || echo 0)
+  sh=$(python3 -c "import json;print(int(json.load(open('$GEO'))['screen']['h']))" 2>/dev/null || echo 0)
+  shot 15-dock
+  if [ "$sw" -gt 0 ]; then screencapture -x -R "0,$((sh-110)),$sw,110" "$OUT/shots/15b-dock-strip.png" && echo "  📸 15b-dock-strip"; fi
+  # 图标文件本身（sips 能读说明 icns 格式没问题）
+  sips -s format png "$APP/Contents/Resources/AppIcon.icns" --out "$OUT/shots/AppIcon-from-icns.png" >/dev/null 2>&1 \
+    && note "  sips 读 AppIcon.icns：$(sips -g pixelWidth "$OUT/shots/AppIcon-from-icns.png" | tail -1 | tr -s ' ')" \
+    || note "  ✗ sips 读不了 AppIcon.icns"
+}
+
+finder_icon_shot() {
+  open -R "$APP" 2>/dev/null || return 0
+  sleep 2.5; shot 16-finder-icon
+  osascript -e 'tell application "Finder" to close every window' >/dev/null 2>&1 || true
+}
+
 # ---------- 驱动（真鼠标） ----------
 drive() {
   local fails=0
@@ -164,12 +209,8 @@ drive() {
   fi
   window_open || { note "  ✗ 主窗口打不开"; return 1; }
   sleep 2.6; shot 03-window
-  # 在窗口里晃晃鼠标：角色跟着看
-  local m; m=$(pt win-sidebar-inbox)
-  if [ -n "$m" ]; then
-    local mx=${m%,*} my=${m#*,}
-    key -e 600 "m:$((mx+520)),$((my-140))"; key -e 600 "m:$((mx+80)),$((my+320))"; key -e 500 "m:$((mx-30)),$((my-170))"
-  fi
+  icon_shots
+  eyes_demo || fails=$((fails+1))
   click win-gate-0-approve || fails=$((fails+1)); sleep 0.22; shot 04-approve-fly; sleep 2.2; shot 05-approved
   click win-gate-0-reject || fails=$((fails+1)); waitpt win-gate-0-send >/dev/null; sleep 0.5
   if evo_front; then paste_text "手机上按钮太挤，再大一圈"; fi; sleep 0.9; shot 06-reject-words
@@ -231,6 +272,7 @@ else
   demo_mode
   MODE=demo
 fi
+finder_icon_shot
 sleep 1
 stop_rec
 pkill -x Evo 2>/dev/null || true

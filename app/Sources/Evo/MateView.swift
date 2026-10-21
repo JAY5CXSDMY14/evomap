@@ -4,9 +4,11 @@ import SwiftUI
 import WebKit
 import EvoCore
 
-// 表情角色：球球（默认）/ 云宝 / 亮亮，跑 aora-bot 的表情引擎（Resources/vendor，版权见 vendor/NOTICE.md）。
+// 表情角色：调度球（默认）/ 云宝 / 亮亮，跑 aora-bot 的表情引擎（Resources/vendor，版权见 vendor/NOTICE.md）。
 // 透明 WKWebView 读本地宿主页 Resources/mate/index.html，不联网（规则表挡掉所有 http/https）。
-// Swift 只调两个函数：evoMate.set(编号, 撒花) 和 evoMate.gaze(x, y)。
+// Swift 调 evoMate.set(编号, 撒花)、evoMate.look(x, y, 眼睛放大)、evoMate.blink(连眨)。
+// v0.5.0「灵动」：表情交给引擎画，身体的呼吸 / 点击挤压回弹 / 状态弹跳 / 很近时一缩，以及眼睛跟鼠标的弹簧，
+// 全部是 SwiftUI 原生弹簧（.spring / .interpolatingSpring）；目标值由 EvoCore 的 EyeFollow / MateMotion 算。
 
 /// 宿主页和引擎文件在哪：打包后在 Evo.app/Contents/Resources/{mate,vendor}；`swift run` / make snapshots 时在 app/Resources。
 enum MateAssets {
@@ -100,6 +102,7 @@ final class MateWebView: WKWebView, WKNavigationDelegate {
         if body == "ready" {
             ready = true
             if let d = desired { evaluateJavaScript(MateBridge.set(d.0, celebrate: d.1), completionHandler: nil) }
+            lastLook = ""
             onReady?()
         } else if body.hasPrefix("error") {
             NSLog("Evo 表情：\(body)")
@@ -120,26 +123,53 @@ final class MateWebView: WKWebView, WKNavigationDelegate {
         updateMonitor()
     }
 
+    /// 鼠标相对角色中心的位置（点，y 向下为正）；nil = 窗口不可见。由 SwiftUI 那边换算成注视目标。
+    var onPointer: ((CGPoint?) -> Void)?
+    private var globalMonitor: Any?
+    private var lastLook = ""
+
     private func updateMonitor() {
-        if let m = monitor { NSEvent.removeMonitor(m); monitor = nil }
+        stopTracking()
         guard followMouse, !still, let w = window else { return }
         w.acceptsMouseMovedEvents = true
+        // 本应用窗口里的移动走本地监听；鼠标在别的应用上方时走全局监听（鼠标移动不需要辅助功能权限）
         monitor = NSEvent.addLocalMonitorForEvents(matching: [.mouseMoved, .leftMouseDragged]) { [weak self] e in
-            self?.track(e)
+            self?.track()
             return e
         }
+        globalMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.mouseMoved, .leftMouseDragged]) { [weak self] _ in
+            Task { @MainActor in self?.track() }
+        }
+        track()
     }
 
-    private func track(_ e: NSEvent) {
-        guard ready, let w = window, e.window === w, Date().timeIntervalSince(lastGaze) > 1.0 / 30 else { return }
+    private func track() {
+        guard let w = window, Date().timeIntervalSince(lastGaze) > 1.0 / 60 else { return }
         lastGaze = Date()
-        let c = convert(NSPoint(x: bounds.midX, y: bounds.midY), to: nil)
-        let p = e.locationInWindow
-        let (x, y) = MateBridge.gazeVector(dx: Double(p.x - c.x), dy: Double(c.y - p.y))
-        evaluateJavaScript(MateBridge.gaze(x, y), completionHandler: nil)
+        guard w.isVisible, w.occlusionState.contains(.visible) else { onPointer?(nil); return }
+        let c = w.convertToScreen(convert(NSRect(x: bounds.midX, y: bounds.midY, width: 0, height: 0), to: nil)).origin
+        let p = NSEvent.mouseLocation          // 屏幕坐标，y 向上
+        onPointer?(CGPoint(x: p.x - c.x, y: c.y - p.y))
     }
 
-    func stopTracking() { if let m = monitor { NSEvent.removeMonitor(m); monitor = nil } }
+    /// SwiftUI 弹簧每一帧的当前值 → 宿主页（相同就不发）。
+    func look(_ x: Double, _ y: Double, boost: Double) {
+        guard ready, !still else { return }
+        let js = MateBridge.look(x, y, boost: boost)
+        guard js != lastLook else { return }
+        lastLook = js
+        evaluateJavaScript(js, completionHandler: nil)
+    }
+
+    func blink(double: Bool) {
+        guard ready, !still else { return }
+        evaluateJavaScript(MateBridge.blink(double: double), completionHandler: nil)
+    }
+
+    func stopTracking() {
+        if let m = monitor { NSEvent.removeMonitor(m); monitor = nil }
+        if let m = globalMonitor { NSEvent.removeMonitor(m); globalMonitor = nil }
+    }
 }
 
 struct MateWebRep: NSViewRepresentable {
@@ -149,23 +179,36 @@ struct MateWebRep: NSViewRepresentable {
     var size: CGFloat
     var still: Bool
     var followMouse: Bool
+    var gazeX: Double = 0
+    var gazeY: Double = 0
+    var eyeBoost: Double = 1
+    var blinkTick: Int = 0
+    var onPointer: ((CGPoint?) -> Void)? = nil
 
-    final class Coordinator { var celebrate = 0; var emotion: MateEmotion? }
+    final class Coordinator { var celebrate = 0; var emotion: MateEmotion?; var blinkTick = 0 }
     func makeCoordinator() -> Coordinator { Coordinator() }
 
     func makeNSView(context: Context) -> MateWebView {
         let w = MateWebView.make()
         w.load(character: character, emotion: emotion, size: size, still: still)
+        w.onPointer = onPointer
         w.followMouse = followMouse
         context.coordinator.celebrate = celebrate
         context.coordinator.emotion = emotion
+        context.coordinator.blinkTick = blinkTick
         return w
     }
 
     func updateNSView(_ w: MateWebView, context: Context) {
         w.load(character: character, emotion: emotion, size: size, still: still)
+        w.onPointer = onPointer
         if w.followMouse != followMouse { w.followMouse = followMouse }
+        w.look(gazeX, gazeY, boost: eyeBoost)
         let co = context.coordinator
+        if co.blinkTick != blinkTick {
+            co.blinkTick = blinkTick
+            w.blink(double: MateMotion.doubleBlink(Double.random(in: 0..<1)))
+        }
         let burst = celebrate != co.celebrate
         if burst || co.emotion != emotion {
             co.celebrate = celebrate; co.emotion = emotion
@@ -179,6 +222,30 @@ struct MateWebRep: NSViewRepresentable {
     }
 }
 
+/// 把 SwiftUI 弹簧插出来的每一帧注视值交给 WKWebView（Animatable：动画期间每帧都会带着中间值重新算 body）。
+struct MateLiveRep: View, Animatable {
+    var rep: MateWebRep
+    var gazeX: Double
+    var gazeY: Double
+    var eyeBoost: Double
+
+    var animatableData: AnimatablePair<AnimatablePair<Double, Double>, Double> {
+        get { AnimatablePair(AnimatablePair(gazeX, gazeY), eyeBoost) }
+        set { gazeX = newValue.first.first; gazeY = newValue.first.second; eyeBoost = newValue.second }
+    }
+
+    var body: some View {
+        var r = rep
+        r.gazeX = gazeX; r.gazeY = gazeY; r.eyeBoost = eyeBoost
+        return r
+    }
+}
+
+/// 给 CI 演示看「眼睛真的在跟」：最近一次注视目标（UIProbe 写进几何 JSON 的 mate-gaze）。
+enum MateGazeProbe {
+    static var last: EyeFollow.Result = .rest
+}
+
 /// 界面里用这个。截图（ImageRenderer 画不了 WKWebView）时换成预先拍好的静态图。
 struct MateView: View {
     var emotion: MateEmotion
@@ -190,19 +257,163 @@ struct MateView: View {
     @Environment(\.evoStatic) private var isStatic
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
+    // 眼睛：SwiftUI 弹簧追 EyeFollow 算出的目标
+    @State private var gazeX = 0.0
+    @State private var gazeY = 0.0
+    @State private var eyeBoost = 1.0
+    @State private var target = EyeFollow.Result.rest
+    // 身体
+    @State private var breathIn = false
+    @State private var squash = CGSize(width: 1, height: 1)
+    @State private var hop: CGFloat = 0
+    @State private var tilt: Double = 0
+    @State private var pressed = false
+    @State private var isNear = false
+    @State private var blinkTick = 0
+    @State private var lastEmotion: MateEmotion?
+
+    private var still: Bool { reduceMotion || forceStill }
+    /// 小号实例（列表里的 26～30 点）不呼吸不弹，省得一屏都在动。
+    private var lively: Bool { !still && size >= 40 }
+
+    /// 眼睛跟随：偏「QQ 弹」的弹簧——响应快、有一点过冲。
+    static let eyeSpring = Animation.interpolatingSpring(stiffness: 170, damping: 13)
+    /// 回正：稍慢、更软。
+    static let eyeHome = Animation.interpolatingSpring(stiffness: 90, damping: 9)
+    static let squashSpring = Animation.spring(response: 0.22, dampingFraction: 0.42)
+    static let releaseSpring = Animation.spring(response: 0.42, dampingFraction: 0.36)
+    static let hopUp = Animation.spring(response: 0.20, dampingFraction: 0.7)
+    static let hopDown = Animation.interpolatingSpring(stiffness: 210, damping: 9)
+
     var body: some View {
         let ch = MateCharacter.from(characterRaw)
         Group {
             if isStatic {
                 MateStill(character: ch, emotion: emotion, size: size)
             } else {
-                MateWebRep(character: ch, emotion: emotion, celebrate: celebrate, size: size,
-                           still: reduceMotion || forceStill, followMouse: followMouse)
+                MateLiveRep(rep: MateWebRep(character: ch, emotion: emotion, celebrate: celebrate, size: size,
+                                            still: still, followMouse: followMouse && !still,
+                                            blinkTick: blinkTick, onPointer: { p in pointer(p) }),
+                            gazeX: gazeX, gazeY: gazeY, eyeBoost: eyeBoost)
+                    // 身体：呼吸（底部为锚，像坐着的软球）× 挤压 × 很近时一缩，再加跳和晃
+                    .scaleEffect(x: bodyScaleX, y: bodyScaleY, anchor: .bottom)
+                    .rotationEffect(.degrees(tilt), anchor: .bottom)
+                    .offset(y: hop)
             }
         }
         .frame(width: size, height: size)
+        .contentShape(Circle())
+        .simultaneousGesture(pressGesture)
+        .task(id: lively) { await liveLoop() }
+        .onChange(of: emotion) { e in kick(to: e) }
+        .onAppear { lastEmotion = emotion }
         .accessibilityElement()
         .accessibilityLabel("\(ch.label)：\(emotion.name)")
+    }
+
+    private var bodyScaleX: CGFloat {
+        let breath = lively ? (breathIn ? 1 - MateMotion.breathScale * 0.5 : 1 + MateMotion.breathScale * 0.3) : 1
+        let near = isNear && lively ? MateMotion.nearShrink + (1 - MateMotion.nearShrink) * 0.4 : 1
+        return CGFloat(breath * near) * squash.width
+    }
+    private var bodyScaleY: CGFloat {
+        let breath = lively ? (breathIn ? 1 + MateMotion.breathScale : 1 - MateMotion.breathScale * 0.4) : 1
+        let near = isNear && lively ? MateMotion.nearShrink : 1
+        return CGFloat(breath * near) * squash.height
+    }
+
+    // MARK: 鼠标 → 眼睛
+
+    private func pointer(_ p: CGPoint?) {
+        let r = EyeFollow.compute(center: (0, 0), diameter: Double(size), pointer: p.map { (Double($0.x), Double($0.y)) })
+        guard EyeFollow.changedEnough(r, target) else { return }
+        let wasNear = target.near
+        target = r
+        if followMouse { MateGazeProbe.last = r }
+        guard !still else { return }
+        withAnimation(r.inRange ? Self.eyeSpring : Self.eyeHome) {
+            gazeX = r.x; gazeY = r.y
+            eyeBoost = r.near ? MateMotion.nearEyeBoost : 1
+        }
+        if r.near != wasNear, lively {
+            // 很近：身体轻轻一缩；离开再弹回
+            withAnimation(Self.squashSpring) { isNear = r.near }
+            if r.near { blinkTick += 1 }
+        }
+    }
+
+    // MARK: 待机：呼吸 + 随机眨眼
+
+    @MainActor private func liveLoop() async {
+        guard lively else { return }
+        var nextBlink = Date().addingTimeInterval(MateMotion.nextBlink(Double.random(in: 0..<1)))
+        while !Task.isCancelled {
+            withAnimation(.spring(response: MateMotion.breathSeconds, dampingFraction: 0.82)) { breathIn.toggle() }
+            try? await Task.sleep(nanoseconds: UInt64(MateMotion.breathSeconds * 1_000_000_000))
+            if Date() >= nextBlink {
+                blinkTick += 1
+                nextBlink = Date().addingTimeInterval(MateMotion.nextBlink(Double.random(in: 0..<1)))
+            }
+        }
+    }
+
+    // MARK: 点一下：压扁 → 弹过头 → 回来
+
+    private var pressGesture: some Gesture {
+        DragGesture(minimumDistance: 0)
+            .onChanged { _ in
+                guard lively, !pressed else { return }
+                pressed = true
+                withAnimation(Self.squashSpring) {
+                    squash = CGSize(width: MateMotion.pressSquash.x, height: MateMotion.pressSquash.y)
+                }
+            }
+            .onEnded { _ in
+                guard lively else { return }
+                pressed = false
+                withAnimation(Self.releaseSpring) {
+                    squash = CGSize(width: MateMotion.releaseStretch.x, height: MateMotion.releaseStretch.y)
+                }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.13) {
+                    withAnimation(Self.releaseSpring) { squash = CGSize(width: 1, height: 1) }
+                }
+                blinkTick += 1
+            }
+    }
+
+    // MARK: 状态变化：弹一下
+
+    private func kick(to e: MateEmotion) {
+        let k = MateMotion.kick(from: lastEmotion, to: e)
+        lastEmotion = e
+        guard lively else { return }
+        let unit = Double(size) / 58
+        func later(_ s: Double, _ a: Animation, _ f: @escaping () -> Void) {
+            DispatchQueue.main.asyncAfter(deadline: .now() + s) { withAnimation(a) { f() } }
+        }
+        switch k {
+        case .none:
+            return
+        case .hop(let h):
+            withAnimation(Self.squashSpring) { squash = CGSize(width: 1.10, height: 0.88) }
+            later(0.10, Self.hopUp) { hop = -CGFloat(h * unit); squash = CGSize(width: 0.93, height: 1.10) }
+            later(0.30, Self.hopDown) { hop = 0; squash = CGSize(width: 1.06, height: 0.94) }
+            later(0.48, Self.releaseSpring) { squash = CGSize(width: 1, height: 1) }
+        case .perk:
+            withAnimation(Self.squashSpring) { squash = CGSize(width: 0.92, height: 1.10) }
+            later(0.16, Self.releaseSpring) { squash = CGSize(width: 1, height: 1) }
+        case .shake:
+            withAnimation(.spring(response: 0.12, dampingFraction: 0.5)) { tilt = -9 }
+            later(0.10, .spring(response: 0.12, dampingFraction: 0.5)) { tilt = 8 }
+            later(0.20, .spring(response: 0.12, dampingFraction: 0.5)) { tilt = -5 }
+            later(0.30, .interpolatingSpring(stiffness: 160, damping: 8)) { tilt = 0 }
+        case .sink:
+            withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) { squash = CGSize(width: 1.07, height: 0.92) }
+            later(0.55, .spring(response: 0.8, dampingFraction: 0.85)) { squash = CGSize(width: 1, height: 1) }
+        case .nod:
+            withAnimation(Self.squashSpring) { hop = CGFloat(2.5 * unit); squash = CGSize(width: 1.04, height: 0.96) }
+            later(0.14, Self.releaseSpring) { hop = 0; squash = CGSize(width: 1, height: 1) }
+        }
     }
 }
 

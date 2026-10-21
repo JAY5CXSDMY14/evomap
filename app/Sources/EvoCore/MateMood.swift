@@ -1,12 +1,12 @@
 import Foundation
 
-// 表情角色（球球 / 云宝 / 亮亮）：evo 的状态 → 表情编号。界面层用 WKWebView 跑 aora-bot 的表情引擎，这里只管映射，Linux 上也能测。
+// 表情角色（调度球 / 云宝 / 亮亮）：evo 的状态 → 表情编号。界面层用 WKWebView 跑 aora-bot 的表情引擎，这里只管映射，Linux 上也能测。
 // 编号是引擎的对外契约（emotion-ball/js/emotions.js、mood-mates/src/data/emotions.js 两边同一张表，永不重排）：
 //   00-09 生命周期 · 10-29 情绪反应 · 30-49 代理工作状态
 
-/// 可选角色。球球是默认（只许自用，见 Resources/vendor/NOTICE.md）；云宝 / 亮亮来自 mood-mates，可买商业许可。
+/// 可选角色。调度球是默认（形象来自 aora-bot emotion-ball 的 blob 球）（只许自用，见 Resources/vendor/NOTICE.md）；云宝 / 亮亮来自 mood-mates，可买商业许可。
 public enum MateCharacter: String, CaseIterable, Sendable {
-    case ball      // 球球（emotion-ball，blob 造型）
+    case ball      // 调度球（emotion-ball，blob 造型）
     case nimbo     // 云宝（mood-mates）
     case twinkle   // 亮亮（mood-mates）
 
@@ -14,7 +14,7 @@ public enum MateCharacter: String, CaseIterable, Sendable {
 
     public var label: String {
         switch self {
-        case .ball: return "球球"
+        case .ball: return "调度球"
         case .nimbo: return "云宝"
         case .twinkle: return "亮亮"
         }
@@ -30,7 +30,7 @@ public enum MateCharacter: String, CaseIterable, Sendable {
         }
     }
 
-    /// 能不能拿去分发（商用要另买许可；球球永远不行）。
+    /// 能不能拿去分发（商用要另买许可；调度球的形象来自 emotion-ball，永远不行）。
     public var licensable: Bool { self != .ball }
 
     public static func from(_ raw: String?) -> MateCharacter { raw.flatMap(MateCharacter.init(rawValue:)) ?? .default }
@@ -141,7 +141,19 @@ public enum MateBridge {
         return "window.evoMate && window.evoMate.gaze(\(c(x)), \(c(y)))"
     }
 
-    /// 鼠标相对角色中心的位置 → 注视。dx/dy 是屏幕点距，reach 是「多远算看到底」（点）。y 向下为正（和 SVG 一致）。
+    /// 直接设定注视（v0.5.0）：x、y 已经是 SwiftUI 弹簧追出来的当前值，宿主页不再自己平滑；
+    /// boost 是眼睛放大倍数（很近时 1.16，平时 1）。
+    public static func look(_ x: Double, _ y: Double, boost: Double = 1) -> String {
+        func c(_ v: Double, _ lo: Double, _ hi: Double) -> String { String(format: "%.3f", min(hi, max(lo, v.isFinite ? v : 0))) }
+        return "window.evoMate && window.evoMate.look(\(c(x, -1.2, 1.2)), \(c(y, -1.2, 1.2)), \(c(boost, 0.5, 1.6)))"
+    }
+
+    /// 眨一下眼（double = 连眨两下）。
+    public static func blink(double: Bool = false) -> String {
+        "window.evoMate && window.evoMate.blink(\(double ? "true" : "false"))"
+    }
+
+    /// 鼠标相对角色中心的位置 → 注视（v0.4 的老算法，范围 360 点、线性；v0.5.0 改用 EyeFollow）。dx/dy 是屏幕点距，reach 是「多远算看到底」（点）。y 向下为正（和 SVG 一致）。
     public static func gazeVector(dx: Double, dy: Double, reach: Double = 360) -> (Double, Double) {
         guard reach > 0 else { return (0, 0) }
         let x = min(1, max(-1, dx / reach)), y = min(1, max(-1, dy / reach))

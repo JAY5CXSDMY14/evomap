@@ -2,9 +2,9 @@
 
 evo 自动循环的 macOS 菜单栏外壳。SwiftUI 写的小壳：菜单栏弹窗里直接批闸门、跟 evo 说话；完整界面嵌现有网页面板；evo 本体（整套 kit）打包在应用里。
 
-v0.3.0 起有了**真正的 Mac 窗口**（Claude 桌面版的样子：左侧栏、宽内容区、底部钉着输入框、统一标题栏和工具栏），菜单栏弹窗变成紧凑的速览；吉祥物换成 aora-bot 表情引擎的 **球球**（可切 云宝 / 亮亮）。实机截图和录屏见 `docs/mac-demo/`。
+v0.3.0 起有了**真正的 Mac 窗口**（Claude 桌面版的样子：左侧栏、宽内容区、底部钉着输入框、统一标题栏和工具栏），菜单栏弹窗变成紧凑的速览；吉祥物换成 aora-bot 表情引擎的球形角色，v0.5.0 起叫 **调度球**（可切 云宝 / 亮亮）。实机截图和录屏见 `docs/mac-demo/`。
 
-> **⚠️ 角色许可：只许自用。** 默认角色球球来自 sam70361/aora-bot 的 emotion-ball（固定版本 e3b6148）。它的**球形视觉形象只许个人学习研究、非商业使用，永远不给商业授权**，所以带球球的 Evo **不得公开分发**（不发 Release、不放公开下载、不卖）。
+> **⚠️ 角色许可：只许自用。** 默认角色调度球的形象来自 sam70361/aora-bot 的 emotion-ball（固定版本 e3b6148）。它的**球形视觉形象只许个人学习研究、非商业使用，永远不给商业授权**，所以带调度球的 Evo **不得公开分发**（不发 Release、不放公开下载、不卖）。
 > 哪天要分发：先在设置里换成 mood-mates 的云宝 / 亮亮并**向作者买商业许可**（1251579308@qq.com），或换成我们自己的角色。许可原文和 NOTICE 在 `Resources/vendor/`。
 
 | 主窗口（浅色） | 主窗口（深色） |
@@ -36,7 +36,7 @@ v0.3.0 起有了**真正的 Mac 窗口**（Claude 桌面版的样子：左侧栏
 
 - `SIGN="Developer ID Application: 名字 (TEAMID)" make dmg`：换正式证书；`SIGN= make app` 跳过签名
 - `UNIVERSAL=1 make dmg`：出 arm64 + x86_64 通用包（默认只出本机架构）
-- 改版本：编辑 `VERSION`（只写 `0.3.0` 这样的号），构建号自动取 git 提交数
+- 改版本：编辑 `VERSION`（只写 `0.5.0` 这样的号），构建号自动取 git 提交数
 
 ## 目录
 
@@ -48,18 +48,20 @@ app/
   scripts/
     assemble-app.sh      组装 Evo.app、拷 kit、签名
     make-dmg.sh          打 dmg
-  Resources/Info.plist.in  Info.plist 模板（__VERSION__ / __BUILD__ 构建时替换）
+    make-icon.py         画应用图标（numpy + Pillow，出 AppIcon.png / AppIcon.icns，结果提交进仓库，构建不依赖它）
+  Resources/Info.plist.in  Info.plist 模板（__VERSION__ / __BUILD__ 构建时替换；CFBundleIconFile = AppIcon）
+  Resources/AppIcon.icns   应用图标「调度球」（AppIcon.png 是 1024 原图），scripts/make-icon.py 用代码画
   Resources/mate/index.html  表情角色宿主页（本地、不联网），Swift 调 evoMate.set(编号) / evoMate.gaze(x, y)
-  Resources/vendor/      第三方表情引擎（aora-bot e3b6148）：emotion-ball/js（球球）、mood-mates/src（云宝 / 亮亮）+ 许可 + NOTICE.md
+  Resources/vendor/      第三方表情引擎（aora-bot e3b6148）：emotion-ball/js（调度球）、mood-mates/src（云宝 / 亮亮）+ 许可 + NOTICE.md
   Sources/EvoCore/       纯逻辑，可单测：status JSON 解码、角标计数、闸门去重、免打扰、心跳、找 python3，
                          以及界面数据映射（ViewModels.swift：问候、状态胶囊、闸门卡片、项目行、吉祥物心情与台词、
                          模糊过滤、命令面板条目、输入框命令、收菜清单、快捷键；MascotPose.swift：菜单栏小脸的姿态；
-                         MateMood.swift：evo 状态 → 表情编号；ItemLog.swift：evo log --json；Navigation.swift：侧栏、
+                         MateMood.swift：evo 状态 → 表情编号；MateMotion.swift：眼睛跟鼠标的偏移、眨眼间隔、状态弹跳；ItemLog.swift：evo log --json；Navigation.swift：侧栏、
                          卡太久清单、网格列数、窗口尺寸、演示脚本）
   Sources/Evo/           菜单栏外壳：
     Theme.swift          设计令牌（颜色、字体、圆角）+ 弹簧按钮、卡片、依次弹入、开关样式
     MainWindow.swift     主窗口（NavigationSplitView 侧栏 + 详情、工具栏、闸门网格、项目页、件时间线、底部输入框）
-    MateView.swift       表情角色：透明 WKWebView + JS 桥、跟鼠标转眼睛、截图用的静态帧
+    MateView.swift       表情角色：透明 WKWebView + JS 桥；眼睛跟鼠标、呼吸、眨眼、挤压回弹、状态弹跳（SwiftUI 弹簧）；截图用的静态帧
     Demo.swift           CI 录屏用：控件坐标导出（EVO_UITEST_GEOMETRY）、应用自演（EVO_DEMO=1）
     Mascot.swift         旧小陶矢量画（现在只用作菜单栏单色小脸和兜底）、聊天气泡
     MainPopover.swift    菜单栏弹窗（紧凑：问候、汇总、前两张闸门卡、打开窗口）
@@ -86,7 +88,7 @@ app/
   - **底部输入框**「告诉 evo…」：像 Claude 一样钉在内容区底部，上面是最近几句对话，evo 的回话旁边是角色（回话 / 出错表情）。
   - **工具栏**：状态胶囊（+ 正在做的事）、立即 tick、暂停 / 恢复、打开面板、⌘K。
 - **弹窗**（点图标）：宽 420、更矮：问候 + 状态胶囊 + 角色气泡、一行汇总（等你 / 施工 / 验收 / 卡住 / 卡太久）、最前面两张闸门卡（多的「还有 N 件，去窗口里看」）、「打开 Evo 窗口 ⌘0」大按钮、底栏（刷新时间、tick、暂停、⌘K、设置、退出）。
-- **表情角色**（球球 / 云宝 / 亮亮，设置里切）：透明 WKWebView 跑本地宿主页，规则表挡掉所有网络请求，不加载任何网络字体。表情跟着 evo 走：
+- **表情角色**（调度球 / 云宝 / 亮亮，设置里切）：透明 WKWebView 跑本地宿主页，规则表挡掉所有网络请求，不加载任何网络字体。表情跟着 evo 走：
 
   | evo 状态 | 表情编号 |
   |---|---|
@@ -100,7 +102,7 @@ app/
   | 暂停、免打扰时段 | 00 睡眠 |
   | 应用刚启动 | 01 唤醒 |
 
-  窗口里眼睛跟着鼠标转；小号实例眼睛放大 1.5～1.8 倍、关粒子（lite）；开了「减弱动态效果」只画静态一帧。映射表在 EvoCore（MateMap），有单元测试。
+  鼠标进到调度球周围（约 3 倍球径）眼睛跟着看，见下面 v0.5.0；小号实例眼睛放大 1.5～1.8 倍、关粒子（lite）；开了「减弱动态效果」只画静态一帧。映射表在 EvoCore（MateMap），有单元测试。
 - **快捷键**（窗口里）：⌘1…⌘9 选第几个项目、⌘↩ 通过第一张卡、⌘K 命令面板、⌘R 刷新、⌘[ 返回上一级。菜单栏「窗口 → 打开 Evo 窗口」⌘0，「Evo」菜单里有 tick、刷新、命令面板、切换深色 / 浅色、设置。
 - **快捷键**（弹窗里）：⌘0 打开窗口、⌘1…⌘9 只看第几个项目（再按一次取消）、⌘↩ 通过当前卡片（鼠标停的那张，没有就第一张）、⌘K 命令面板、⌘R 刷新、⌘, 设置、⌘Q 退出。
 - **⌘K 命令面板**：动作、每个闸门的通过 / 打回、每个项目都在里面，输入即模糊过滤（中文、英文都行），↑↓ 选、回车执行、Esc 关。
@@ -115,10 +117,25 @@ app/
 - 首次设置向导多一步「定岗位」：`evo team init --json` 给出建议，点「就这样」写入（`--apply`）。
 - 纯逻辑在 `Sources/EvoCore/Team.swift`（解码、状态灯、成绩一句话、输入框意图、确认卡文字、向导提案），有测试；样例 `Tests/EvoCoreTests/Fixtures/team.json`（同一份在 `scripts/demo/team.json` 给 CI 实机演示用）。
 
+### v0.5.0「调度球」：眼睛跟鼠标、更 QQ 弹、新图标
+- **改名**：界面上的「球球」全部改叫 **调度球**（设置里的角色按钮、侧栏、读屏标签、提示文案、注释、测试）。形象仍是 aora-bot emotion-ball 的球形角色，许可照旧：只许自用、不得公开分发（`Resources/vendor/NOTICE.md`）。
+- **眼睛跟鼠标**：鼠标进到调度球周围 **3 倍球径**（`EyeFollow.rangeFactor`，侧栏 58 点的球 ≈ 174 点半径）里，两只眼睛整体朝鼠标方向偏；离球心 1.2 倍球径以内幅度随距离变大，再远方向照跟、幅度拉满；出了范围眼睛弹回正中。眼睛的位置是 SwiftUI 原生弹簧（`.interpolatingSpring(stiffness: 170, damping: 13)` 跟随、`stiffness: 90, damping: 9` 回正）逐帧插值出来的，每帧交给宿主页 `evoMate.look(x, y, 放大)` 直接写进引擎（不再叠引擎自己的平滑）。主窗口侧栏、菜单栏弹窗、首次向导里的调度球都跟；本应用窗口里走本地鼠标监听，鼠标在别的应用上方走全局监听（鼠标移动不需要辅助功能权限）。
+- **很近时**（0.85 倍球径以内，差不多贴着球）：眼睛放大到 1.16 倍、身体轻轻一缩（0.93），还会眨一下；离开再弹回。
+- **更灵动**（全是 SwiftUI 原生弹簧）：
+  - 待机呼吸：以底边为锚一吸一呼（约 1.9 秒一次、幅度 2%），像坐着的软球；
+  - 随机眨眼：2.6～6.5 秒随机一次，偶尔连眨两下（引擎本身的眨眼照旧）；
+  - 点一下：按下压扁（宽 1.13、高 0.84），松手弹过头（0.94 / 1.09）再回来；
+  - 状态变化：完成 / 开心往上一跳（先蹲再跳、落地再压一下），等你 / 好奇 / 接任务竖起来一下，出错左右晃，开始思考 / 检索 / 回话点个头，睡觉往下一沉。
+  - 小号实例（列表里 26～30 点的）不呼吸不弹，省得一屏都在动。
+- **减少动态效果**：开了就全部关掉——不跟鼠标、不呼吸、不眨、不弹，只画静态一帧（和以前一样）。
+- **应用图标**：深灰到黑的圆角方块，一个白色、带灰色柔和光泽的大圆球从左下探进来，右上两只略斜的竖椭圆黑眼睛（带一点高光）。`scripts/make-icon.py` 用代码画（不是拿参考图改的），出 `Resources/AppIcon.png`（1024）和全套尺寸的 `Resources/AppIcon.icns`（16～1024，含 @2x），`assemble-app.sh` 拷进包，Info.plist 加 `CFBundleIconFile`；Dock 图标不再在运行时换成角色截图，直接用包里的图标。改图标：改脚本 → `python3 scripts/make-icon.py`（要 `pip install pillow numpy`）→ 提交两张图。
+- 纯逻辑在 `Sources/EvoCore/MateMotion.swift`（`EyeFollow.compute`：球心 + 球径 + 鼠标 → 偏移向量、在不在范围、是不是很近；眨眼间隔；状态 → 身体动作），有测试。
+- CI 实机演示多一段：鼠标从右下远处慢慢移近调度球 → 绕一圈 → 贴近 → 移开，截 `03a-eyes-far`、`03b-eyes-near-right`、`03c-eyes-circle-left`、`03d-eyes-circle-below`、`03e-eyes-very-near`、`03f-eyes-away`，每张旁边在 `HOW.txt` 记下应用报出的注视值（`mate-gaze`：x、y、在不在范围、是不是很近）；图标拍 `15-dock`、`15b-dock-strip`（Dock 那一条）、`16-finder-icon`，再用 `sips` 把包里的 icns 读成 `AppIcon-from-icns.png`。
+
 ### 动效和无障碍
 
 - 按钮、胶囊按下压到 0.92、松手弹过头到 1.04 再回来（`spring(response: 0.3, dampingFraction: 0.55)`）；卡片依次弹入；批过的卡片缩小飞走；「等你处理」数字变了会晃一下；状态胶囊换状态时弹一下。
-- 角色表情见上表；系统设置里开了「减弱动态效果」：不弹不跳，只淡入淡出，角色只画静态一帧、不跟鼠标。
+- 角色表情见上表；系统设置里开了「减弱动态效果」：不弹不跳，只淡入淡出，调度球只画静态一帧、不跟鼠标、不呼吸不眨眼。
 - 卡片、项目行、按钮、角色都有读屏标签（VoiceOver 念「土布，看效果：注册页按钮…，件号 TB-UX-003」这类整句）。
 
 ### 和 evo 自己的提醒的关系

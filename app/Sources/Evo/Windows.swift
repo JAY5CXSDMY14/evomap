@@ -123,7 +123,7 @@ struct SettingsView: View {
                         MateView(emotion: .curious, size: 40)
                     }
                     Hint(text: mateCharacter == MateCharacter.ball.rawValue
-                         ? "球球（emotion-ball）只许自用：个人学习研究、非商业，带着它的 Evo 不能公开分发。要分发就换云宝 / 亮亮并买商业许可。"
+                         ? "调度球（形象来自 aora-bot 的 emotion-ball）只许自用：个人学习研究、非商业，带着它的 Evo 不能公开分发。要分发就换云宝 / 亮亮并买商业许可。"
                          : "云宝 / 亮亮（mood-mates）：个人免费；商用或分发前要向作者买商业许可。", color: Theme.textSecondary)
                     HStack(spacing: 8) {
                         Text("外观").foregroundStyle(Theme.textPrimary)

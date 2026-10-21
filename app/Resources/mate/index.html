@@ -1,7 +1,8 @@
 <!doctype html>
 <!-- Evo 的表情宿主页：本地文件、不联网（应用侧还挡掉了所有 http/https 请求）。
      ?engine=ball|mates  &c=blob|nimbo|twinkle  &e=表情编号  &eye=眼睛放大  &lite=1  &still=1（减弱动态效果：只画静态帧）
-     Swift 通过 evoMate.set(id, celebrate) / evoMate.gaze(x, y) 驱动。角色版权见 ../vendor/NOTICE.md -->
+     Swift 通过 evoMate.set(id, celebrate) / evoMate.look(x, y, boost) / evoMate.blink(double) 驱动。
+     v0.5.0：眼睛跟鼠标的弹簧由 SwiftUI 算（look 直接把当前值写进引擎，不再叠一层引擎自己的平滑）。角色版权见 ../vendor/NOTICE.md -->
 <html><head><meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="connect-src 'none'; font-src 'none'; frame-src 'none'; object-src 'none'">
 <style>
@@ -21,7 +22,7 @@
     : ['mood-mates/src/core/geometry.js', 'mood-mates/src/core/render.js', 'mood-mates/src/core/features.js',
        'mood-mates/src/core/fx.js', 'mood-mates/src/data/emotions.js', 'mood-mates/src/core/engine.js',
        'mood-mates/src/characters/nimbo.js', 'mood-mates/src/characters/twinkle.js'];
-  var mate = null, cur = q.get('e') || '02', pending = null;
+  var mate = null, cur = q.get('e') || '02', pending = null, baseEye = +(q.get('eye') || 1);
   function post(m) { try { webkit.messageHandlers.evo.postMessage(m); } catch (e) {} }
   function load(i) {
     if (i >= files.length) return start();
@@ -55,6 +56,19 @@
       if (still) mate.renderStatic();
     },
     gaze: function (x, y) { if (mate && !still) mate.setGaze(x, y); },
+    // x、y 是 SwiftUI 弹簧的当前值（可略过冲到 ±1.2）；两个引擎的注视都是 _gaze {x, y, tx, ty}，横 ±24、竖 ±15
+    look: function (x, y, boost) {
+      if (!mate || still) return;
+      var g = mate._gaze;
+      if (g) { g.tx = g.x = x * 24; g.ty = g.y = y * 15; } else { mate.setGaze(x, y); }
+      if (typeof boost === 'number' && mate._eyeScale != null) mate._eyeScale = baseEye * boost;
+    },
+    blink: function (twice) {
+      if (!mate || still || !mate._blinkNow) return;
+      var t = performance.now();
+      mate._blinkNow(t);
+      if (twice) setTimeout(function () { if (mate) mate._blinkNow(performance.now()); }, 260);
+    },
     current: function () { return cur; }
   };
   load(0);

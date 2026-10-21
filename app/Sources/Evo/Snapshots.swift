@@ -87,7 +87,7 @@ enum Snapshots {
                        TeamConfirmCard(state: tm, change: TeamChange(role: "verify", value: "group/evo-verify"))
                    }.padding(24),
                    width: 948, dark: dark, name: "team-\(sfx)", out: out)
-            // 6 角色表情（球球 / 云宝 / 亮亮）+ 菜单栏小脸
+            // 6 角色表情（调度球 / 云宝 / 亮亮）+ 菜单栏小脸
             render(VStack(spacing: 0) {
                        ForEach(MateCharacter.allCases, id: \.self) { c in MateSheetStatic(character: c) }
                        MascotSheet()

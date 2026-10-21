@@ -65,14 +65,20 @@ final class MainWindowController: NSObject, NSWindowDelegate {
     }
 }
 
-/// Dock 图标：陶土色圆角方块上放角色（拍好了用角色，没拍好用旧小陶）。
+/// Dock 图标：v0.5.0 起用包里的 AppIcon.icns（调度球，scripts/make-icon.py 画的）——不再在运行时覆盖。
+/// 只有 `swift run` 这种没有包图标的开发场景，才退回到「圆角方块上放角色静态帧」。
 @MainActor
 enum DockIcon {
+    static var bundleHasIcon: Bool {
+        Bundle.main.object(forInfoDictionaryKey: "CFBundleIconFile") != nil
+            && Bundle.main.url(forResource: "AppIcon", withExtension: "icns") != nil
+    }
+
     static func apply() {
+        if bundleHasIcon { NSApp.applicationIconImage = nil; return }   // nil = 用包里的图标
         let tile = ZStack {
-            RoundedRectangle(cornerRadius: 230, style: .continuous)
-                .fill(LinearGradient(colors: [Color(nsColor: NSColor(hex: 0xF3E6DA)), Color(nsColor: NSColor(hex: 0xE8CDB9))],
-                                     startPoint: .top, endPoint: .bottom))
+            RoundedRectangle(cornerRadius: 186, style: .continuous)
+                .fill(LinearGradient(colors: [Color(white: 0.30), Color(white: 0.06)], startPoint: .top, endPoint: .bottom))
                 .frame(width: 824, height: 824)
                 .shadow(color: .black.opacity(0.25), radius: 18, y: 10)
             MateStill(character: MateAssets.character, emotion: .standby, size: 560)
@@ -244,6 +250,7 @@ struct SidebarHeader: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .center, spacing: 10) {
                 MateView(emotion: state.mateEmotion, celebrate: state.mateCelebrate, size: 58, followMouse: true)
+                    .uiProbe("win-mate")
                 VStack(alignment: .leading, spacing: 2) {
                     Text("\(Greeting.text(at: Date()))，老板").font(Theme.title(17)).foregroundStyle(Theme.textPrimary)
                         .lineLimit(1).minimumScaleFactor(0.8)

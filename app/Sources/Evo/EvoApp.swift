@@ -47,7 +47,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         UIProbe.start()
         DemoRunner.start()
         if !UserDefaults.standard.bool(forKey: "setupDone") { WindowManager.shared.showSetup() }
-        // Dock 图标用角色的静态一帧（屏幕外拍一张，拍不成就用旧小陶）
+        // 先拍好角色静态帧（截图兜底用）；Dock 图标用包里的 AppIcon.icns，只有开发时没包图标才用角色帧
         Task { @MainActor in
             await MateSnapshotCache.shared.prepare(MateAssets.character, [.standby], side: 240)
             if MainWindowController.shared.isOpen { DockIcon.apply() }
