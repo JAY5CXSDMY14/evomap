@@ -28,6 +28,7 @@ final class AppState: ObservableObject {
     @Published var logErrors: [String: String] = [:]
     @Published var appearance: String = UserDefaults.standard.string(forKey: "appearance") ?? "system"   // system / light / dark
     @Published var demoReject: (id: String, words: String)?   // 演示模式：让某张卡展开打回输入框并填好原话
+    var popoverShown = false                       // 菜单栏弹窗开着吗（开主窗口时顺手收起）
     var previewQuiet: Bool?                        // 截图用：固定「是不是免打扰」
     private var reactionToken = UUID()
     private var mergedCounts: [String: Int] = [:]

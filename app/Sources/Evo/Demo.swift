@@ -47,6 +47,15 @@ enum UIProbe {
             d["key"] = w.isKeyWindow ? 1 : 0
             out[name] = d
         }
+        // 闸门卡按显示顺序起别名：win-gate-0-approve 永远是眼前第一张（探点按卡片 id 注册，卡片飞走后顺序会变）
+        let st = AppState.shared
+        for (prefix, list) in [("win-gate", st.windowCards), ("pop-gate", Array(st.cards.prefix(WindowSizing.popoverCards)))] {
+            for (i, c) in list.enumerated() {
+                for sfx in ["approve", "reject", "send", "timeline"] {
+                    if let v = out["\(prefix)-\(c.id)-\(sfx)"] { out["\(prefix)-\(i)-\(sfx)"] = v }
+                }
+            }
+        }
         if let b = MenuWindow.statusButton(), let w = b.window {
             out["status-item"] = cgRect(w.convertToScreen(b.convert(b.bounds, to: nil)))
         }

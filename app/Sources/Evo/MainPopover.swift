@@ -57,6 +57,8 @@ struct MainPopover: View {
         .background(Theme.bg)
         .animation(Motion.or(Motion.pop), value: cards.map(\.id))
         .background(shortcuts)
+        .onAppear { if !isStatic { state.popoverShown = true } }
+        .onDisappear { if !isStatic { state.popoverShown = false } }
     }
 
     private func focusedID(_ cards: [GateCard]) -> String? {
@@ -227,7 +229,7 @@ struct GatesSection: View {
                 EmptyState().staggeredAppear(2).transition(.scale(scale: 0.9).combined(with: .opacity))
             } else {
                 ForEach(Array(cards.enumerated()), id: \.element.id) { i, c in
-                    GateCardView(state: state, card: c, focused: c.id == focusedID, probe: "pop-gate-\(i)")
+                    GateCardView(state: state, card: c, focused: c.id == focusedID, probe: "pop-gate-\(c.id)")
                         .onHover { h in hovered = h ? c.id : (hovered == c.id ? nil : hovered) }
                         .staggeredAppear(2 + i)
                         .transition(.asymmetric(

@@ -8,15 +8,14 @@ import EvoCore
 // 开着窗口时 Dock 里有图标（activation policy 切到 .regular），关掉回到纯菜单栏。
 
 @MainActor
-final class MainWindowController: NSObject, NSWindowDelegate, NSToolbarDelegate {
+final class MainWindowController: NSObject, NSWindowDelegate {
     static let shared = MainWindowController()
     private(set) var window: NSWindow?
-    private static let actionsID = NSToolbarItem.Identifier("evo.actions")
-    private static let statusID = NSToolbarItem.Identifier("evo.status")
 
     var isOpen: Bool { window?.isVisible ?? false }
 
     func show() {
+        if AppState.shared.popoverShown { MenuWindow.show() }     // 弹窗是开关式的：点一下状态栏按钮把它收起
         if window == nil { build() }
         if NSApp.activationPolicy() != .regular {
             NSApp.setActivationPolicy(.regular)
@@ -40,11 +39,7 @@ final class MainWindowController: NSObject, NSWindowDelegate, NSToolbarDelegate 
         w.title = "Evo"
         w.titleVisibility = .hidden
         w.toolbarStyle = .unified
-        let tb = NSToolbar(identifier: "Evo.main")
-        tb.delegate = self
-        tb.displayMode = .iconOnly
-        tb.allowsUserCustomization = false
-        w.toolbar = tb
+        // 工具栏由 SwiftUI 的 .toolbar 提供（NavigationSplitView 会接管窗口工具栏，自己建的 NSToolbar 会被换掉）
         w.minSize = NSSize(width: WindowSizing.minWidth, height: WindowSizing.minHeight)
         w.isReleasedWhenClosed = false
         w.delegate = self
@@ -67,31 +62,6 @@ final class MainWindowController: NSObject, NSWindowDelegate, NSToolbarDelegate 
         DispatchQueue.main.async {
             if !DockPolicy.showsDock(mainWindowOpen: self.isOpen) { NSApp.setActivationPolicy(.accessory) }
         }
-    }
-
-    // MARK: 工具栏
-
-    func toolbarDefaultItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
-        [Self.statusID, .flexibleSpace, Self.actionsID]
-    }
-    func toolbarAllowedItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
-        [Self.statusID, .flexibleSpace, Self.actionsID]
-    }
-
-    func toolbar(_ toolbar: NSToolbar, itemForItemIdentifier id: NSToolbarItem.Identifier, willBeInsertedIntoToolbar flag: Bool) -> NSToolbarItem? {
-        let item = NSToolbarItem(itemIdentifier: id)
-        let view: NSView
-        if id == Self.actionsID {
-            item.label = "操作"
-            view = NSHostingView(rootView: ToolbarActions(state: AppState.shared))
-        } else if id == Self.statusID {
-            item.label = "状态"
-            view = NSHostingView(rootView: ToolbarStatus(state: AppState.shared))
-        } else { return nil }
-        view.setFrameSize(view.fittingSize)
-        item.view = view
-        item.visibilityPriority = .high
-        return item
     }
 }
 
@@ -174,6 +144,12 @@ struct MainWindowView: View {
                 .navigationSplitViewColumnWidth(min: 230, ideal: 256, max: 340)
         } detail: {
             DetailArea(state: state)
+                .toolbar {
+                    ToolbarItem(placement: .navigation) { ToolbarStatus(state: state) }
+                    ToolbarItem(placement: .primaryAction) { ToolbarActions(state: state) }
+                }
+                .toolbarBackground(Theme.bg, for: .windowToolbar)
+                .toolbarBackground(.visible, for: .windowToolbar)
         }
         .navigationSplitViewStyle(.balanced)
         .frame(minWidth: WindowSizing.minWidth, minHeight: WindowSizing.minHeight)
@@ -451,7 +427,7 @@ struct GateGridView: View {
         LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: CGFloat(GateGrid.spacing), alignment: .top), count: n),
                   alignment: .leading, spacing: CGFloat(GateGrid.spacing)) {
             ForEach(Array(cards.enumerated()), id: \.element.id) { i, c in
-                GateCardView(state: state, card: c, focused: i == 0, probe: "win-gate-\(i)", openItem: opener(c))
+                GateCardView(state: state, card: c, focused: i == 0, probe: "win-gate-\(c.id)", openItem: opener(c))
                 .staggeredAppear(i)
                 .transition(.asymmetric(
                     insertion: .scale(scale: 0.9, anchor: .top).combined(with: .opacity),
