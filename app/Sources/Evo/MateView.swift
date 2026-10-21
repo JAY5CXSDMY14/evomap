@@ -29,7 +29,8 @@ enum MateAssets {
     static var rules: WKContentRuleList?
     static func prepareRules() {
         guard rules == nil else { return }
-        let json = #"[{"trigger":{"url-filter":"^(https?|wss?|ftp)://"},"action":{"type":"block"}}]"#
+        // WebKit 的规则不支持「|」，一种协议一条
+        let json = #"[{"trigger":{"url-filter":"^https?://"},"action":{"type":"block"}},{"trigger":{"url-filter":"^wss?://"},"action":{"type":"block"}},{"trigger":{"url-filter":"^ftp://"},"action":{"type":"block"}}]"#
         WKContentRuleListStore.default()?.compileContentRuleList(forIdentifier: "evo-mate-offline", encodedContentRuleList: json) { list, err in
             if let err { NSLog("Evo 表情：规则表编译失败 \(err.localizedDescription)") }
             Task { @MainActor in MateAssets.rules = list }

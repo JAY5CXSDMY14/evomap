@@ -41,7 +41,6 @@ defaults delete $BUNDLE "NSWindow Frame Evo.main" 2>/dev/null || true
 mkdir -p "$HOME/.evoloop"
 # CI 上关掉免打扰（不然半夜跑的录屏里角色在睡觉）；本机跑不动你的配置
 if [ -n "${CI:-}" ] || [ ! -f "$HOME/.evoloop/config.json" ]; then echo '{"notify": {"quiet_hours": {}}}' > "$HOME/.evoloop/config.json"; fi
-osascript -e 'tell application "System Events" to set autohide of dock preferences to false' >/dev/null 2>&1 || true
 
 # ---------- 录屏 ----------
 REC_PID=""; REC_KIND=""
@@ -111,62 +110,43 @@ click() {
 paste_text() { printf '%s' "$1" | pbcopy; "$CLICLICK" kd:cmd t:v ku:cmd >/dev/null; }
 key() { "$CLICLICK" "$@" >/dev/null; }
 
-can_drive() {   # 鼠标真的能被挪动、点开弹窗吗
-  [ -n "$CLICLICK" ] || { note "没有 cliclick"; return 1; }
-  "$CLICLICK" m:400,400 >/dev/null 2>&1; sleep 0.3
-  local p; p=$("$CLICLICK" p 2>/dev/null | tail -1)
-  note "  鼠标挪到 400,400 后读回：$p"
-  click status-item || return 1
-  if waitpt pop-open-window >/dev/null; then key kp:esc; sleep 0.8; return 0; fi
-  note "  点了菜单栏图标，弹窗没出来"
-  key kp:esc
-  return 1
-}
-
-tcc_grant() {
-  note "写 TCC.db 授权（辅助功能 / 发事件 / 录屏）…"
-  local now; now=$(date +%s)
-  for db in "$HOME/Library/Application Support/com.apple.TCC/TCC.db" "/Library/Application Support/com.apple.TCC/TCC.db"; do
-    [ -f "$db" ] || continue
-    for client in "$CLICLICK" /bin/bash /bin/sh /usr/bin/osascript "$(command -v ffmpeg || echo /usr/bin/true)" /usr/sbin/screencapture "$APP/Contents/MacOS/Evo"; do
-      for svc in kTCCServiceAccessibility kTCCServicePostEvent kTCCServiceScreenCapture; do
-        sudo sqlite3 "$db" "INSERT OR REPLACE INTO access (service, client, client_type, auth_value, auth_reason, auth_version, indirect_object_identifier, flags, last_modified) VALUES ('$svc', '$client', 1, 2, 4, 1, 'UNUSED', 0, $now);" 2>>"$WORK/tcc.log" || true
-      done
-    done
-  done
-  sudo killall tccd 2>/dev/null || true
-  tail -3 "$WORK/tcc.log" 2>/dev/null | sed 's/^/  tcc: /' | tee -a "$HOW"
-  sleep 2
-}
-
-# ---------- 驱动（真鼠标） ----------
-drive() {
+can_drive() {
   local fails=0
-  shot 01-desktop
-  click status-item || fails=$((fails+1)); waitpt pop-open-window >/dev/null; sleep 1.4; shot 02-popover
-  click pop-open-window || fails=$((fails+1)); waitpt win-sidebar-inbox >/dev/null; sleep 2.6; shot 03-window
+  sleep 1.2; shot 02-popover
+  click pop-open-window || fails=$((fails+1))
+  for _ in $(seq 1 30); do window_open && break; sleep 0.25; done
+  if ! window_open; then     # 再试一次：重新点开弹窗再点按钮
+    note "  窗口没出来，重试"
+    open_popover && click pop-open-window
+    for _ in $(seq 1 30); do window_open && break; sleep 0.25; done
+  fi
+  window_open || { note "  ✗ 主窗口打不开"; return 1; }
+  sleep 2.6; shot 03-window
   # 在窗口里晃晃鼠标：角色跟着看
   local m; m=$(pt win-sidebar-inbox)
   if [ -n "$m" ]; then
     local mx=${m%,*} my=${m#*,}
-    key -e 600 "m:$((mx+500)),$((my-120))"; key -e 600 "m:$((mx+60)),$((my+300))"; key -e 500 "m:$((mx-40)),$((my-160))"
+    key -e 600 "m:$((mx+520)),$((my-140))"; key -e 600 "m:$((mx+80)),$((my+320))"; key -e 500 "m:$((mx-30)),$((my-170))"
   fi
   click win-gate-0-approve || fails=$((fails+1)); sleep 0.22; shot 04-approve-fly; sleep 2.2; shot 05-approved
   click win-gate-0-reject || fails=$((fails+1)); waitpt win-gate-0-send >/dev/null; sleep 0.5
-  paste_text "手机上按钮太挤，再大一圈"; sleep 0.9; shot 06-reject-words
+  if evo_front; then paste_text "手机上按钮太挤，再大一圈"; fi; sleep 0.9; shot 06-reject-words
   click win-gate-0-send || fails=$((fails+1)); sleep 2.2; shot 07-rejected
   click win-sidebar-project-TB || fails=$((fails+1)); sleep 2.0; shot 08-project
   click win-item-0 || fails=$((fails+1)); sleep 2.6; shot 09-item-timeline
-  key kd:cmd t:k ku:cmd; sleep 1.0; paste_text "深色"; sleep 1.0; shot 10-palette
-  key kp:return; sleep 2.4; shot 11-dark-item
+  if evo_front; then
+    key kd:cmd t:k ku:cmd; sleep 1.0
+    if [ -n "$(pt palette-field)" ]; then paste_text "深色"; sleep 1.0; shot 10-palette; key kp:return; else note "  ✗ ⌘K 面板没出来"; fails=$((fails+1)); fi
+  else note "  ✗ Evo 不在最前面，跳过键盘步骤"; fails=$((fails+1)); fi
+  sleep 2.4; shot 11-dark-item
   click win-sidebar-inbox || fails=$((fails+1)); sleep 1.4; shot 12-dark-inbox
   click composer-field || fails=$((fails+1)); sleep 0.4
-  paste_text "注册页在手机上按钮太挤了"; sleep 0.6
-  click composer-send || key kp:return; sleep 3.6; shot 13-composer-reply
-  click status-item || fails=$((fails+1)); sleep 1.8; shot 14-popover-dark
-  key kp:esc; sleep 0.6
-  note "真鼠标驱动完成，失败点击 $fails 次；最后状态：$(geo selection) · 卡片 $(geo cards) · 深色 $(geo dark)"
-  return 0
+  if evo_front; then paste_text "注册页在手机上按钮太挤了"; fi; sleep 0.6
+  click composer-send || fails=$((fails+1)); sleep 3.6; shot 13-composer-reply
+  open_popover || fails=$((fails+1)); sleep 1.8; shot 14-popover-dark
+  popover_open && click status-item; sleep 0.6
+  note "真鼠标驱动完成，失败 $fails 处；最后状态：$(geo selection) · 卡片 $(geo cards) · 深色 $(geo dark)"
+  [ $fails -le 3 ]
 }
 
 demo_mode() {
@@ -180,16 +160,23 @@ demo_mode() {
 
 start_rec
 launch
+shot 01-desktop
 MODE=""
 if can_drive; then MODE=cliclick
 else
   tcc_grant
   launch
+  shot 01-desktop
   if can_drive; then MODE="cliclick（写 TCC.db 后）"; fi
 fi
 if [ -n "$MODE" ]; then
   note "驱动方式：$MODE"
-  drive
+  if ! drive; then
+    note "真鼠标驱动失败太多：改用应用自演补拍"
+    rm -f "$OUT"/shots/*.png
+    demo_mode
+    MODE="$MODE → demo"
+  fi
 else
   note "两次都点不动：改用应用自演"
   demo_mode
