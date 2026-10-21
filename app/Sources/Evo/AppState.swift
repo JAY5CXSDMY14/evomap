@@ -2,7 +2,8 @@
 import AppKit
 import EvoCore
 
-/// 应用的全部状态：每 30 秒跑一遍 `evo projects` + 每个项目 `evo -p X status --json`。
+/// 应用的全部状态：`evo projects` + 每个项目 `evo -p X status --json`。
+/// v0.7.0：订阅 `evo watch --json`，有事件就刷新（去抖 1.2 秒），事件流活着时只做 2 分钟兜底轮询；断了自动回到 30 秒轮询并重连。
 @MainActor
 final class AppState: ObservableObject {
     static let shared = AppState()
@@ -37,6 +38,16 @@ final class AppState: ObservableObject {
     @Published var pluginBusy: Set<String> = []    // 正在开关的插件名
     @Published var pluginNote: String?             // 插件列表读不出来时的一句（老 evo 没有 plugin 命令）
     @Published var contractWarning: String?        // v0.6.0：evo 的 JSON 接口大版本对不上（evo 比 App 新/旧，请更新）
+    @Published var features: FeatureList?          // v0.7.0：evo feature list --json（nil = 老 evo 没有功能开关，界面照旧全显示）
+    @Published var featureNote: String?            // 功能列表读不出来的原因（设置页「功能」卡片里画错误卡片 + 重试）
+    @Published var featureBusy: Set<String> = []   // 正在开关的功能 id / 正在存的「功能/键」
+    @Published var featureForms: [String: FeatureForm] = [:]   // 自动表单的草稿和红字
+    @Published var expandedFeature: String?        // 设置页里展开了表单的那个功能
+    @Published var scrollTarget: String?           // 内容区滚到这个 id（展开表单时）
+    @Published var pageRetrying = false            // 错误卡片上的「重试」在跑
+    @Published var watchLink = WatchLink()         // v0.7.0：evo watch --json 事件流的连接状态
+    var watchClient: WatchClient?
+    private var pendingRefresh = false             // 刷新途中又来了事件：刷完再刷一次
     var popoverShown = false                       // 菜单栏弹窗开着吗（开主窗口时顺手收起）
     var previewQuiet: Bool?                        // 截图用：固定「是不是免打扰」
     private var reactionToken = UUID()
@@ -160,16 +171,18 @@ final class AppState: ObservableObject {
         refresh()
         timer?.invalidate()
         timer = Timer.scheduledTimer(withTimeInterval: Self.pollSeconds, repeats: true) { _ in
-            Task { @MainActor in AppState.shared.refresh() }
+            Task { @MainActor in AppState.shared.pollTick() }
         }
+        startWatch()
     }
 
     func refresh() {
-        guard !refreshing else { return }
+        guard !refreshing else { pendingRefresh = true; return }
         refreshing = true
         Task {
             await doRefresh()
             refreshing = false
+            if pendingRefresh { pendingRefresh = false; refresh() }
         }
     }
 
@@ -221,8 +234,10 @@ final class AppState: ObservableObject {
         if MateMap.mergedIncreased(old: mergedCounts, new: merged) { react(.merged) }
         mergedCounts = merged
         if Launchd.installed { loopRunning = await Launchd.isLoaded() } else { loopRunning = nil }
-        await loadTeam()
-        await loadPlugins()
+        await loadFeatures()                       // v0.7.0：先读功能列表，关掉的功能不去问它
+        if registry.teamVisible { await loadTeam() }
+        if registry.pluginsVisible { await loadPlugins() }
+        applyFeatureVisibility()
         lastRefresh = Date()
     }
 

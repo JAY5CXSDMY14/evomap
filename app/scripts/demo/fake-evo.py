@@ -94,17 +94,72 @@ def team(s, argv):
     print("假 evo team：不认得 " + " ".join(argv), file=sys.stderr); return 1
 
 
+FEATURES = os.path.join(os.path.dirname(os.path.abspath(__file__)), "features.json")
+
+
+def builtin_feature(s, argv):
+    """没有真 evo 时的 evo feature：list --json / on / off / set（只认 features.json 里的设置，按 schema 校验）。"""
+    d = json.load(open(FEATURES, encoding="utf-8"))
+    ch = s.setdefault("features", {})
+    for f in d["features"]:
+        o = ch.get(f["id"]) or {}
+        if "enabled" in o:
+            f["enabled"] = o["enabled"]; f["state"] = "active" if o["enabled"] else "off"; f["why"] = "" if o["enabled"] else "你关了它"
+        f["config"].update(o.get("config") or {})
+    act = argv[0] if argv else "list"
+    if act in ("list", "dump"):
+        out(d); return 0
+    f = next((x for x in d["features"] if len(argv) > 1 and x["id"] == argv[1]), None)
+    if not f:
+        print(f"没有功能 {argv[1] if len(argv) > 1 else ''}", file=sys.stderr); return 2
+    o = ch.setdefault(f["id"], {})
+    if act in ("on", "off"):
+        if act == "off" and f.get("in_use"):
+            print(f"{f['id']} 正在用（{f['in_use_text']}），关不掉", file=sys.stderr); return 2
+        o["enabled"] = act == "on"; save(s); print(f"{f['id']} 已{'开' if act == 'on' else '关'}"); return 0
+    if act == "set":
+        props = (f.get("settings") or {}).get("properties") or {}
+        for kv in argv[2:]:
+            k, _, v = kv.partition("=")
+            p = props.get(k)
+            if not p:
+                print(f"{f['id']} 没有设置 {k}", file=sys.stderr); return 2
+            try:
+                val = {"integer": int, "number": float, "boolean": lambda x: x in ("true", "1", "on"), "string": str}[p["type"]](v)
+            except ValueError:
+                print(f"{k} 要是 {p['type']}", file=sys.stderr); return 2
+            if p["type"] in ("integer", "number") and not (p.get("minimum", -1e18) <= val <= p.get("maximum", 1e18)):
+                print(f"{k} 要在 {p.get('minimum')}–{p.get('maximum')} 之间", file=sys.stderr); return 2
+            o.setdefault("config", {})[k] = val
+        save(s); print(f"{f['id']} 设置已存"); return 0
+    print("用法：feature list|on|off|set", file=sys.stderr); return 2
+
+
 def main(argv):
     s = load()
     code = None
     if len(argv) >= 2 and argv[0] == "-p":
         code, argv = argv[1], argv[2:]
     cmd = argv[0] if argv else "help"
-    if cmd == "plugin":                  # v0.6.0：插件交给真 evo（包里的 kit，插件目录 $EVO_PLUGINS_DIR），演示的是真的插件机制
+    if cmd in ("plugin", "feature", "watch"):
+        # v0.6.0 插件、v0.7.0 功能开关 / 事件流：交给真 evo（包里的 kit；$EVO_HOME、$EVO_PLUGINS_DIR 指到临时目录），演示的是真机制
         real = os.environ.get("EVO_REAL_EVO")
         if not real or not os.path.exists(real):
-            print("假 evo：没有 EVO_REAL_EVO，插件功能演示不了", file=sys.stderr); return 2
+            if cmd == "feature":
+                return builtin_feature(s, argv[1:])
+            print(f"假 evo：没有 EVO_REAL_EVO，{cmd} 演示不了", file=sys.stderr); return 2
         os.execv(sys.executable, [sys.executable, real] + argv)
+    if cmd == "_demo":                   # v0.7.0：演示用开关：_demo break log / _demo fix log（让 evo log 失败，看错误卡片）
+        act, what = (argv[1:3] + ["", ""])[:2]
+        broken = set(s.get("broken") or [])
+        if act == "break":
+            broken.add(what)
+        elif act == "fix":
+            broken.discard(what)
+        s["broken"] = sorted(broken); save(s)
+        print(f"演示：{what} {'坏了' if what in broken else '好了'}"); return 0
+    if cmd in (s.get("broken") or []):
+        print(f"evo {cmd} 读状态文件失败：state.json 被锁住（演示）", file=sys.stderr); return 1
     if cmd == "projects" and "--json" in argv:
         out({"schema_version": 1, "projects": [{"code": c, "name": p["name"]} for c, p in s["projects"].items()]})
         return 0

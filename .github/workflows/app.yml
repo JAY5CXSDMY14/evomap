@@ -38,6 +38,9 @@ jobs:
           test -f build/Evo.app/Contents/Resources/evo/bin/evo_plugin.py
           test -f build/Evo.app/Contents/Resources/evo/plugins/example-hello/plugin.json
           test -f build/Evo.app/Contents/Resources/evo/schemas/status.schema.json
+          test -f build/Evo.app/Contents/Resources/evo/features/team/feature.json
+          test -f build/Evo.app/Contents/Resources/evo/schemas/feature-list.schema.json
+          grep -q '"CFBundleShortVersionString" => "0.7.0"' <(plutil -p build/Evo.app/Contents/Info.plist)
           test -f build/Evo.app/Contents/Resources/mate/index.html
           test -f build/Evo.app/Contents/Resources/vendor/emotion-ball/js/engine.js
           test -f build/Evo.app/Contents/Resources/vendor/NOTICE.md

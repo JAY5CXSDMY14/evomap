@@ -224,11 +224,15 @@ struct SidebarView: View {
                     SidebarRow(symbol: "hourglass", title: "卡太久", badge: state.stuckEntries.count, accentBadge: false,
                                selected: current == .stale) { go(.stale) }
                         .uiProbe("win-sidebar-stale")
-                    SidebarRow(symbol: "person.3", title: "团队", badge: state.team?.attention ?? 0, accentBadge: false,
-                               selected: current == .team) { go(.team) }
-                        .uiProbe("win-sidebar-team")
-                    // v0.6.0：插件分组（打开了的插件的侧栏页；没有就不出现）
-                    let pages = state.plugins?.sidebarPages ?? []
+                    // v0.7.0：侧栏跟着功能列表走：功能包 team 关了「团队」就不出现（老 evo 没有功能开关 → 照旧显示）
+                    if state.registry.teamVisible {
+                        SidebarRow(symbol: "person.3", title: "团队", badge: state.team?.attention ?? 0, accentBadge: false,
+                                   selected: current == .team) { go(.team) }
+                            .uiProbe("win-sidebar-team")
+                            .transition(.move(edge: .leading).combined(with: .opacity))
+                    }
+                    // v0.6.0：插件分组（打开了的插件的侧栏页；没有就不出现）；v0.7.0：功能包 plugins 关了整组不出现
+                    let pages = state.registry.pluginsVisible ? (state.plugins?.sidebarPages ?? []) : []
                     if !pages.isEmpty {
                         SidebarHeading(text: "插件")
                         ForEach(Array(pages.enumerated()), id: \.element.key) { i, pg in
@@ -241,10 +245,12 @@ struct SidebarView: View {
                 }
                 .padding(.horizontal, 8)
                 .animation(Motion.or(Motion.softSpring), value: state.plugins?.sidebarPages.map(\.key) ?? [])
+                .animation(Motion.or(Motion.softSpring), value: state.registry.teamVisible)
             }
             Spacer(minLength: 0)
             Rectangle().fill(Theme.border).frame(height: 1).padding(.horizontal, 12)
             SidebarRow(symbol: "gearshape", title: "设置", badge: 0, accentBadge: false, selected: current == .settings) { go(.settings) }
+                .uiProbe("win-sidebar-settings")
                 .padding(.horizontal, 8).padding(.vertical, 8)
         }
         .frame(maxHeight: .infinity, alignment: .top)
@@ -379,15 +385,31 @@ struct DetailArea: View {
     @ObservedObject var state: AppState
     @State private var width: CGFloat = 800
 
+    private func backAction(_ sel: SidebarItem) -> (() -> Void)? {
+        guard let p = sel.parent else { return nil }
+        let st = state
+        return { withAnimation(Motion.or(Motion.softSpring)) { st.windowSelection = p } }
+    }
+
     var body: some View {
         let sel = state.windowSelection ?? .inbox
         VStack(spacing: 0) {
+          ScrollViewReader { proxy in
             ScrollView(.vertical) {
                 VStack(alignment: .leading, spacing: 0) {
                     if let w = state.contractWarning {      // v0.6.0：evo 的接口版本和 App 对不上
                         ContractBanner(text: w).padding(.bottom, 16)
                     }
                     Group {
+                        // v0.7.0 错误边界：这页的数据读不出来 → 只这一页画「出错了 + 重试」卡片，侧栏和别的页照常
+                        if let err = PageBoundary.error(for: sel, state.pageErrors) {
+                            VStack(alignment: .leading, spacing: 0) {
+                                PageTitleForError(sel: sel, state: state)
+                                PageErrorCard(error: err, busy: state.pageRetrying, back: backAction(sel)) {
+                                    state.retryPage(sel)
+                                }
+                            }
+                        } else {
                         switch sel {
                         case .inbox: InboxPane(state: state, width: width)
                         case .project(let c): ProjectPane(state: state, code: c, width: width)
@@ -398,6 +420,7 @@ struct DetailArea: View {
                             if let ref = state.plugins?.page(p, id) { PluginPane(state: state, ref: ref) }
                             else { Hint(text: "插件 \(p) 的页「\(id)」不在了（插件关掉或删掉了）", color: Theme.textSecondary) }
                         case .settings: SettingsView(state: state, embedded: true).frame(maxWidth: .infinity)
+                        }
                         }
                     }
                     .id(sel)
@@ -410,9 +433,27 @@ struct DetailArea: View {
             }
             .onPreferenceChange(WidthKey.self) { w in if abs(w - width) > 1 { width = w } }
             .animation(Motion.or(Motion.softSpring), value: sel)
+            .onChange(of: state.scrollTarget) { t in
+                guard let t else { return }
+                withAnimation(Motion.or(Motion.softSpring)) { proxy.scrollTo(t, anchor: .top) }
+                state.scrollTarget = nil
+            }
+          }
             if sel != .settings { ComposerDock(state: state) }
         }
         .background(Theme.bg.ignoresSafeArea())
+    }
+}
+
+/// 错误卡片上面那行页标题（让人知道是哪一页坏了）。
+struct PageTitleForError: View {
+    let sel: SidebarItem
+    @ObservedObject var state: AppState
+    var body: some View {
+        Text(sel.title { state.snapshot($0)?.name })
+            .font(Theme.title(24)).foregroundStyle(Theme.textPrimary)
+            .lineLimit(1).truncationMode(.tail)
+            .padding(.bottom, 14)
     }
 }
 

@@ -123,6 +123,9 @@ public enum DemoScript {
         case team             // 侧栏「团队」：岗位卡片
         case pluginPage       // v0.6.0：侧栏「插件」分组里的页（示例插件 example-hello）
         case pluginCommand    // v0.6.0：输入框跑 /hello，回话是插件卡片
+        case features         // v0.7.0：设置页「功能」：关掉 team → 侧栏「团队」消失
+        case featureForm      // v0.7.0：按 settings schema 自动画的表单（填个超范围的数 → 红字）
+        case pageError        // v0.7.0：件详情读不出来 → 「这页出错了 + 重试」卡片
         case palette          // ⌘K
         case dark             // 命令面板里切深色
         case composer         // 输入框发一句，看回话
@@ -146,6 +149,9 @@ public enum DemoScript {
         case .team: return 2.6
         case .pluginPage: return 2.6
         case .pluginCommand: return 3.0
+        case .features: return 2.4
+        case .featureForm: return 2.4
+        case .pageError: return 2.4
         case .palette: return 1.8
         case .dark: return 2.4
         case .composer: return 3.2

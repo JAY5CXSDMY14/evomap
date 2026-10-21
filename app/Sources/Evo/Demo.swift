@@ -183,6 +183,24 @@ enum DemoRunner {
             }
         case .pluginCommand:
             _ = st.send(mode: .feedback, project: st.codes.first ?? "", text: "/hello 老板", look: false)
+        case .features:          // v0.7.0：设置页「功能」，关掉 team → 侧栏「团队」消失
+            withAnimation(Motion.or(Motion.softSpring)) { st.windowSelection = .settings }
+            st.setFeatureEnabled("team", false)
+        case .featureForm:       // 自动表单：填一个超范围的数，看红字
+            st.toggleFeatureExpanded("item-caps")
+            if let f = st.features?.feature("item-caps"), let fld = f.settings?.fields.first(where: { $0.key == "item_hard_runs" }) {
+                st.editFeatureDraft(f, fld.key, "2000")
+                st.commitFeatureField(f, fld)
+            }
+        case .pageError:         // 让假 evo 的 log 坏掉，打开件详情 → 错误卡片
+            Task { @MainActor in
+                _ = await Shell.evo(["_demo", "break", "log"], timeout: 10)
+                if let c = st.codes.first, let k = st.snapshot(c)?.doc?.items.first?.key {
+                    withAnimation(Motion.or(Motion.softSpring)) { st.windowSelection = .item(project: c, key: k) }
+                }
+                try? await Task.sleep(nanoseconds: 3_000_000_000)
+                _ = await Shell.evo(["_demo", "fix", "log"], timeout: 10)
+            }
         case .palette:
             PaletteController.shared.show()
             PaletteController.shared.model.query = "深色"

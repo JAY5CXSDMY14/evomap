@@ -1,0 +1,583 @@
+{
+    "schema_version": 1,
+    "api": "1.0",
+    "preset": "all",
+    "file": "/tmp/evoh/features.yml",
+    "file_error": null,
+    "features": [
+        {
+            "id": "arch-preset",
+            "name": "架构预设",
+            "sub": "碰后端路径的件任务书带「架构规范」，交卷查结构（python-fastapi / node-ts / swift-app）",
+            "version": "1.0.0",
+            "api": "^1",
+            "essential": false,
+            "state": "active",
+            "why": "",
+            "enabled": true,
+            "chosen": true,
+            "source": "default",
+            "in_use": 0,
+            "in_use_text": "",
+            "requires": [
+                "config",
+                "git"
+            ],
+            "provides": [
+                "preset.arch"
+            ],
+            "parts": [
+                {
+                    "slot": "cli",
+                    "key": "arch"
+                },
+                {
+                    "slot": "prompt.head",
+                    "key": "20-arch"
+                },
+                {
+                    "slot": "delivery.check",
+                    "key": "20-arch"
+                },
+                {
+                    "slot": "status",
+                    "key": "arch_preset"
+                }
+            ],
+            "settings": null,
+            "config": {},
+            "config_source": {},
+            "subscribes": [
+                "tick.before_dispatch"
+            ]
+        },
+        {
+            "id": "deploy",
+            "name": "上线",
+            "sub": "老板点「上线」后跑 deploy_cmd；每天早上自动攒一批建上线闸门（自动收菜）",
+            "version": "1.0.0",
+            "api": "^1",
+            "essential": true,
+            "state": "active",
+            "why": "",
+            "enabled": true,
+            "chosen": true,
+            "source": "default",
+            "in_use": 0,
+            "in_use_text": "",
+            "requires": [
+                "state",
+                "config"
+            ],
+            "provides": [
+                "deploy"
+            ],
+            "parts": [
+                {
+                    "slot": "settings",
+                    "key": "deploy"
+                }
+            ],
+            "settings": {
+                "type": "object",
+                "x-order": [
+                    "auto_ship_gate",
+                    "ship_gate_at"
+                ],
+                "properties": {
+                    "auto_ship_gate": {
+                        "type": "boolean",
+                        "title": "每天自动攒一批建上线闸门",
+                        "description": "全局 / 项目 config.json 的 auto_ship_gate 写了以它为准",
+                        "default": true
+                    },
+                    "ship_gate_at": {
+                        "type": "string",
+                        "title": "几点之后自动收菜",
+                        "description": "24 小时制 HH:MM（上海时间）",
+                        "default": "08:20"
+                    }
+                }
+            },
+            "config": {
+                "auto_ship_gate": true,
+                "ship_gate_at": "08:20"
+            },
+            "config_source": {
+                "auto_ship_gate": "default",
+                "ship_gate_at": "default"
+            },
+            "subscribes": [
+                "tick.before_save"
+            ]
+        },
+        {
+            "id": "digest",
+            "name": "早报和每晚汇总",
+            "sub": "夜里要推的事攒到早上一条发；每晚汇总今天的动静（可贴日报 issue）",
+            "version": "1.0.0",
+            "api": "^1",
+            "essential": false,
+            "state": "active",
+            "why": "",
+            "enabled": true,
+            "chosen": true,
+            "source": "default",
+            "in_use": 0,
+            "in_use_text": "",
+            "requires": [
+                "notify",
+                "state"
+            ],
+            "provides": [
+                "digest"
+            ],
+            "parts": [
+                {
+                    "slot": "cli",
+                    "key": "digest"
+                },
+                {
+                    "slot": "settings",
+                    "key": "digest"
+                }
+            ],
+            "settings": {
+                "type": "object",
+                "x-order": [
+                    "nightly_email"
+                ],
+                "properties": {
+                    "nightly_email": {
+                        "type": "boolean",
+                        "title": "每晚汇总也发邮件",
+                        "description": "要邮件推送开着；全局配置 notify.email.nightly 写了以它为准",
+                        "default": true
+                    }
+                }
+            },
+            "config": {
+                "nightly_email": true
+            },
+            "config_source": {
+                "nightly_email": "default"
+            },
+            "subscribes": []
+        },
+        {
+            "id": "github",
+            "name": "GitHub 来源",
+            "sub": "从 issue 拉件、老板在 issue 下的评论当补反馈；合并 / 上线时回写 issue",
+            "version": "1.0.0",
+            "api": "^1",
+            "essential": true,
+            "state": "active",
+            "why": "",
+            "enabled": true,
+            "chosen": true,
+            "source": "default",
+            "in_use": 0,
+            "in_use_text": "",
+            "requires": [
+                "state",
+                "config"
+            ],
+            "provides": [
+                "github"
+            ],
+            "parts": [
+                {
+                    "slot": "cli",
+                    "key": "pull"
+                }
+            ],
+            "settings": null,
+            "config": {},
+            "config_source": {},
+            "subscribes": []
+        },
+        {
+            "id": "item-caps",
+            "name": "每件上限",
+            "sub": "返工 / 派工次数 / 累计小时到了就暂停，问老板继续还是不做",
+            "version": "1.0.0",
+            "api": "^1",
+            "essential": true,
+            "state": "active",
+            "why": "",
+            "enabled": true,
+            "chosen": true,
+            "source": "default",
+            "in_use": 0,
+            "in_use_text": "",
+            "requires": [
+                "state",
+                "orca"
+            ],
+            "provides": [
+                "caps"
+            ],
+            "parts": [
+                {
+                    "slot": "settings",
+                    "key": "item-caps"
+                },
+                {
+                    "slot": "status",
+                    "key": "limits"
+                },
+                {
+                    "slot": "cli",
+                    "key": "limits"
+                }
+            ],
+            "settings": {
+                "type": "object",
+                "x-order": [
+                    "decider_reworks",
+                    "item_hard_runs",
+                    "item_hard_hours"
+                ],
+                "properties": {
+                    "decider_reworks": {
+                        "type": "integer",
+                        "title": "决策岗指导返工最多几次",
+                        "description": "到了转老板「继续 / 不做」；0 = 不限",
+                        "minimum": 0,
+                        "maximum": 50,
+                        "default": 2
+                    },
+                    "item_hard_runs": {
+                        "type": "integer",
+                        "title": "一件最多派工几次",
+                        "description": "施工 + 验收都算；到了暂停等老板；0 = 不限",
+                        "minimum": 0,
+                        "maximum": 1000,
+                        "default": 12
+                    },
+                    "item_hard_hours": {
+                        "type": "number",
+                        "title": "一件工人最多累计几小时",
+                        "description": "到了暂停等老板；0 = 不限",
+                        "minimum": 0,
+                        "maximum": 1000,
+                        "default": 6
+                    }
+                }
+            },
+            "config": {
+                "decider_reworks": 2,
+                "item_hard_runs": 20,
+                "item_hard_hours": 6
+            },
+            "config_source": {
+                "decider_reworks": "default",
+                "item_hard_runs": "user",
+                "item_hard_hours": "default"
+            },
+            "subscribes": [
+                "tick.after_dispatch"
+            ]
+        },
+        {
+            "id": "notify-email",
+            "name": "邮件推送",
+            "sub": "SMTP：Telegram 没配或发失败时兜底，另外收早间汇总和每晚汇总",
+            "version": "1.0.0",
+            "api": "^1",
+            "essential": false,
+            "state": "active",
+            "why": "",
+            "enabled": true,
+            "chosen": true,
+            "source": "default",
+            "in_use": 0,
+            "in_use_text": "",
+            "requires": [
+                "notify"
+            ],
+            "provides": [
+                "mail.send"
+            ],
+            "parts": [
+                {
+                    "slot": "notify.channel",
+                    "key": "20-email"
+                },
+                {
+                    "slot": "settings",
+                    "key": "notify-email"
+                }
+            ],
+            "settings": {
+                "type": "object",
+                "x-order": [
+                    "mode"
+                ],
+                "properties": {
+                    "mode": {
+                        "type": "string",
+                        "title": "什么时候发邮件",
+                        "description": "fallback：Telegram 没配或发失败才发；always：要推的事都发（全局配置 notify.email.mode 写了以它为准）",
+                        "enum": [
+                            "fallback",
+                            "always"
+                        ],
+                        "default": "fallback"
+                    }
+                }
+            },
+            "config": {
+                "mode": "fallback"
+            },
+            "config_source": {
+                "mode": "default"
+            },
+            "subscribes": []
+        },
+        {
+            "id": "notify-telegram",
+            "name": "Telegram 推送",
+            "sub": "要推的事发 Telegram，闸门消息带「通过 / 打回」按钮；evo bot 收按钮",
+            "version": "1.0.0",
+            "api": "^1",
+            "essential": false,
+            "state": "active",
+            "why": "",
+            "enabled": true,
+            "chosen": true,
+            "source": "default",
+            "in_use": 0,
+            "in_use_text": "",
+            "requires": [
+                "notify"
+            ],
+            "provides": [],
+            "parts": [
+                {
+                    "slot": "notify.channel",
+                    "key": "10-telegram"
+                },
+                {
+                    "slot": "cli",
+                    "key": "bot"
+                }
+            ],
+            "settings": null,
+            "config": {},
+            "config_source": {},
+            "subscribes": []
+        },
+        {
+            "id": "notify-webhook",
+            "name": "Webhook 推送",
+            "sub": "事件 JSON POST 到配置的 URL（可带 HMAC 签名），给别的 bot / Agent 用",
+            "version": "1.0.0",
+            "api": "^1",
+            "essential": false,
+            "state": "active",
+            "why": "",
+            "enabled": true,
+            "chosen": true,
+            "source": "default",
+            "in_use": 0,
+            "in_use_text": "",
+            "requires": [
+                "notify"
+            ],
+            "provides": [],
+            "parts": [
+                {
+                    "slot": "notify.channel",
+                    "key": "30-webhook"
+                }
+            ],
+            "settings": null,
+            "config": {},
+            "config_source": {},
+            "subscribes": []
+        },
+        {
+            "id": "orca-gate-sync",
+            "name": "Orca 闸门同步",
+            "sub": "Orca 端（手机 / 工人）结的闸门：打回类照办，放行类转成在 evo 入口再确认",
+            "version": "1.0.0",
+            "api": "^1",
+            "essential": true,
+            "state": "active",
+            "why": "",
+            "enabled": true,
+            "chosen": true,
+            "source": "default",
+            "in_use": 0,
+            "in_use_text": "",
+            "requires": [
+                "state",
+                "orca"
+            ],
+            "provides": [],
+            "parts": [
+                {
+                    "slot": "settings",
+                    "key": "orca-gate-sync"
+                }
+            ],
+            "settings": {
+                "type": "object",
+                "x-order": [
+                    "execute_negative"
+                ],
+                "properties": {
+                    "execute_negative": {
+                        "type": "boolean",
+                        "title": "Orca 端点「打回 / 不做」直接照办",
+                        "description": "关掉后 Orca 端的任何结果都要在 evo 入口确认；项目配置 orca_gate_sync 写了以它为准。放行类结果永远不直接算数",
+                        "default": true
+                    }
+                }
+            },
+            "config": {
+                "execute_negative": true
+            },
+            "config_source": {
+                "execute_negative": "default"
+            },
+            "subscribes": [
+                "tick.gates"
+            ]
+        },
+        {
+            "id": "plugins",
+            "name": "第三方插件",
+            "sub": "~/.evoloop/plugins 里的外部插件（侧栏页 / 输入框命令 / 通知渠道 / 件按钮），接口见 docs/plugins.md",
+            "version": "1.0.0",
+            "api": "^1",
+            "essential": false,
+            "state": "off",
+            "why": "你关了它",
+            "enabled": false,
+            "chosen": false,
+            "source": "user",
+            "in_use": 0,
+            "in_use_text": "",
+            "requires": [
+                "notify"
+            ],
+            "provides": [
+                "plugins.host"
+            ],
+            "parts": [
+                {
+                    "slot": "page",
+                    "key": "plugins",
+                    "title": "插件",
+                    "icon": "puzzlepiece.extension"
+                },
+                {
+                    "slot": "cli",
+                    "key": "plugin"
+                }
+            ],
+            "settings": null,
+            "config": {},
+            "config_source": {},
+            "subscribes": []
+        },
+        {
+            "id": "team",
+            "name": "团队 / 模型协调",
+            "sub": "岗位卡片、magpie 健康检查、额度满切备用、模型成绩和建议；团队页",
+            "version": "1.0.0",
+            "api": "^1",
+            "essential": true,
+            "state": "active",
+            "why": "",
+            "enabled": true,
+            "chosen": true,
+            "source": "default",
+            "in_use": 0,
+            "in_use_text": "",
+            "requires": [
+                "state",
+                "config",
+                "notify"
+            ],
+            "provides": [
+                "team"
+            ],
+            "parts": [
+                {
+                    "slot": "page",
+                    "key": "team",
+                    "title": "团队",
+                    "icon": "person.3"
+                },
+                {
+                    "slot": "cli",
+                    "key": "team"
+                },
+                {
+                    "slot": "cli",
+                    "key": "models"
+                },
+                {
+                    "slot": "status",
+                    "key": "team"
+                }
+            ],
+            "settings": null,
+            "config": {},
+            "config_source": {},
+            "subscribes": [
+                "tick.after_dispatch"
+            ]
+        },
+        {
+            "id": "ui-preset",
+            "name": "UI 预设",
+            "sub": "碰界面的件任务书带「UI 规范」，交卷查依赖（web-react / swiftui）",
+            "version": "1.0.0",
+            "api": "^1",
+            "essential": false,
+            "state": "active",
+            "why": "",
+            "enabled": true,
+            "chosen": true,
+            "source": "default",
+            "in_use": 0,
+            "in_use_text": "",
+            "requires": [
+                "config",
+                "git"
+            ],
+            "provides": [
+                "preset.ui"
+            ],
+            "parts": [
+                {
+                    "slot": "cli",
+                    "key": "ui"
+                },
+                {
+                    "slot": "prompt.head",
+                    "key": "10-ui"
+                },
+                {
+                    "slot": "delivery.check",
+                    "key": "10-ui"
+                },
+                {
+                    "slot": "status",
+                    "key": "ui_preset"
+                }
+            ],
+            "settings": null,
+            "config": {},
+            "config_source": {},
+            "subscribes": [
+                "tick.before_dispatch"
+            ]
+        }
+    ],
+    "third_party": null
+}

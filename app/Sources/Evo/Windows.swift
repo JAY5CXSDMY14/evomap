@@ -82,6 +82,14 @@ struct FieldBox: View {
     }
 }
 
+struct EmbeddableScroll<Content: View>: View {
+    let embedded: Bool
+    @ViewBuilder var content: () -> Content
+    var body: some View {
+        if embedded { content() } else { MaybeScroll(maxHeight: 2000) { content() } }
+    }
+}
+
 struct SettingsView: View {
     @ObservedObject var state: AppState
     @AppStorage("panelPort") private var panelPort = 8765
@@ -99,7 +107,8 @@ struct SettingsView: View {
     }
 
     var body: some View {
-        MaybeScroll(maxHeight: 2000) {
+        // 嵌在主窗口里时外面已经有滚动区：不再套一层（展开功能表单时要靠外层 ScrollViewReader 滚过去）
+        EmbeddableScroll(embedded: embedded) {
             VStack(alignment: .leading, spacing: 14) {
                 HStack(spacing: 12) {
                     MateView(emotion: .standby, size: 44)
@@ -111,6 +120,8 @@ struct SettingsView: View {
                     Spacer()
                 }
                 .staggeredAppear(0)
+                FeatureSettingsCard(state: state)         // v0.7.0：功能开关 + 按 settings schema 自动画的表单
+                    .staggeredAppear(1)
                 SettingsCard(title: "角色和外观", symbol: "face.smiling") {
                     HStack(spacing: 8) {
                         ForEach(MateCharacter.allCases, id: \.self) { c in
@@ -165,6 +176,8 @@ struct SettingsView: View {
                     FieldBox(placeholder: "evo 路径（留空用应用自带的）", text: $evoPath)
                     Hint(text: "现在用：\(isStatic ? "Evo.app/Contents/Resources/evo/bin/evo" : (EvoEnv.evoScript ?? "没找到"))")
                     Hint(text: "心跳超过 \(Int(state.config.heartbeatStaleMinutes)) 分钟算停（全局配置 limits.heartbeat_stale_minutes）")
+                    Hint(text: isStatic ? "事件流已连上（evo watch --json）：有动静马上刷新" : state.watchLink.statusText(),
+                         color: state.watchLink.alive() || isStatic ? Theme.textSecondary : Theme.warning)
                 }
                 .staggeredAppear(4)
                 PluginSettingsCard(state: state)          // v0.6.0：插件开关

@@ -40,6 +40,28 @@ enum Snapshots {
         return [ProjectSnapshot(code: "TB", doc: tb), ProjectSnapshot(code: "EV", doc: ev), ProjectSnapshot(code: "AB", doc: ab)]
     }
 
+    /// v0.7.0 截图用的功能列表（和 evo feature list --json 同形；team 关着）。
+    static var sampleFeatures: FeatureList {
+        let caps = SettingsSchema(fields: [
+            SettingField(key: "decider_reworks", kind: .integer, title: "决策岗指导返工最多几次", description: "到了转老板「继续 / 不做」；0 = 不限", minimum: 0, maximum: 50, defaultValue: .number(2)),
+            SettingField(key: "item_hard_runs", kind: .integer, title: "一件最多派工几次", description: "施工 + 验收都算；到了暂停等老板；0 = 不限", minimum: 0, maximum: 1000, defaultValue: .number(12)),
+            SettingField(key: "item_hard_hours", kind: .number, title: "一件工人最多累计几小时", description: "到了暂停等老板；0 = 不限", minimum: 0, maximum: 1000, defaultValue: .number(6)),
+        ])
+        let deploy = SettingsSchema(fields: [
+            SettingField(key: "auto_ship_gate", kind: .boolean, title: "每天自动攒一批建上线闸门", defaultValue: .bool(true)),
+            SettingField(key: "ship_gate_at", kind: .string, title: "几点之后自动收菜", description: "24 小时制 HH:MM（上海时间）", defaultValue: .string("08:20")),
+        ])
+        return FeatureList(features: [
+            FeatureInfo(id: "deploy", name: "上线", sub: "老板点「上线」后跑 deploy_cmd；每天早上自动攒一批建上线闸门", essential: true, settings: deploy),
+            FeatureInfo(id: "item-caps", name: "每件上限", sub: "返工 / 派工次数 / 累计小时到了就暂停，问老板继续还是不做", essential: true, settings: caps,
+                        config: ["item_hard_runs": .number(20)]),
+            FeatureInfo(id: "github", name: "GitHub 来源", sub: "拉 issue 成件、回写评论、关 issue", essential: true, inUse: 2, inUseText: "2 个项目连着 GitHub"),
+            FeatureInfo(id: "notify-telegram", name: "Telegram 推送", sub: "闸门和停摆推到 Telegram；关掉不影响别的渠道"),
+            FeatureInfo(id: "plugins", name: "第三方插件", sub: "~/.evoloop/plugins 的外部插件（接口 evo_api 1.0）", parts: [FeaturePart(slot: "page", key: "plugins")]),
+            FeatureInfo(id: "team", name: "团队 / 模型协调", sub: "你关了它", state: "off", enabled: false, essential: true, parts: [FeaturePart(slot: "page", key: "team")]),
+        ])
+    }
+
     static func beats(_ snaps: [ProjectSnapshot], stale: String? = nil) -> [HeartbeatStatus] {
         snaps.map { s in
             s.code == stale ? HeartbeatStatus(project: s.code, ageMinutes: 42, level: .stale)
@@ -77,6 +99,18 @@ enum Snapshots {
             render(PaletteView(state: main, model: pm), width: 520, dark: dark, name: "palette-\(sfx)", out: out)
             // 4 设置
             render(SettingsView(state: main), width: 520, dark: dark, name: "settings-\(sfx)", out: out)
+            // 4b 功能开关 + 自动表单（v0.7.0）：team 关着、item-caps 展开、填了超范围的数
+            let fs = AppState.preview(snaps: snaps, beats: beats(snaps))
+            fs.features = sampleFeatures
+            fs.expandedFeature = "item-caps"
+            if let f = sampleFeatures.feature("item-caps"), let fld = f.settings?.fields.first(where: { $0.key == "item_hard_runs" }) {
+                var fm = FeatureForm(f); fm.edit(fld.key, "2000"); _ = fm.commit(fld)
+                fs.featureForms[f.id] = fm
+            }
+            render(FeatureSettingsCard(state: fs).padding(20), width: 560, dark: dark, name: "features-\(sfx)", out: out)
+            // 4c 页错误边界（v0.7.0）
+            render(PageErrorCard(error: PageError(message: "evo log 读状态文件失败：state.json 被锁住（演示）", title: "TB-UX-003 的时间线读不出来"),
+                                 back: {}) {}.padding(20), width: 680, dark: dark, name: "page-error-\(sfx)", out: out)
             // 5 向导
             render(SetupView(model: sampleSetup()), width: 620, dark: dark, name: "wizard-\(sfx)", out: out)
             // 5b 团队页（v0.4.0）：岗位卡片 + 各项目跟随全局 / 本项目专用 + 确认卡

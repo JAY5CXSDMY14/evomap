@@ -246,6 +246,27 @@ drive() {
   click composer-field || fails=$((fails+1)); sleep 0.4
   if evo_front; then paste_text "/hello 老板"; fi; sleep 0.5
   click composer-send || fails=$((fails+1)); waitpt chat-card >/dev/null || note "  ✗ 没看到 /hello 的回话卡片"; sleep 1.4; shot 09g-plugin-hello
+  # v0.7.0 功能开关：设置 → 功能，关掉「团队 / 模型协调」→ 侧栏「团队」消失（真 evo feature off team）
+  click win-sidebar-settings || fails=$((fails+1)); waitpt settings-feature-team >/dev/null; sleep 1.6
+  click settings-feature-team || fails=$((fails+1)); sleep 2.6; shot 09h-features-team-off
+  if [ -n "$(pt win-sidebar-team)" ]; then note "  ✗ 关了 team，侧栏「团队」还在"; fails=$((fails+1)); else note "  ✓ 侧栏「团队」已消失"; fi
+  python3 "$EVO_REAL_EVO" feature list 2>&1 | grep -E "team|预设" | sed 's/^/    evo: /' | tee -a "$HOW"
+  # v0.7.0 自动表单：展开「每件上限」，派工次数填 2000（schema 最大 1000）→ 红字；再填 30 → 存好
+  click feature-expand-item-caps || fails=$((fails+1)); sleep 1.6
+  click feature-field-item-caps-item_hard_runs || fails=$((fails+1)); sleep 0.3
+  if evo_front; then key kd:cmd t:a ku:cmd; paste_text "2000"; sleep 0.3; key kp:return; fi
+  waitpt feature-error-item-caps-item_hard_runs >/dev/null || { note "  ✗ 没出红字"; fails=$((fails+1)); }; sleep 0.8; shot 09i-feature-form-error
+  click feature-field-item-caps-item_hard_runs || true; sleep 0.3
+  if evo_front; then key kd:cmd t:a ku:cmd; paste_text "30"; sleep 0.3; key kp:return; fi
+  sleep 2.4; shot 09j-feature-form-saved
+  python3 "$EVO_REAL_EVO" feature list --json 2>/dev/null | python3 -c "import json,sys;d=json.load(sys.stdin);print('    evo: item-caps', [f['config'] for f in d['features'] if f['id']=='item-caps'])" | tee -a "$HOW"
+  # v0.7.0 错误边界：假 evo 的 log 弄坏 → 打开件详情 → 「这页出错了 + 重试」；修好后点重试
+  python3 scripts/demo/fake-evo.py _demo break log | tee -a "$HOW"
+  click win-sidebar-project-TB || fails=$((fails+1)); sleep 1.4
+  click win-item-0 || fails=$((fails+1)); waitpt page-error-retry >/dev/null || { note "  ✗ 没出错误卡片"; fails=$((fails+1)); }; sleep 1.2; shot 09k-page-error
+  python3 scripts/demo/fake-evo.py _demo fix log | tee -a "$HOW"
+  click page-error-retry || fails=$((fails+1)); sleep 2.4; shot 09l-page-error-retried
+  if [ -n "$(pt page-error-card)" ]; then note "  ✗ 重试后错误卡片还在"; fails=$((fails+1)); fi
   click win-sidebar-project-TB || true; sleep 1.0; click win-item-0 || true; sleep 1.6
   if evo_front; then
     key kd:cmd t:k ku:cmd; sleep 1.0
@@ -259,7 +280,7 @@ drive() {
   open_popover || fails=$((fails+1)); sleep 1.8; shot 14-popover-dark
   popover_open && click status-item; sleep 0.6
   note "真鼠标驱动完成，失败 $fails 处；最后状态：$(geo selection) · 卡片 $(geo cards) · 深色 $(geo dark)"
-  [ $fails -le 5 ]
+  [ $fails -le 6 ]
 }
 
 demo_mode() {
