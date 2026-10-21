@@ -5,12 +5,39 @@
   "repo": "~/Desktop/项目/土布/tubu-platform",
   "main_branch": "main",
   "github_repo": "JAY5CXSDMY14/tubu-platform",
-  "trusted_authors": ["JAY5CXSDMY14"],
+  "trusted_authors": [
+    "JAY5CXSDMY14"
+  ],
   "test_cmd": "pytest api/tests tools/tests",
   "push_cmd": "HTTPS_PROXY=socks5h://127.0.0.1:1082 git push origin main",
   "deploy_cmd": "",
   "policy_terms": "~/Desktop/项目/土布/协作契约/hooks/policy-terms.txt",
   "lessons_file": "docs/LESSONS.md",
   "standards_file": "docs/code-standards.md",
-  "digest_issue": null
+  "digest_issue": null,
+  "arch_preset": "python-fastapi",
+  "_arch_preset": "老板 2026-10-21 批准：沿用现有 api/ 平铺结构和 migrations/NNN_*.sql 原生 SQL 迁移，只约束新代码。api/schemas.py 延迟 import materials_repo 是老违约不追究；两个 004 迁移老的不动，新编号再撞打回。见 kit/presets/arch/README.md。",
+  "arch_overrides": {
+    "root": "api",
+    "layout": "by-type",
+    "migrations_dir": "migrations",
+    "migrations_pattern": "^\\d{3}_[a-z0-9_]+(\\.sqlite)?\\.sql$",
+    "layers.service": [
+      "auth.py",
+      "batch_import.py",
+      "search_*.py",
+      "processing_log.py",
+      "seed.py"
+    ],
+    "layers.core": [
+      "dictionary.py",
+      "normalize.py",
+      "weave_code.py",
+      "storage/*"
+    ],
+    "arch_paths": [
+      "api/",
+      "migrations/"
+    ]
+  }
 }

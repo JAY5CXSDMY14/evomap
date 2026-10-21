@@ -262,7 +262,7 @@ def test_swift_layers_and_st_profile(loop):
     st = json.load(open(os.path.join(KIT, "profiles", "st", "project.json"), encoding="utf-8"))
     tb = json.load(open(os.path.join(KIT, "profiles", "tubu", "project.json"), encoding="utf-8"))
     assert st["arch_preset"] == "swift-app" and st["arch_overrides"]["root"] == "REASTOCK/Sources/REASTOCK"
-    assert "arch_preset" not in tb and "arch_overrides" not in tb
+    assert tb["arch_preset"] == "python-fastapi" and tb["arch_overrides"]["root"] == "api" and tb["arch_overrides"]["layout"] == "by-type"
     eff = A.effective(st, files=[])
     assert A.touches_backend({"scope": ["REASTOCK/Sources/REASTOCK/Engine/"]}, eff)
     assert not A.touches_backend({"scope": ["docs/"]}, eff)
