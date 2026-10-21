@@ -173,7 +173,7 @@ if [ "$(uname)" = Darwin ]; then
 <key>ProgramArguments</key><array><string>$PY</string><string>$RUN_KIT/bin/evo</string>$args</array>
 <key>RunAtLoad</key><true/><key>KeepAlive</key><true/>
 <key>StandardOutPath</key><string>$LOGS/$what.log</string><key>StandardErrorPath</key><string>$LOGS/$what.log</string>
-<key>EnvironmentVariables</key><dict><key>PATH</key><string>$LPATH</string><key>PYTHONDONTWRITEBYTECODE</key><string>1</string>$ENVX</dict>
+<key>EnvironmentVariables</key><dict><key>PATH</key><string>$LPATH</string><key>PYTHONDONTWRITEBYTECODE</key><string>1</string><key>PYTHONUNBUFFERED</key><string>1</string>$ENVX</dict>
 </dict></plist>
 PL
     if [ -f "$plist" ] && cmp -s "$TMP" "$plist" && launchctl list 2>/dev/null | grep -q "$label"; then

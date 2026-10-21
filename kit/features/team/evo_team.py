@@ -58,12 +58,24 @@ def registry_path(root):
     return os.path.join(root, "team_models.json")
 
 
+def _probe_path(home):
+    """Air 试跑 10-21：在没有 ~/.local/bin 的 shell 里刷新，会把 claude 误判成「没装」并缓存 5 分钟。
+    除了当前 PATH，再看常见安装目录（和 install.sh 写给常驻进程的 PATH 一致的那几处）。"""
+    extra = [os.path.join(home, ".local", "bin"), "/opt/homebrew/bin", "/usr/local/bin", os.path.join(home, ".npm-global", "bin"),
+             os.path.join(home, ".claude", "local")]
+    seen, out = set(), []
+    for d in (os.environ.get("PATH") or "").split(os.pathsep) + extra:
+        if d and d not in seen:
+            seen.add(d); out.append(d)
+    return os.pathsep.join(out)
+
+
 def probe_clis(home, tools=None):
     """本机装了哪些 CLI、看起来登录了没有（只是猜）。"""
     out = {}
     for t in list(KNOWN_TOOLS) + [x for x in (tools or {}) if x not in KNOWN_TOOLS]:
         tc = (tools or {}).get(t) or {}
-        path = shutil.which(tc.get("bin") or t)
+        path = shutil.which(tc.get("bin") or t, path=_probe_path(home))
         files = tc.get("login_files") or LOGIN_FILES.get(t)
         logged = None if not files else any(os.path.exists(os.path.join(home, f)) for f in files)
         out[t] = {"installed": bool(path), "path": path, "logged_in": logged if path else None}

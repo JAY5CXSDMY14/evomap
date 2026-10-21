@@ -1962,10 +1962,54 @@ def checkpoint(s, name):
     crash_point(name)
 
 
+def _find_key(o, key):
+    if isinstance(o, dict):
+        if key in o:
+            return o[key]
+        for v in o.values():
+            r = _find_key(v, key)
+            if r is not None:
+                return r
+    elif isinstance(o, list):
+        for v in o:
+            r = _find_key(v, key)
+            if r is not None:
+                return r
+    return None
+
+
+def orca_up(s):
+    """Air 试跑 10-21：Orca 退出后 evo 一直显示「施工中」、什么都不说。每轮先看一眼 orca status：
+    不通就记一次、推一次（orca_down），这一轮不派工、不判卡住；恢复后记一行，下一轮的「工人不在了」走 C7 自动重启一次。"""
+    r = run_cmd(ORCA + ["status", "--json"], timeout=tmo("orca"), extra_env=False)
+    try:
+        j = json.loads(r.stdout or "{}")
+    except Exception:
+        j = {}
+    reach = _find_key(j, "reachable")
+    up = r.returncode == 0 and reach is not False and (reach is True or j.get("ok") is True)
+    if up:
+        if s.get("orca_down"):
+            mins = int((time.time() - s["orca_down"]) / 60)
+            log(s, f"Orca 恢复（停了约 {mins} 分钟）：工人进程不在的件会自动重启一次")
+            s.pop("orca_down", None); save(s)
+        return True
+    if not s.get("orca_down"):
+        s["orca_down"] = time.time()
+        why = "没装 orca 命令" if r.returncode == 127 else ("orca status 超时" if r.returncode == 124 else "Orca 应用没在运行")
+        log(s, f"Orca 不通（{why}）：先不派工、不判卡住。打开 Orca 后自动接着跑")
+        notify("orca_down", "Orca 没开", f"{why}。打开 Orca（open -a Orca）后自动接着跑；正在施工的件会在原工作区重启一次。")
+        save(s)
+    return False
+
+
 # ---------- 接棒一轮 ----------
 def cmd_tick(a=None):
     lease_check(loop=True)
-    s = load(); guard_git(s); c = coord(s); T = tasks(s)
+    s = load(); guard_git(s)
+    if not orca_up(s):
+        return
+    c = coord(s); T = tasks(s)
     by_task = {}
     for k, it in s["items"].items():
         for r in ("build", "verify", "merge"):
@@ -3436,6 +3480,8 @@ def cmd_status(a):
         print(f"■ 暂停：{s['_ro']['paused']}（处理好后 evo -p {CODE} resume）")
     if s["_ro"]["tick_running"]:
         print(f"■ 正在接棒一轮（已 {s['_ro']['tick_running'].get('minutes') or 0} 分钟），下面是上次存盘时的状态")
+    if s.get("orca_down"):
+        print(f"■ Orca 没开（从 {TM.local(s['orca_down']).strftime('%H:%M')} 起）：先不派工。打开 Orca 后自动接着跑")
     print("■ 等你点头" + ("（Orca 闸门这次没读到）" if stale else ""))
     for g in pend + confirm_gates_doc(s):
         print(f"  {g['id']}  {g.get('question')}")
@@ -3496,6 +3542,7 @@ def status_doc(s, pend):
     doc = {
         "schema_version": STATUS_SCHEMA_VERSION, "project": CODE, "name": CFG.get("name", CODE), "generated_at": TM.iso(),
         "last_tick": read_heartbeats().get(CODE),
+        "orca_down_since": TM.iso(s["orca_down"]) if s.get("orca_down") else None,
         "count": cnt,
         "stuck": sum(1 for it in s["items"].values() if it.get("stalled") or it["state"] in ("escalated", "asking")),
         "goal": CFG.get("goal") or None,
@@ -3927,6 +3974,11 @@ def feature_off_stub(f, name):
 
 
 if __name__ == "__main__":
+    for _st in (sys.stdout, sys.stderr):          # Air 试跑 10-21：launchd 把输出写文件时是整块缓冲，autopilot.log 一直 0 字节
+        try:
+            _st.reconfigure(line_buffering=True)
+        except Exception:
+            pass
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sp = p.add_subparsers(dest="cmd", required=True)
     x = sp.add_parser("add"); x.add_argument("--title", required=True); x.add_argument("--scope", required=True)

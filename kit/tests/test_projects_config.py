@@ -185,3 +185,22 @@ def test_new_without_orca_installed_does_not_crash(loop):
     assert r.returncode == 0, r.stderr
     assert "Traceback" not in r.stderr and "没装 Orca" in r.stdout
     assert os.path.exists(loop.cfg_path("NO"))
+
+
+def test_orca_down_pauses_tick_and_shows_in_status(loop):
+    # Air 试跑 10-21：Orca 退出后 evo 一直显示「施工中」不吭声
+    loop.project("OD")
+    open(os.path.join(loop.orca_dir, "down"), "w").close()
+    loop.add("OD")
+    loop.tick("OD")
+    assert loop.item("OD")["state"] == "queued"                     # Orca 不通：不派工
+    r = loop.evo("-p", "OD", "status")
+    assert "Orca 没开" in r.stdout, r.stdout
+    assert json.loads(loop.evo("-p", "OD", "status", "--json").stdout)["orca_down_since"]
+    assert "Orca 没开" in loop.notifications()
+    loop.tick("OD")
+    assert loop.notifications().count("Orca 没开") == 1               # 只记一次
+    os.remove(os.path.join(loop.orca_dir, "down"))
+    loop.tick("OD")
+    assert loop.item("OD")["state"] != "queued"
+    assert not json.loads(loop.evo("-p", "OD", "status", "--json").stdout)["orca_down_since"]
