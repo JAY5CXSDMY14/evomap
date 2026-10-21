@@ -186,7 +186,18 @@ Telegram 环境变量改名 `EVO_TG_TOKEN` / `EVO_TG_CHAT`，旧名 `TUBU_TG_TOK
 - **外部工具**（`evo arch check` 跑，接棒器不跑）：import-linter 用仓库自己的契约或按分层生成 INI 契约，改动前后各跑一次（`git worktree`）只算新违约；ruff / SwiftLint 只算新增行；dependency-cruiser 同理按分层生成 forbidden 规则。没装或工具自己报错只警告并给安装命令。
 - **档案**：ST `arch_preset: swift-app` + `arch_overrides.root = REASTOCK/Sources/REASTOCK`（按类型平铺沿用；Engine/Data/Models 新加 import SwiftUI 打回）；TB 不动，对照结论与建议 overrides 在 kit/presets/arch/README.md 最后一节（生成契约在土布现有代码上只有 `api/schemas.py → materials_repo` 一处老违约）。
 
+## 第十六轮：接口定版本 + 插件机制（均有自动测试，`kit/tests/test_round16.py` 20 个，全套 240 个（其中 2 个要本机装 import-linter / ruff）；说明见 docs/app-contract.md、docs/plugins.md）
+老板原话「Evo dmg 做得不错，记得留好接口或者插件什么的，方便以后扩展功能，优化调整」，并同意方案：App 和 evo 之间的 JSON 接口定版本，再加一个插件文件夹，丢一个插件进去就多一个侧栏页、输入框命令或通知渠道，不用改 App 本体。
+- **接口定版本**：所有给 App 用的 `--json` 顶层都带 `schema_version: 1`（新增：`projects --json`、`log --json`、`models --json`、`ui/arch show|check --json`、`team init --json`；`status`、`team` 本来就有）。规则：只加字段不升；不兼容才升大版本，App 读到不认识的大版本显示「evo 比 App 新/旧，请更新」而不崩。每个命令的字段、类型、含义、可选与否写在 `docs/app-contract.md`，机器可读的 JSON Schema（2020-12）在 `kit/schemas/`（projects、status、log、team、team-init、plugin-list、plugin-run、card、plugin-manifest），测试拿真输出逐个校验（CI 多装 `jsonschema`）。`evo projects` 不带 `--json` 的纯文本输出不变。
+- **插件**（`kit/bin/evo_plugin.py`）：`~/.evoloop/plugins/<名字>/plugin.json`（`EVO_PLUGINS_DIR` 可改）。manifest 照 VS Code 扩展的 `engines` + `contributes` 写法：`name`、`version`、`evo_api`（兼容范围，semver 子集 `^1` / `>=1 <2`）、`enabled`（新装默认 false）、`contributes.sidebar_pages / composer_commands / notify_channels / item_actions`，每项一条 `run` 命令行。执行照 git / kubectl 插件：外部可执行文件、子进程；输入输出照 git credential helper：一次性 JSON over stdio（stdin 请求、stdout 卡片 JSON）。没用 JSON-RPC：一问一答无状态，一次性子进程最稳。
+- **隔离**：自己的进程组，超时（默认 20 秒，最多 60）整组杀；stdout 超 256 KB 立即杀；环境变量白名单（`PATH HOME LANG LC_* TZ TMPDIR USER LOGNAME` + `EVO_API EVO_PLUGIN_NAME EVO_PLUGIN_DIR EVO_PLUGIN_DATA`），拿不到任何密钥类环境变量；插件失败只回一个 `ok:false` 信封（退出码 3），不影响 evo 主循环。外部 Agent（`EVO_AGENT`）不能开关、安装插件。没做文件系统沙箱（文档里写明：只装看过代码的插件）。
+- **卡片**：`{schema_version, title, subtitle?, blocks}`，块只有 `text`（style/tone）、`list`、`table`、`buttons`（action + payload，点了再跑同一条命令）；evo 校验并截断超长文字，不合格的说清哪条。
+- **通知渠道**：`evo_notify` 发推送时，打开的插件的 notify_channels 各跑一次，事件 JSON 从 stdin 给。默认只收要推的事（同 Telegram，受免打扰、早间汇总也收）；`events: all` 每个事件立刻收。`evo notify-test` 也测插件渠道。失败只记 stderr。
+- **命令**：`evo plugin list [--json] | enable <名> | disable <名> | run <名> <类型> <id> [--args --action --payload --project --item] [--json] | validate [名|目录] [--json] | install <目录> [--force]`。
+- **示例插件** `kit/plugins/example-hello/`（纯 Python 标准库）：侧栏页「你好」（文字 + 列表 + 表格 + 按钮，按钮掷骰子）、输入框 `/hello 名字`、通知渠道（追加到 `$EVO_PLUGIN_DATA/notify.log`）、件详情页按钮。
+
 ## 只能在 Mac mini 上验的
+- 第十六轮插件：真 App 里打开示例插件后侧栏出现「你好」、`/hello` 出卡片（CI 实机演示有截图，本机再点一遍）；插件通知渠道接真推送（比如自己写一个 Bark / ntfy 插件）在免打扰时段是否按预期攒到早上。
 - 真施工模型会不会按「UI 规范」块选库、交卷写清新依赖理由；`npx shadcn@latest create --preset nova` / `add` 在本机网络（代理）下能不能跑通。
 - 真 Orca 的消息有没有 `id` 字段（evo 依次认 `id` / `message_id` / `messageId`；都没有就不去重）、没确认的消息会不会重投。
 - 真决策岗模型能否稳定按 decisions JSON 交决定；Orca 将来若有「回复工人」的命令，换掉 `deliver_answer()`。

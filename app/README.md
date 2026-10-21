@@ -2,6 +2,8 @@
 
 evo 自动循环的 macOS 菜单栏外壳。SwiftUI 写的小壳：菜单栏弹窗里直接批闸门、跟 evo 说话；完整界面嵌现有网页面板；evo 本体（整套 kit）打包在应用里。
 
+v0.6.0 起**能装插件**：丢一个文件夹进 `~/.evoloop/plugins/`，侧栏多一页、输入框多一个 `/命令`、通知多一个渠道，不用改 App（见下面 v0.6.0 和 `../docs/plugins.md`）；App 读 evo 的 JSON 接口都带版本号（`../docs/app-contract.md`）。
+
 v0.3.0 起有了**真正的 Mac 窗口**（Claude 桌面版的样子：左侧栏、宽内容区、底部钉着输入框、统一标题栏和工具栏），菜单栏弹窗变成紧凑的速览；吉祥物换成 aora-bot 表情引擎的球形角色，v0.5.0 起叫 **调度球**（可切 云宝 / 亮亮）。实机截图和录屏见 `docs/mac-demo/`。
 
 > **⚠️ 角色许可：只许自用。** 默认角色调度球的形象来自 sam70361/aora-bot 的 emotion-ball（固定版本 e3b6148）。它的**球形视觉形象只许个人学习研究、非商业使用，永远不给商业授权**，所以带调度球的 Evo **不得公开分发**（不发 Release、不放公开下载、不卖）。
@@ -36,7 +38,7 @@ v0.3.0 起有了**真正的 Mac 窗口**（Claude 桌面版的样子：左侧栏
 
 - `SIGN="Developer ID Application: 名字 (TEAMID)" make dmg`：换正式证书；`SIGN= make app` 跳过签名
 - `UNIVERSAL=1 make dmg`：出 arm64 + x86_64 通用包（默认只出本机架构）
-- 改版本：编辑 `VERSION`（只写 `0.5.0` 这样的号），构建号自动取 git 提交数
+- 改版本：编辑 `VERSION`（只写 `0.6.0` 这样的号），构建号自动取 git 提交数
 
 ## 目录
 
@@ -67,6 +69,7 @@ app/
     MainPopover.swift    菜单栏弹窗（紧凑：问候、汇总、前两张闸门卡、打开窗口）
     Palette.swift        ⌘K 命令面板
     Windows.swift        设置、首次向导
+    PluginViews.swift    v0.6.0 插件：通用卡片渲染器（三态）、插件页、件按钮、设置里的开关、接口版本横幅
     Snapshots.swift      make snapshots 用的假数据和出图
     AppState / Panel / Notifier / Shell   轮询、面板窗口、通知、跑命令
   Tests/EvoCoreTests/    单元测试 + Fixtures/ 样例 JSON
@@ -141,6 +144,19 @@ app/
 | ![Dock](docs/mac-demo/15b-dock-strip.png) | ![Finder](docs/mac-demo/16-finder-icon.png) |
 
 注意：GitHub 的 macOS runner 默认开着「减弱动态效果」，调度球在那上面只画静态帧；演示脚本会先 `defaults write com.apple.universalaccess reduceMotion -bool false`，并用 `EVO_DEMO_MOTION=1`（只给录屏用）让应用忽略这个设置。
+
+### v0.6.0 插件 + 接口版本（kit 第十六轮）
+- **接口定版本**：App 只通过 `evo … --json` 取数，每个输出顶层都有 `schema_version`（现在 1）。`ContractCheck`（`Sources/EvoCore/Contract.swift`）先看版本号：同一大版本多了字段照常解码、忽略新字段；大版本不认识（比如 evo 升到 2）就不解码，窗口顶上出一条黄色横幅「evo 版本比 App 新（…），请更新 Evo App」（或「比 App 旧，请更新 evo」），对应项目卡片显示同一句，不崩溃。项目列表改读 `evo projects --json`，老 evo 不认就退回纯文本。字段表见 `../docs/app-contract.md`，Schema 在 `../kit/schemas/`。
+- **侧栏「插件」分组**：`evo plugin list --json` 里打开了的插件的侧栏页，一页一行（图标是插件给的 SF Symbol）。点开 → `evo plugin run <插件> sidebar_page <id> --json` → 插件输出的卡片 JSON 用**通用卡片渲染器**画：标题、文字（正文 / 小字 / 大标题 / 等宽，五种色调）、列表（图标、副标题、角标）、表格、按钮。按钮点了再跑同一条插件命令（带 action / payload），卡片弹簧换上。三态：加载（转圈）、报错（红字 + 再试一次，写明「只是这个插件出错」）、空。
+- **输入框 `/命令`**：打 `/hello 老板` → 交给插件的 composer_command，回话是一张卡片（气泡位置换成卡片，按钮照样能点）。不认识的 `/词` 照旧当反馈发，不会吞掉「/api 路径不对」这种话。
+- **件详情页按钮**：插件的 item_action 在件详情右栏「插件」卡片里一个按钮，结果卡片画在下面。
+- **设置 → 插件**：每个插件一个开关（跑 `evo plugin enable/disable`），下面一行是版本和贡献点；plugin.json 不合格或 evo_api 不兼容的插件红字说明、拨不开。新装的插件默认关着。
+- 纯逻辑在 `Sources/EvoCore/Plugins.swift`（plugin list / run 解码、卡片模型、`/命令` 匹配、命令行拼装、三态）和 `Contract.swift`，测试 `Tests/EvoCoreTests/PluginTests.swift`（样例 `Fixtures/plugin_*.json` 是真 evo 的输出）。界面在 `Sources/Evo/PluginViews.swift`；组件截图 `make snapshots` 多一张 `plugin-light/dark.png`。
+- CI 实机演示多一段：用包里的真 evo 装示例插件 `example-hello`（`evo plugin install` + `enable`，插件目录在临时目录）→ 侧栏点「你好」→ 点卡片上的「掷骰子」→ 输入框打 `/hello 老板`，截 `09e-plugin-page`、`09f-plugin-button`、`09g-plugin-hello`。假 evo（`scripts/demo/fake-evo.py`）把 `plugin` 子命令转给真 evo，所以演示的是真的插件机制。
+
+| 侧栏「插件」→ 示例插件页（CI 实机） | 输入框 `/hello 老板` 的回话卡片 |
+|---|---|
+| ![插件页](docs/mac-demo/09e-plugin-page.png) | ![/hello](docs/mac-demo/09g-plugin-hello.png) |
 
 ### 动效和无障碍
 
