@@ -67,7 +67,7 @@ DEFAULTS = {
     "magpie_url": "http://127.0.0.1:3425",
     "main_branch": "main",
     "nightly_at": "23:30",
-    "auto_ship_gate": True, "ship_gate_at": "08:20",
+    # auto_ship_gate / ship_gate_at：第十八轮搬进功能包 deploy 的设置（config.json 写了仍以它为准）
     "relook_on_change": True,          # 看效果通过后又返工、改了老板看过的内容 → 合并前重开看效果闸门
     "audit_weekday": 6,                # 每周哪天夜审时提醒决策岗跑 ponytail-audit：0=周一 … 6=周日
     "limits": {"builders_total": 2, "owner_queue_pause": 5, "rework_rounds": 2, "stall_minutes": 15,
@@ -2103,7 +2103,7 @@ def cmd_tick(a=None):
         check_gates(s, pend)
         check_no_live(s, tasks(s), {g["id"] for g in pend})   # 读不到闸门就不判（免得误报）
     decider_wake(s, T)
-    auto_ship(s, gl.get("gates", []) if j.get("ok") else None)
+    emit("tick.before_save", live={"s": s, "gates": gl.get("gates", []) if j.get("ok") else None}, record=False)   # 自动收菜（功能包 deploy）…
     save(s)
     heartbeat()
     emit("tick", count={st: sum(1 for it in s["items"].values() if it["state"] == st)
@@ -3972,9 +3972,9 @@ def ship_resolved(s, batch, go):
         return
     dc = CFG.get("deploy_cmd")
     if dc:
-        r = run_cmd(dc, cwd=CFG["repo"], shell=True, timeout=tmo("deploy"))
-        if r.returncode:
-            tail = (r.stdout + r.stderr)[-300:]
+        dep = svc("deploy")                              # 第十八轮：部署是功能包 deploy（配了 deploy_cmd 它就关不掉）
+        ok, tail = dep.run(s, batch) if dep else (False, "功能 deploy 关着，没部署（evo feature on deploy）")
+        if not ok:
             log(s, f"上线命令失败，{len(batch)} 件留在可收菜：{tail}")
             for k in batch:
                 tl(k, "deploy_failed", tail=tail[-300:])
@@ -4027,25 +4027,6 @@ def ship_batch(s):
     log(s, f"攒了 {len(ready)} 件待上线，闸门 {g['gate']['id']}")
     notify("gate_created", "可以收菜了", f"{len(ready)} 件待上线", gate=g["gate"]["id"], items=ready)
     return True
-
-
-def auto_ship(s, gates):
-    """自动收菜：每天到 ship_gate_at（默认 08:20，晨报前）之后，第一次有已合并的件时：没有等着的上线闸门就建一个。
-    一天只建一次（看过就记下当天，老板点「再等等」当天不再建）；auto_ship_gate=false 关掉。"""
-    if not CFG.get("auto_ship_gate", True):
-        return
-    now = TM.local(); today = now.strftime("%Y-%m-%d")
-    if s.get("auto_ship_day") == today or now.strftime("%H:%M") < CFG.get("ship_gate_at", "08:20"):
-        return
-    if not any(it["state"] == "merged" for it in s["items"].values()):
-        return                                           # 还没有可收菜的：今天的机会留着，等有了再建
-    pend = {g["id"] for g in (gates or []) if g.get("status") in (None, "pending")}
-    if any(it.get("ship_gate") in pend for it in s["items"].values() if it.get("ship_gate")):
-        s["auto_ship_day"] = today
-        return log(s, "自动收菜：已有等着的上线闸门，不重复建")
-    if ship_batch(s):                                    # 第十七轮 L-25：主线红没建成不记当天，转绿后当天还能收（主线测试按提交号缓存 30 分钟）
-        s["auto_ship_day"] = today
-        log(s, "自动收菜：已建上线闸门")
 
 
 # ---------- 心跳与看门狗：它自己停了要让老板知道 ----------

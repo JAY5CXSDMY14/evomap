@@ -41,6 +41,7 @@ EVENTS = {
     "tick.before_dispatch": "一轮里派工之前（同步，功能包可改状态）",
     "tick.after_dispatch": "一轮里派工、推送、查停滞之后（同步，功能包可改状态）",
     "tick.gates": "一轮里读到 Orca 闸门列表之后（同步）",
+    "tick.before_save": "一轮里最后存盘之前（同步；live 带 gates，自动收菜在这）",
     "tick": "一轮结束",
     "feature.changed": "功能开关 / 设置变了",
     "feature.error": "某个功能包订阅者出错或超时",

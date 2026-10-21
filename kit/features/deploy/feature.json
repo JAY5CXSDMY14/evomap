@@ -1,0 +1,23 @@
+{
+  "id": "deploy",
+  "api": "^1",
+  "version": "1.0.0",
+  "name": "上线",
+  "sub": "老板点「上线」后跑 deploy_cmd；每天早上自动攒一批建上线闸门（自动收菜）",
+  "essential": true,
+  "requires": ["state", "config"],
+  "provides": ["deploy"],
+  "parts": [
+    {"slot": "settings", "key": "deploy"}
+  ],
+  "one": "1 个项目配了上线命令",
+  "many": "{n} 个项目配了上线命令",
+  "settings": {
+    "type": "object",
+    "x-order": ["auto_ship_gate", "ship_gate_at"],
+    "properties": {
+      "auto_ship_gate": {"type": "boolean", "title": "每天自动攒一批建上线闸门", "description": "全局 / 项目 config.json 的 auto_ship_gate 写了以它为准", "default": true},
+      "ship_gate_at": {"type": "string", "title": "几点之后自动收菜", "description": "24 小时制 HH:MM（上海时间）", "default": "08:20"}
+    }
+  }
+}
