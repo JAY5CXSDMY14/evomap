@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """画 Evo 的应用图标「调度球」，出 Resources/AppIcon.png（1024）和 Resources/AppIcon.icns（全套尺寸）。
 
-原创矢量风格：深灰到黑的 macOS 圆角方块，一个白色、带灰色柔和渐变光泽的大圆球从左下方探进来，
-球右上部两只略微倾斜的竖椭圆黑眼睛（带一点高光）。纯代码画（numpy + Pillow），不用任何外部图片。
+原创矢量风格（老板 2026-10-21 选定方向）：暖奶油色 macOS 圆角方块，一个珊瑚橙色的软圆球从右下角探进来，
+球左上部两只略微倾斜的竖椭圆黑眼睛（带一点高光），好奇地朝左上看。纯代码画（numpy + Pillow），不用任何外部图片。
 
 用法（在 app/ 目录）：python3 scripts/make-icon.py      依赖：pip install pillow numpy
 结果提交进仓库，构建时 assemble-app.sh 直接拷 AppIcon.icns，CI 不用装 Python 包。
@@ -72,21 +72,21 @@ def render():
     # 投影：方块下方柔和阴影
     shadow = rounded_rect_mask(xs, ys - 12 * SS, t0, t0, t1, t1, radius, aa)
     sh_img = Image.fromarray((shadow * 255).astype(np.uint8)).filter(ImageFilter.GaussianBlur(18 * SS))
-    sh = np.asarray(sh_img, np.float32) / 255 * 0.45
+    sh = np.asarray(sh_img, np.float32) / 255 * 0.28
     rgb, alpha = over(rgb, alpha, np.zeros_like(rgb), sh)
 
     tile = rounded_rect_mask(xs, ys, t0, t0, t1, t1, radius, aa)
     ty = (ys - t0) / T
     tx = (xs - t0) / T
-    top = np.array([0.30, 0.30, 0.32]); bot = np.array([0.055, 0.055, 0.065])
+    top = np.array([0.985, 0.955, 0.885]); bot = np.array([0.955, 0.895, 0.780])
     g = np.clip(ty * 0.85 + tx * 0.15, 0, 1)[..., None]
     bg = top * (1 - g) + bot * g
     # 方块顶部一圈细微的内高光
-    rim = (1 - smoothstep(0, 10 * SS, ys - t0)) * 0.10
-    bg = bg + rim[..., None]
+    rim = (1 - smoothstep(0, 10 * SS, ys - t0)) * 0.03
+    bg = np.clip(bg + rim[..., None], 0, 1)
 
-    # ---- 调度球：从左下方探进来，超出方块的部分被裁掉 ----
-    bcx, bcy, br = t0 + 0.33 * T, t0 + 0.90 * T, 0.70 * T
+    # ---- 调度球：从右下角探进来，超出方块的部分被裁掉 ----
+    bcx, bcy, br = t0 + 0.70 * T, t0 + 0.74 * T, 0.50 * T
     d = np.sqrt((xs - bcx) ** 2 + (ys - bcy) ** 2)
     ball = 1 - smoothstep(br - aa, br + aa, d)
     nx, ny = (xs - bcx) / br, (ys - bcy) / br
@@ -96,23 +96,23 @@ def render():
     diff = np.clip(nx * L[0] + ny * L[1] + nz * L[2], 0, 1)
     H = L + np.array([0, 0, 1.0]); H = H / np.linalg.norm(H)
     spec = np.clip(nx * H[0] + ny * H[1] + nz * H[2], 0, 1) ** 18
-    shade = 0.30 + 0.62 * diff + 0.14 * spec
+    shade = 0.42 + 0.55 * diff + 0.10 * spec
     edge = smoothstep(0.80, 1.0, np.sqrt(nx ** 2 + ny ** 2))
     shade = shade - 0.12 * edge
-    base = np.array([0.985, 0.985, 0.99])
-    cool = np.array([0.52, 0.53, 0.56])
+    base = np.array([1.0, 0.56, 0.38])
+    cool = np.array([0.80, 0.30, 0.18])
     s = np.clip(shade, 0, 1)[..., None]
     ball_rgb = cool * (1 - s) + base * s
     # 球落在方块上的一圈暗影（让球更「立」起来）
-    halo = (smoothstep(br + 40 * SS, br, d) * (1 - ball)) * 0.35
+    halo = (smoothstep(br + 36 * SS, br, d) * (1 - ball)) * 0.16
     bg = bg * (1 - halo[..., None])
 
     layer = bg * (1 - ball[..., None]) + ball_rgb * ball[..., None]
 
-    # ---- 眼睛：右上部，两只竖椭圆，顶端略向左倾 ----
-    eye_ang = -16
-    eyes = [(t0 + 0.455 * T, t0 + 0.475 * T), (t0 + 0.665 * T, t0 + 0.445 * T)]
-    rx, ry = 0.050 * T, 0.108 * T
+    # ---- 眼睛：球的左上部，两只竖椭圆，顶端略向左倾，朝左上看 ----
+    eye_ang = -20
+    eyes = [(t0 + 0.505 * T, t0 + 0.555 * T), (t0 + 0.655 * T, t0 + 0.505 * T)]
+    rx, ry = 0.044 * T, 0.092 * T
     for ex, ey in eyes:
         m = ellipse_mask(xs, ys, ex, ey, rx, ry, eye_ang, aa)
         eye_col = np.array([0.07, 0.07, 0.08])

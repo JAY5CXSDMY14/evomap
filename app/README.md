@@ -50,7 +50,7 @@ app/
     make-dmg.sh          打 dmg
     make-icon.py         画应用图标（numpy + Pillow，出 AppIcon.png / AppIcon.icns，结果提交进仓库，构建不依赖它）
   Resources/Info.plist.in  Info.plist 模板（__VERSION__ / __BUILD__ 构建时替换；CFBundleIconFile = AppIcon）
-  Resources/AppIcon.icns   应用图标「调度球」（AppIcon.png 是 1024 原图），scripts/make-icon.py 用代码画
+  Resources/AppIcon.icns   应用图标「调度球」（奶油底 + 珊瑚橙球从右下角探头，老板 10-21 选定）（AppIcon.png 是 1024 原图），scripts/make-icon.py 用代码画
   Resources/mate/index.html  表情角色宿主页（本地、不联网），Swift 调 evoMate.set(编号) / evoMate.gaze(x, y)
   Resources/vendor/      第三方表情引擎（aora-bot e3b6148）：emotion-ball/js（调度球）、mood-mates/src（云宝 / 亮亮）+ 许可 + NOTICE.md
   Sources/EvoCore/       纯逻辑，可单测：status JSON 解码、角标计数、闸门去重、免打扰、心跳、找 python3，
