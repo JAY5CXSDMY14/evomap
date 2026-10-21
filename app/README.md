@@ -167,7 +167,8 @@ app/
 - **每页错误边界**：团队页、项目页、件详情读不出来 → 只这一页画「出错了」卡片（原因、重试、返回），侧栏和别的页照常；等你处理、卡太久不整页挡；设置页永远能开。（SwiftUI 没有异常式边界，这里按「这页的数据读没读出来」判断。）
 - 纯逻辑 `Sources/EvoCore/Features.swift`，测试 `Tests/EvoCoreTests/FeatureTests.swift`（14 个，样例 `Fixtures/feature_list.json` 是真 evo 的输出）；界面 `Sources/Evo/FeatureViews.swift`。组件截图多 `features-*.png`、`page-error-*.png`。
 - CI 实机演示多三步：设置 → 关掉「团队 / 模型协调」（真 evo `feature off team`）→ 侧栏「团队」消失；展开「每件上限」填 2000 → 红字「不能大于 1000」，再填 30 → 存好；假 evo 的 `log` 弄坏 → 件详情出错误卡片 → 修好点重试。截 `09h`–`09l`。假 evo 把 `feature`、`watch` 转给包里的真 evo，另有 `_demo break|fix log`。
-- 结果：Swift 测试 88 个（74 → 88）；app CI __APPRUN__。
+- 结果：Swift 测试 88 个（74 → 88）；app CI run 39563598844（8913b8c）、39564662641（b1fc493）、39565976360（833128d）都绿（编译、测试、打包、组件截图都过）。
+- **还没过的（实机演示）**：错误卡片 + 重试在 run 39563598844 真鼠标跑通（`09k`、`09l`）；功能列表、表单都画出来了，但在 CI 上**拨一个功能开关后主线程卡住约 100 秒**（app.log：`feature off team` 到返回 101.4 秒，期间 watch.ping 全攒着、探点文件 14 秒没更新；同一条命令在 Linux 上 0.17 秒），所以「侧栏团队消失」「红字」两步没拍到，后面的点击落在旧坐标上。要在真 Mac 上 `sample Evo` 查是什么卡住主线程。
 
 ### 动效和无障碍
 
