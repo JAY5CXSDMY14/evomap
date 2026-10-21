@@ -12,6 +12,19 @@
 
 另一条硬要求是三态必做。会取数据或可能为空的界面，要做空状态、加载中、报错三种样子。Web 用 shadcn Empty、Skeleton、Alert 和 sonner。SwiftUI 用 ContentUnavailableView、ProgressView 和骨架占位。验收要三态截图各一张。
 
+
+## 审美：taste-skill（Web）
+
+Web 预设带上 taste-skill 的固定副本（MIT，提交 6010f91，在 kit/vendor/taste-skill）。它管「好不好看」，上面的库表管「用什么」，两者不冲突。
+
+施工岗做 Web 界面时先读 SKILL.md。页面（官网、落地页）和应用界面（工作台、后台）走不同流程。应用界面看 references/app-screens.md。
+
+已有品牌的项目保留自己的颜色和字体，只借构图和规矩。只改一个组件时，贴着周围设计做。新页面或整页重做才走完整流程，约 30–45 分钟。
+
+验收岗对改动的前端文件跑 lint.mjs。本机有 Chrome 时，再跑 inspect.mjs。有 FAIL 就不通过。三个宽度的截图放进证据，给看效果门用。
+
+土布注意：土布的靛蓝是品牌色，taste-skill 默认禁靛蓝和紫色。土布按品牌放行，在证据里写明。SwiftUI 不用 taste-skill，继续按系统组件和苹果规范。
+
 ## 三种模式
 
 | 项目配置 `ui_preset` | 用在哪 | 说明 |

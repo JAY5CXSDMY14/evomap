@@ -398,9 +398,15 @@
   "预设只管新写的代码；仓库原来用的库照旧，不整体迁移。某一类仓库已经在用别的库时，那一类沿用现有的，evo 只报一次。",
   "红线：已有依赖（含 shadcn 组件、Radix 原语、Motion、dnd-kit 等）能正确表达的组件和交互行为，严禁自己设计实现；先查成熟库和业界常见做法（shadcn 示例、Radix / WAI-ARIA 模式），照着用。确实没有现成的，交卷 changes 写明查过哪些、为什么不够。",
   "三态必做：每个会取数据或可能为空的界面，都要做空状态、加载中、报错三种样子，不只做顺利时。用现成实现：空状态用 shadcn Empty，加载中用 shadcn Skeleton（按钮内用 Spinner），报错用 shadcn Alert（局部）或 sonner toast（操作失败），报错要有一句人话原因和「重试」。",
+  "审美：做 Web 界面先读 {KIT}/vendor/taste-skill/SKILL.md（taste-skill 固定副本）。先分清是页面（官网、落地页）还是应用界面（工作台、后台、设置），应用界面按 references/app-screens.md 走。已有品牌的项目用 --keep palette,type 保留自己的颜色和字体，只借构图和规矩；改一个组件或一小块时不抽方向，贴着周围设计做。新页面或整页重做才走完整流程（约 30–45 分钟）。",
   "加新依赖之前先看上面各类已选的库能不能做；覆盖不了才加，并在交卷 changes 里写明为什么（哪一类都不归、或已选库缺什么）。",
   "同一类只留一个库：新加禁用库或同类第二个库，接棒器直接打回返工；确实要换，先 ask 决策岗，老板批准后写进项目 ui_overrides。",
   "界面组件先用 shadcn 已有的（npx shadcn@latest add <组件>），源码进 components/ui/ 后按需改；不另外手写同名组件。",
   "图标只用 Lucide，动画只用 Motion，颜色、圆角、间距只用设计令牌（CSS 变量 / Tailwind 类），不写死十六进制颜色。"
- ]
+ ],
+ "taste": {
+  "skill": "vendor/taste-skill",
+  "pinned": "6010f91",
+  "license": "MIT"
+ }
 }

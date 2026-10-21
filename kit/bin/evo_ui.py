@@ -172,7 +172,7 @@ def effective(cfg, repo=None, present=None):
             conflicts.append({"category": name, "label": c.get("label", name), "existing": found, "kept": c["kept"]})
         c["core"], c["banned"] = core, banned
         cats[name] = c
-    return {"name": pre["name"], "title": pre.get("title", pre["name"]), "principles": pre.get("principles") or [],
+    return {"name": pre["name"], "title": pre.get("title", pre["name"]), "principles": pre.get("principles") or [], "taste": pre.get("taste"),
             "rules": pre.get("rules") or [], "ui_paths": (cfg or {}).get("ui_paths") or pre.get("ui_paths") or [],
             "component_dir": pre.get("component_dir") or "", "components": pre.get("components") or [],
             "aliases": pre.get("component_aliases") or {}, "categories": cats, "conflicts": conflicts}
@@ -227,15 +227,18 @@ def _lines(eff):
     return out
 
 
+_KIT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+
 def builder_block(eff):
     lines = [f"UI 规范（预设 {eff['name']}；只管新写的代码，旧代码不迁移）：",
              "原则：" + "、".join(eff["principles"]) + "。"] + _lines(eff)
-    red = [r for r in eff.get("rules", []) if r.startswith(("红线", "三态"))]
+    red = [r for r in eff.get("rules", []) if r.startswith(("红线", "三态", "审美"))]
     lines += red
     lines.append("规矩：上面覆盖不了才加新依赖，并在交卷 changes 里写明为什么；新加禁用库或同类第二个库，接棒器直接打回。"
                  + ("界面组件先用 shadcn 已有的（npx shadcn@latest add <组件>），不手写同名组件。" if eff["components"] else
                     "先用系统组件和 SF Symbols；第三方 UI 库要老板批准（写进 ui_overrides）。"))
-    return "\n".join(lines) + "\n\n"
+    return "\n".join(lines).replace("{KIT}", _KIT) + "\n\n"
 
 
 def verifier_block(eff, code):
@@ -244,8 +247,12 @@ def verifier_block(eff, code):
              "新加了禁用库或同类第二个库 → 不通过；新依赖不在规范里、交卷又没写理由 → 不通过。",
              "- 自造组件/行为（红线）：已有依赖能正确表达的组件或交互（例如自己写 Button / Modal / Toast / 下拉 / 拖拽 / 弹簧动画）却手写了一份 → 不通过，写明该用哪个库的哪个现成实现；交卷里写清查过哪些、为什么不够的除外。",
              "- 三态：会取数据或可能为空的界面，缺空状态、加载中、报错任一种样子 → 不通过；截图要三态各一张（看效果门让老板看全）。"]
+    if eff.get("taste"):
+        lines.append("- 审美（taste-skill）：对改动的前端文件（不含 components/ui/ 里 shadcn 原始源码）跑 `node {KIT}/vendor/taste-skill/scripts/lint.mjs <文件>`（应用界面加 --app），"
+                     "本机有 Chrome 就再跑 `inspect.mjs <页面地址>`（应用界面加 --app）。有 FAIL → 不通过；"
+                     "项目自己的品牌色/字体被判 FAIL 的，按 --allow 放行并在证据里写明。1440/768/390 三个宽度的截图放进证据给看效果门。")
     lines += _lines(eff)
-    return "\n".join(lines) + "\n\n"
+    return "\n".join(lines).replace("{KIT}", _KIT) + "\n\n"
 
 
 def head(role, it, eff, code):

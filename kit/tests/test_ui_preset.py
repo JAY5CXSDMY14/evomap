@@ -252,3 +252,15 @@ def test_three_states_rule_in_both_presets():
     for name in ("web-react", "swiftui"):
         pre = json.load(open(os.path.join(KIT, "presets", "ui", name + ".json"), encoding="utf-8"))
         assert any(r.startswith("三态") and "空状态" in r and "加载中" in r and "报错" in r for r in pre["rules"])
+
+
+def test_taste_skill_vendored_and_injected():
+    pre = json.load(open(os.path.join(KIT, "presets", "ui", "web-react.json"), encoding="utf-8"))
+    assert pre["taste"]["pinned"] and any(r.startswith("审美") for r in pre["rules"])
+    vd = os.path.join(KIT, "vendor", "taste-skill")
+    for f in ("SKILL.md", "LICENSE", "VENDOR.md", "scripts/lint.mjs", "scripts/inspect.mjs", "references/app-screens.md"):
+        assert os.path.exists(os.path.join(vd, f)), f
+    eff = {"name": "web-react", "principles": pre["principles"], "rules": pre["rules"], "categories": {},
+           "components": ["button"], "taste": pre["taste"]}
+    b, v = UI.builder_block(eff), UI.verifier_block(eff, "TB")
+    assert "taste-skill/SKILL.md" in b and "{KIT}" not in b and "lint.mjs" in v and "{KIT}" not in v
