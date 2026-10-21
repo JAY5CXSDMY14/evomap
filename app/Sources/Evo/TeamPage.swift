@@ -314,18 +314,24 @@ struct TeamConfirmCard: View {
     var body: some View {
         let c = state.team?.card(change.role)
         let cur: String? = change.kind == .thinking ? c?.thinking : c?.models.first
-        HStack(alignment: .center, spacing: 10) {
-            Image(systemName: "arrow.triangle.2.circlepath").font(.system(size: 15, weight: .semibold)).foregroundStyle(Theme.accent)
-            Text(change.confirmText(current: cur)).font(Theme.body(13)).foregroundStyle(Theme.textPrimary)
-                .fixedSize(horizontal: false, vertical: true)
-            Spacer(minLength: 6)
-            Button("算了") { withAnimation(Motion.or(Motion.pop)) { state.cancelTeam() } }
-                .buttonStyle(BouncyStyle(kind: .ghost, compact: true))
-                .uiProbe("team-confirm-no")
-            Button("确认换") { withAnimation(Motion.or(Motion.pop)) { state.confirmTeam(change) } }
-                .buttonStyle(BouncyStyle(kind: .primary, compact: true))
-                .uiProbe("team-confirm-yes")
+        // 文字在上、按钮在下，宽度占满：别在 HStack 里给 Text 加 fixedSize（会被量成一字一行，把整个窗口顶出屏幕）
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .top, spacing: 8) {
+                Image(systemName: "arrow.triangle.2.circlepath").font(.system(size: 14, weight: .semibold)).foregroundStyle(Theme.accent)
+                Text(change.confirmText(current: cur)).font(Theme.body(13)).foregroundStyle(Theme.textPrimary)
+                    .lineLimit(3).frame(maxWidth: .infinity, alignment: .leading)
+            }
+            HStack(spacing: 8) {
+                Spacer(minLength: 0)
+                Button("算了") { withAnimation(Motion.or(Motion.pop)) { state.cancelTeam() } }
+                    .buttonStyle(BouncyStyle(kind: .ghost, compact: true))
+                    .uiProbe("team-confirm-no")
+                Button("确认换") { withAnimation(Motion.or(Motion.pop)) { state.confirmTeam(change) } }
+                    .buttonStyle(BouncyStyle(kind: .primary, compact: true))
+                    .uiProbe("team-confirm-yes")
+            }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .padding(12)
         .card(highlighted: true)
         .transition(.scale(scale: 0.92, anchor: .bottom).combined(with: .opacity))
