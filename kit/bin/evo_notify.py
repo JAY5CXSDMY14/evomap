@@ -6,6 +6,8 @@
   telegram 只发「要推」的事；闸门消息带「通过 / 打回」按钮，由 evo bot 收按钮
   email    SMTP；Telegram 没配或发失败时兜底，另外收早间汇总
   macos    本机通知（只发要推的事）
+  plugin   第十六轮：打开的插件里的 notify_channels（事件 JSON 从 stdin 给插件命令，见 docs/plugins.md）；
+           默认只收要推的事（同 telegram，受免打扰），events=all 的渠道每个事件都收
 
 要推的只有：闸门 5 分钟没人处理、件卡住（含状态文件损坏暂停、接棒器心跳停了）、推送连续失败 3 次、岗位因额度暂停、用量异常、上线失败。
 其余事件只进 outbox（webhook 设 events=all 时也发）。
@@ -163,6 +165,7 @@ class Notifier:
             if (w.get("events") or "push") == "all" or ev["level"] == "push":
                 self.post_webhook(w, ev)
         if ev["level"] != "push":
+            self.plugins(ev, push=False)                  # 第十六轮：events=all 的插件渠道
             return ev
         if self.is_quiet():
             _append(self.held, ev)                        # 免打扰：攒到早上汇总
@@ -184,7 +187,19 @@ class Notifier:
             mode = (self.n.get("email") or {}).get("mode", "fallback")
             if mode == "always" or not res.get("telegram"):
                 res["email"] = send_mail(f"[evo] {ev['title']}", text)
+        res.update(self.plugins(ev, push=True))
         return res
+
+    def plugins(self, ev, push):
+        """第十六轮：插件通知渠道。插件出什么事都不能拖垮提醒（evo_plugin.invoke 不抛异常，这里再兜一层）。"""
+        if os.environ.get("EVO_NO_PLUGINS"):
+            return {}
+        try:
+            import evo_plugin
+            return evo_plugin.notify(self.root, ev, push)
+        except Exception as e:
+            print(f"插件通知渠道出错：{e}", file=sys.stderr)
+            return {}
 
     def _prefix(self, ev):
         return f"[{ev['project']}] " if ev.get("project") else ""
@@ -272,6 +287,7 @@ class Notifier:
             send_mail(f"[evo] 早间汇总：{len(uniq)} 件", text)
         ev = self.event("digest_morning", "早间汇总", text, data={"count": len(uniq), "events": [e["id"] for e in uniq]}, project="*")
         _append(self.outbox, ev)
+        self.plugins(ev, push=True)                       # 插件渠道和 telegram 一样收早间汇总
         for w in self.webhooks():
             if (w.get("events") or "push") == "all":
                 self.post_webhook(w, ev)
@@ -289,6 +305,7 @@ class Notifier:
             out["telegram"] = self.telegram(f"{ev['title']}\n{ev['body']}")
         if "email" in ch:
             out["email"] = send_mail(f"[evo] {ev['title']}", ev["body"])
+        out.update(self.plugins(ev, push=True))
         if self.n.get("macos") and sys.platform == "darwin":
             r = subprocess.run(["osascript", "-e", f'display notification "{ev["body"]}" with title "{ev["title"]}"'], capture_output=True)
             out["macos"] = r.returncode == 0

@@ -11,6 +11,9 @@ extension AppState {
     func loadTeam() async {
         if previewQuiet != nil { return }                 // 截图 / 预览用的假状态：不去跑 evo
         let r = await Shell.evo(["team", "--json"], timeout: 60)
+        if r.ok, let m = ContractCheck.check(r.out, command: .team).message {
+            teamError = m; contractWarning = m; return
+        }
         if r.ok, let d = try? TeamDoc.decode(r.out) {
             team = d; teamError = nil
         } else {

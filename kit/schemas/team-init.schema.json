@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/JAY5CXSDMY14/evomap/kit/schemas/team-init.schema.json",
+  "title": "evo team init --json",
+  "description": "向导里的岗位卡片提案（不写配置）。--apply --json 时是 {schema_version, ok, applied, notes}。",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "notes"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1,
+      "description": "大版本。只加字段不升；不兼容的改动才升到 2（App 读到不认识的大版本提示更新）"
+    },
+    "cards": {
+      "type": "object"
+    },
+    "notes": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "ok": {
+      "type": "boolean"
+    },
+    "applied": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "additionalProperties": true
+}

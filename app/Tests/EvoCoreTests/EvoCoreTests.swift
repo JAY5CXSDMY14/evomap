@@ -541,9 +541,11 @@ final class NavigationTests: XCTestCase {
         XCTAssertLessThan(DemoScript.steps.firstIndex(of: .approve)!, DemoScript.steps.firstIndex(of: .rejectWords)!)
         XCTAssertLessThan(DemoScript.steps.firstIndex(of: .palette)!, DemoScript.steps.firstIndex(of: .dark)!)
         XCTAssertEqual(DemoScript.shotName(.popover), "02-popover.png")
-        XCTAssertEqual(DemoScript.shotName(.done), "14-done.png")
+        XCTAssertEqual(DemoScript.shotName(.done), "16-done.png")             // v0.6.0：多了插件页、/hello 两步
         XCTAssertEqual(DemoScript.shotName(.team), "09-team.png")          // v0.4.0：时间线之后看团队页
         XCTAssertLessThan(DemoScript.steps.firstIndex(of: .item)!, DemoScript.steps.firstIndex(of: .team)!)
+        XCTAssertLessThan(DemoScript.steps.firstIndex(of: .team)!, DemoScript.steps.firstIndex(of: .pluginPage)!)
+        XCTAssertLessThan(DemoScript.steps.firstIndex(of: .pluginPage)!, DemoScript.steps.firstIndex(of: .pluginCommand)!)
         XCTAssertGreaterThan(DemoScript.totalSeconds, 15)
         XCTAssertLessThan(DemoScript.totalSeconds, 60)
     }

@@ -9,6 +9,7 @@ public enum SidebarItem: Hashable, Sendable {
     case item(project: String, key: String)
     case stale
     case team             // v0.4.0：岗位卡片（工具·模型·思考档位·备用·成绩）
+    case plugin(String, String)   // v0.6.0：插件的侧栏页（插件名, 页 id），内容由插件输出的卡片 JSON 画
     case settings
 
     /// 详情页标题。
@@ -19,6 +20,7 @@ public enum SidebarItem: Hashable, Sendable {
         case .item(_, let k): return k
         case .stale: return "卡太久"
         case .team: return "团队"
+        case .plugin(_, let id): return id
         case .settings: return "设置"
         }
     }
@@ -119,6 +121,8 @@ public enum DemoScript {
         case project          // 侧栏选项目
         case item             // 打开一件的时间线
         case team             // 侧栏「团队」：岗位卡片
+        case pluginPage       // v0.6.0：侧栏「插件」分组里的页（示例插件 example-hello）
+        case pluginCommand    // v0.6.0：输入框跑 /hello，回话是插件卡片
         case palette          // ⌘K
         case dark             // 命令面板里切深色
         case composer         // 输入框发一句，看回话
@@ -140,6 +144,8 @@ public enum DemoScript {
         case .project: return 2.2
         case .item: return 2.6
         case .team: return 2.6
+        case .pluginPage: return 2.6
+        case .pluginCommand: return 3.0
         case .palette: return 1.8
         case .dark: return 2.4
         case .composer: return 3.2

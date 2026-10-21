@@ -1,0 +1,1 @@
+{"schema_version": 1, "ok": false, "plugin": "example-hello", "kind": "sidebar_page", "id": "hello", "card": null, "error": "插件 example-hello 还没打开（设置里打开，或 evo plugin enable example-hello）", "elapsed_ms": 0, "stderr_tail": ""}

@@ -31,6 +31,12 @@ final class AppState: ObservableObject {
     @Published var team: TeamDoc?                  // v0.4.0 团队页：evo team --json
     @Published var teamError: String?
     @Published var pendingTeam: TeamChange?        // 等你点「确认换」的换模型（卡片下拉框 / 输入框「把验收换成 X」）
+    @Published var plugins: PluginList?            // v0.6.0：evo plugin list --json（侧栏「插件」分组、设置里的开关）
+    @Published var pluginPages: [String: CardViewState] = [:]     // 「插件/页」→ 插件页的三态
+    @Published var itemActionResults: [String: CardViewState] = [:]   // 「项目/件号/插件/按钮」→ 件详情页插件按钮的结果
+    @Published var pluginBusy: Set<String> = []    // 正在开关的插件名
+    @Published var pluginNote: String?             // 插件列表读不出来时的一句（老 evo 没有 plugin 命令）
+    @Published var contractWarning: String?        // v0.6.0：evo 的 JSON 接口大版本对不上（evo 比 App 新/旧，请更新）
     var popoverShown = false                       // 菜单栏弹窗开着吗（开主窗口时顺手收起）
     var previewQuiet: Bool?                        // 截图用：固定「是不是免打扰」
     private var reactionToken = UUID()
@@ -41,6 +47,8 @@ final class AppState: ObservableObject {
         var text: String
         var mine: Bool
         var failed = false
+        var card: PluginCard? = nil                 // v0.6.0：插件「/命令」的回话是一张卡片
+        var command: PluginComposerRef? = nil       // 卡片上的按钮再跑这个插件命令
     }
 
     static let pollSeconds: TimeInterval = 30
@@ -127,6 +135,9 @@ final class AppState: ObservableObject {
     func loadLog(project: String, key: String) async {
         let k = "\(project)/\(key)"
         let r = await Shell.evo(["-p", project, "log", key, "--json"], timeout: 60)
+        if r.ok, let m = ContractCheck.check(r.out, command: .log).message {
+            logErrors[k] = m; contractWarning = m; return
+        }
         if r.ok, let l = try? ItemLog.decode(r.out) {
             logs[k] = l; logErrors[k] = nil
         } else {
@@ -164,20 +175,29 @@ final class AppState: ObservableObject {
 
     private func doRefresh() async {
         config = EvoEnv.loadConfig()
-        let list = await Shell.evo(["projects"], timeout: 30)
+        // v0.6.0：先要 JSON（projects --json）；老 evo 不认 --json 就退回纯文本
+        var list = await Shell.evo(["projects", "--json"], timeout: 30)
+        if !list.ok { list = await Shell.evo(["projects"], timeout: 30) }
         guard list.ok else {
             globalError = "evo 跑不起来：\(list.tail)"
             snaps = []; beats = []; lastRefresh = Date()
             return
         }
         globalError = nil
-        let codes = ProjectList.parse(list.out)
+        var warning: String?
+        let codes: [String]
+        switch ProjectList.parseAny(list.out) {
+        case .success(let c): codes = c
+        case .failure(let m): codes = []; warning = m.message
+        }
         var results: [String: ProjectSnapshot] = [:]
         await withTaskGroup(of: ProjectSnapshot.self) { group in
             for code in codes {
                 group.addTask {
                     let r = await Shell.evo(["-p", code, "status", "--json"], timeout: 60)
                     guard r.ok else { return ProjectSnapshot(code: code, error: r.tail.isEmpty ? "退出码 \(r.code)" : r.tail) }
+                    // 不认识的大版本：不解码（字段含义可能变了），只显示「请更新」
+                    if let m = ContractCheck.check(r.out, command: .status).message { return ProjectSnapshot(code: code, error: m) }
                     do { return ProjectSnapshot(code: code, doc: try StatusDoc.decode(r.out)) } catch {
                         return ProjectSnapshot(code: code, error: "不是 status JSON：\(r.out.prefix(80))")
                     }
@@ -186,6 +206,8 @@ final class AppState: ObservableObject {
             for await s in group { results[s.code] = s }
         }
         snaps = codes.compactMap { results[$0] }
+        if warning == nil, let m = snaps.compactMap(\.error).first(where: { $0.hasPrefix("evo 版本比 App") }) { warning = m }
+        contractWarning = warning
         beats = snaps.compactMap { s in
             s.doc.map { HeartbeatStatus.of(project: s.code, lastTick: $0.lastTick, staleMinutes: config.heartbeatStaleMinutes) }
         }
@@ -200,6 +222,7 @@ final class AppState: ObservableObject {
         mergedCounts = merged
         if Launchd.installed { loopRunning = await Launchd.isLoaded() } else { loopRunning = nil }
         await loadTeam()
+        await loadPlugins()
         lastRefresh = Date()
     }
 
@@ -278,6 +301,14 @@ final class AppState: ObservableObject {
     // MARK: 输入框
 
     func send(mode: ComposerMode, project: String, text: String, look: Bool) -> String? {
+        // v0.6.0：「/名字 参数」是插件的输入框命令：交给插件，回话是一张卡片（不认识的 /词 照旧当反馈发）
+        if let m = PluginCommandParser.match(text, commands: plugins?.composerCommands ?? []) {
+            chat.append(ChatLine(text: text.trimmingCharacters(in: .whitespacesAndNewlines), mine: true))
+            trimChat()
+            react(.sending)
+            runComposerPlugin(m.command, args: m.args, project: project, action: nil, payload: nil)
+            return nil
+        }
         // v0.4.0：「把验收换成 X」不发给 evo feedback，先出确认卡，点了才 evo team set
         if let ch = TeamIntent.parse(text, currentProject: project.isEmpty ? nil : project, projects: codes) {
             chat.append(ChatLine(text: text.trimmingCharacters(in: .whitespacesAndNewlines), mine: true))

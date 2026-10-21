@@ -1,0 +1,193 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/JAY5CXSDMY14/evomap/kit/schemas/plugin-list.schema.json",
+  "title": "evo plugin list --json",
+  "description": "装了哪些插件、开没开、各自贡献了什么（App 侧栏「插件」分组和设置里的开关读这个）。",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "evo_api",
+    "plugins_dir",
+    "plugins"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1,
+      "description": "大版本。只加字段不升；不兼容的改动才升到 2（App 读到不认识的大版本提示更新）"
+    },
+    "evo_api": {
+      "type": "string",
+      "description": "这版 evo 的插件接口版本，例 1.0"
+    },
+    "plugins_dir": {
+      "type": "string"
+    },
+    "plugins": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "name",
+          "enabled",
+          "valid",
+          "compatible",
+          "active",
+          "errors",
+          "contributes"
+        ],
+        "additionalProperties": true,
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "version": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "evo_api": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "valid": {
+            "type": "boolean"
+          },
+          "compatible": {
+            "type": "boolean"
+          },
+          "active": {
+            "type": "boolean",
+            "description": "enabled && valid && compatible：App 只展示 active 的贡献点"
+          },
+          "errors": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "contributes": {
+            "type": "object",
+            "required": [
+              "sidebar_pages",
+              "composer_commands",
+              "notify_channels",
+              "item_actions"
+            ],
+            "properties": {
+              "sidebar_pages": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": [
+                    "id",
+                    "title"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "icon": {
+                      "type": "string"
+                    }
+                  }
+                }
+              },
+              "composer_commands": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": [
+                    "id",
+                    "name"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "description": {
+                      "type": "string"
+                    },
+                    "usage": {
+                      "type": "string"
+                    }
+                  }
+                }
+              },
+              "notify_channels": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": [
+                    "id",
+                    "title"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "events": {
+                      "enum": [
+                        "push",
+                        "all"
+                      ]
+                    }
+                  }
+                }
+              },
+              "item_actions": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": [
+                    "id",
+                    "title"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "icon": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "additionalProperties": true
+}

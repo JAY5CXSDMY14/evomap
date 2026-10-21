@@ -1,0 +1,95 @@
+{
+ "schema_version": 1,
+ "ok": true,
+ "plugin": "example-hello",
+ "kind": "sidebar_page",
+ "id": "hello",
+ "card": {
+  "schema_version": 1,
+  "title": "你好，老板 👋",
+  "subtitle": "example-hello 0.1.0",
+  "blocks": [
+   {
+    "type": "text",
+    "text": "这页是 example-hello 插件画的：插件只输出一段卡片 JSON，App 用通用渲染器画出来。现在 21:10。",
+    "style": "body"
+   },
+   {
+    "type": "list",
+    "items": [
+     {
+      "title": "侧栏页",
+      "subtitle": "就是这一页",
+      "badge": "sidebar_pages",
+      "symbol": "sidebar.left"
+     },
+     {
+      "title": "输入框命令",
+      "subtitle": "在下面输入框打 /hello 老板",
+      "badge": "composer_commands",
+      "symbol": "text.cursor"
+     },
+     {
+      "title": "通知渠道",
+      "subtitle": "要推的事会追加到插件数据目录的 notify.log",
+      "badge": "notify_channels",
+      "symbol": "bell"
+     },
+     {
+      "title": "件按钮",
+      "subtitle": "件详情页多一个「跟这件打招呼」",
+      "badge": "item_actions",
+      "symbol": "hand.wave"
+     }
+    ]
+   },
+   {
+    "type": "table",
+    "columns": [
+     "项",
+     "值"
+    ],
+    "rows": [
+     [
+      "打开次数",
+      3
+     ],
+     [
+      "插件接口",
+      "1.0"
+     ],
+     [
+      "数据目录",
+      "example-hello"
+     ]
+    ]
+   },
+   {
+    "type": "buttons",
+    "buttons": [
+     {
+      "label": "再打个招呼",
+      "action": "again",
+      "style": "primary"
+     },
+     {
+      "label": "掷骰子",
+      "action": "roll",
+      "style": "secondary",
+      "payload": {
+       "sides": 6
+      }
+     }
+    ]
+   },
+   {
+    "type": "text",
+    "text": "按钮点了会再跑一次插件命令（request.action = 按钮的 action）。",
+    "style": "caption"
+   }
+  ]
+ },
+ "error": null,
+ "elapsed_ms": 41,
+ "stderr_tail": ""
+}

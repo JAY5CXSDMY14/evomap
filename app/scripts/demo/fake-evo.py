@@ -100,6 +100,14 @@ def main(argv):
     if len(argv) >= 2 and argv[0] == "-p":
         code, argv = argv[1], argv[2:]
     cmd = argv[0] if argv else "help"
+    if cmd == "plugin":                  # v0.6.0：插件交给真 evo（包里的 kit，插件目录 $EVO_PLUGINS_DIR），演示的是真的插件机制
+        real = os.environ.get("EVO_REAL_EVO")
+        if not real or not os.path.exists(real):
+            print("假 evo：没有 EVO_REAL_EVO，插件功能演示不了", file=sys.stderr); return 2
+        os.execv(sys.executable, [sys.executable, real] + argv)
+    if cmd == "projects" and "--json" in argv:
+        out({"schema_version": 1, "projects": [{"code": c, "name": p["name"]} for c, p in s["projects"].items()]})
+        return 0
     if cmd == "projects":
         for c, p in s["projects"].items():
             print(f"{c} {p['name']} ~/code/{c.lower()} JAY5CXSDMY14/{c.lower()}")
@@ -128,6 +136,7 @@ def main(argv):
         return 0
     if cmd == "log":
         key = argv[1]
+        argv = [a for a in argv if a != "--json"]
         p = s["projects"][code]
         l = (p.get("logs") or {}).get(key)
         it = next((i for i in p.get("items", []) if i["key"] == key), None)

@@ -177,6 +177,12 @@ enum DemoRunner {
             }
         case .team:
             withAnimation(Motion.or(Motion.softSpring)) { st.windowSelection = .team }
+        case .pluginPage:
+            if let pg = st.plugins?.sidebarPages.first {
+                withAnimation(Motion.or(Motion.softSpring)) { st.windowSelection = .plugin(pg.plugin, pg.id) }
+            }
+        case .pluginCommand:
+            _ = st.send(mode: .feedback, project: st.codes.first ?? "", text: "/hello 老板", look: false)
         case .palette:
             PaletteController.shared.show()
             PaletteController.shared.model.query = "深色"

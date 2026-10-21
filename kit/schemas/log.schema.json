@@ -1,0 +1,92 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/JAY5CXSDMY14/evomap/kit/schemas/log.schema.json",
+  "title": "evo -p <代号> log <件号> --json",
+  "description": "一件的现状、交卷和时间线。",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "key",
+    "events"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1,
+      "description": "大版本。只加字段不升；不兼容的改动才升到 2（App 读到不认识的大版本提示更新）"
+    },
+    "key": {
+      "type": "string"
+    },
+    "title": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "state": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "raw": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "goal": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "report": {
+      "type": [
+        "object",
+        "null"
+      ]
+    },
+    "manual_checks": {
+      "type": "array"
+    },
+    "has_diff": {
+      "type": "boolean"
+    },
+    "merged_sha": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "notes": {
+      "type": "array"
+    },
+    "artifacts": {
+      "type": "array"
+    },
+    "events": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "at",
+          "event"
+        ],
+        "additionalProperties": true,
+        "properties": {
+          "at": {
+            "type": "string"
+          },
+          "item": {
+            "type": "string"
+          },
+          "event": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  },
+  "additionalProperties": true
+}

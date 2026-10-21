@@ -37,6 +37,8 @@
   evo -p AB feedback --item <件号> "原话"  对某件补反馈：它等你的看效果/做不做闸门作废，改完重开
   evo -p AB goal [set "一两句" | clear]   项目目标：写进每份任务书开头「项目目标：…」
   evo -p AB ui [show | set web-react|swiftui|none | set 类别=包名[,包名] | set 类别= | check]   UI 栈预设（见 kit/presets/ui/README.md）
+  evo plugin list|enable|disable|run|validate|install …   插件（第十六轮，见 docs/plugins.md）：侧栏页 / 输入框命令 / 通知渠道
+  evo projects --json             项目列表（App 用；所有给 App 的 --json 都带 schema_version，见 docs/app-contract.md）
 """
 import argparse, datetime, fcntl, hashlib, hmac, json, os, re, secrets, subprocess, sys, time, shlex
 
@@ -48,6 +50,7 @@ import evo_time as TM       # noqa: E402
 import evo_notify as NT     # noqa: E402
 import evo_ui as UI         # noqa: E402
 import evo_arch as ARCH     # noqa: E402  第十五轮：后端/架构预设
+import evo_plugin as PLUG   # noqa: E402  第十六轮：插件
 # 多项目：每个项目一个目录 ~/.evoloop/projects/（旧 ~/.tubu 自动沿用）<代号>/{config.json, state/}；命令用 -p <代号> 指定
 _old = os.path.expanduser("~/.tubu/projects")
 HOME_DIR = os.environ.get("EVO_HOME") or os.environ.get("TUBU_HOME") or (
@@ -1171,7 +1174,7 @@ def cmd_models(a):
         return
     listed = magpie_models()
     if getattr(a, "json", False):
-        doc = {"magpie_url": GCFG.get("magpie_url"), "magpie_ok": listed is not None,
+        doc = {"schema_version": APP_SCHEMA_VERSION, "magpie_url": GCFG.get("magpie_url"), "magpie_ok": listed is not None,
                "models": [m["id"] for m in listed] if listed is not None else None}
         if HAS_PROJECT:
             doc.update(project=CODE, **project_model_view(CODE, listed))
@@ -1514,7 +1517,7 @@ def cmd_team(a):
         h = team_health(force=True)
         prop = TEAM.propose(h, team_tools())
         if a.json and not a.apply:
-            print(json.dumps(prop, ensure_ascii=False)); return
+            print(json.dumps({"schema_version": APP_SCHEMA_VERSION, **prop}, ensure_ascii=False)); return
         if not a.apply:
             for r, c in prop["cards"].items():
                 print(f"{TEAM.ROLE_NAMES[r]}：{c['tool']} · {'/'.join(c['models']) or '工具默认模型'}"
@@ -1526,7 +1529,7 @@ def cmd_team(a):
         for r, c in prop["cards"].items():
             _team_write(path, None, r, lambda x, c=c: (x.update({k: v for k, v in c.items() if k in TEAM_FIELDS}),
                                                          None if c.get("fallback") else x.pop("fallback", None)))
-        print(json.dumps({"ok": True, "applied": list(prop["cards"]), "notes": prop["notes"]}, ensure_ascii=False) if a.json
+        print(json.dumps({"schema_version": APP_SCHEMA_VERSION, "ok": True, "applied": list(prop["cards"]), "notes": prop["notes"]}, ensure_ascii=False) if a.json
               else f"已写入 {path}：{'、'.join(TEAM.ROLE_NAMES[r] for r in prop['cards'])}。下一次派工生效。")
         return
     if act == "dismiss":
@@ -2551,7 +2554,7 @@ def cmd_ui(a):
             sys.exit(f"UI 预设只能是：{' | '.join(UI.NAMES)}")
         eff = UI.effective({**CFG, "ui_preset": pv}) if pv else ui_eff()
         if a.json:
-            print(json.dumps({"ui_preset": CFG.get("ui_preset") or "none", "effective": eff}, ensure_ascii=False, indent=1)); return
+            print(json.dumps({"schema_version": APP_SCHEMA_VERSION, "ui_preset": CFG.get("ui_preset") or "none", "effective": eff}, ensure_ascii=False, indent=1)); return
         print(UI.table(eff) if eff else "UI 预设：none（没开；evo -p " + CODE + " ui set web-react | swiftui）"); return
     if act == "check":
         path = a.path or (os.getcwd() if git(os.getcwd(), "rev-parse", "--git-dir", check=False) else CFG["repo"])
@@ -2561,7 +2564,7 @@ def cmd_ui(a):
         eff = UI.effective(CFG, present=UI.git_deps(path, base)["manifest"])   # 「现有」按改动前算，新加的不算现有
         r = UI.check(path, base, "HEAD", eff)
         if a.json:
-            print(json.dumps(r, ensure_ascii=False, indent=1))
+            print(json.dumps({"schema_version": APP_SCHEMA_VERSION, **r}, ensure_ascii=False, indent=1))
         else:
             print(f"UI 依赖检查（预设 {eff['name']}，对比 {base[:10]}..HEAD）")
             for x in r["violations"]:
@@ -2629,7 +2632,7 @@ def cmd_arch(a):
             sys.exit(f"架构预设只能是：{' | '.join(ARCH.NAMES)}")
         eff = ARCH.effective({**CFG, "arch_preset": pv}) if pv else arch_eff()
         if a.json:
-            print(json.dumps({"arch_preset": CFG.get("arch_preset") or "none", "effective": eff}, ensure_ascii=False, indent=1, default=list)); return
+            print(json.dumps({"schema_version": APP_SCHEMA_VERSION, "arch_preset": CFG.get("arch_preset") or "none", "effective": eff}, ensure_ascii=False, indent=1, default=list)); return
         print(ARCH.table(eff) if eff else "架构预设：none（没开；evo -p " + CODE + " arch set python-fastapi | node-ts | swift-app）"); return
     if act == "check":
         path = a.path or (os.getcwd() if git(os.getcwd(), "rev-parse", "--git-dir", check=False) else CFG["repo"])
@@ -2641,7 +2644,7 @@ def cmd_arch(a):
         tools = [] if a.no_tools else ARCH.run_tools(path, base, "HEAD", eff, r["changed"])
         bad = bool(r["violations"]) or any(t["status"] == "fail" for t in tools)
         if a.json:
-            print(json.dumps({**r, "tools": tools, "ok": not bad}, ensure_ascii=False, indent=1))
+            print(json.dumps({"schema_version": APP_SCHEMA_VERSION, **r, "tools": tools, "ok": not bad}, ensure_ascii=False, indent=1))
         else:
             print(f"架构检查（预设 {eff['name']}，源码根 {eff['root']}/，对比 {base[:10]}..HEAD，只看新增）")
             for x in r["violations"]:
@@ -2745,7 +2748,7 @@ def cmd_log(a):
     if a.diff:
         print(item_diff(it) or "（没有改动可看：还没施工，或工作区已清理且没有合并提交）"); return
     if a.json:
-        print(json.dumps({"key": a.key, "title": it.get("title"), "state": state_name(it) if it else None, "raw": it.get("state"),
+        print(json.dumps({"schema_version": APP_SCHEMA_VERSION, "key": a.key, "title": it.get("title"), "state": state_name(it) if it else None, "raw": it.get("state"),
                           "goal": CFG.get("goal") or None, "report": it.get("report"),
                           "manual_checks": (it.get("report") or {}).get("manual_checks") or [],
                           "has_diff": bool(it.get("worktree") and os.path.isdir(it.get("worktree") or "")) or bool(it.get("merged_sha")),
@@ -3135,6 +3138,12 @@ def cmd_import(a):
 
 
 def cmd_projects(a):
+    if getattr(a, "json", False):                 # 第十六轮：App 用的稳定格式（docs/app-contract.md）
+        ps = []
+        for code in list_projects():
+            c = _read_json(os.path.join(HOME_DIR, code, "config.json"))
+            ps.append({"code": code, "name": c.get("name") or code, "repo": c.get("repo"), "github": c.get("github_repo") or None})
+        print(json.dumps({"schema_version": APP_SCHEMA_VERSION, "projects": ps}, ensure_ascii=False)); return
     for code in list_projects():
         c = json.load(open(os.path.join(HOME_DIR, code, "config.json"), encoding="utf-8"))
         print(f"{code:<5} {c.get('name', ''):<10} {c.get('repo')}  {c.get('github_repo', '')}")
@@ -3518,6 +3527,7 @@ def cmd_status(a):
 
 
 STATUS_SCHEMA_VERSION = 1
+APP_SCHEMA_VERSION = 1      # 第十六轮：给 App 的 --json 统一带这个（大版本；只加字段不升），见 docs/app-contract.md
 
 
 def state_name(it):
@@ -3792,6 +3802,92 @@ def _emit_for(code, kind, title, body):
         print(f"提醒没发出去：{e}", file=sys.stderr)
 
 
+def cmd_plugin(a):
+    """evo plugin …（第十六轮）。插件见 docs/plugins.md；输出格式见 docs/app-contract.md。"""
+    act = a.action
+    if act == "list":
+        doc = PLUG.list_doc(EVO_ROOT)
+        if a.json:
+            print(json.dumps(doc, ensure_ascii=False)); return 0
+        if not doc["plugins"]:
+            print(f"没有插件（{doc['plugins_dir']}）。装示例：evo plugin install {os.path.join(KIT, 'plugins', 'example-hello')}"); return 0
+        for p in doc["plugins"]:
+            st = "开" if p["active"] else ("关" if p["valid"] and p["compatible"] else "坏")
+            c = p["contributes"]
+            what = "、".join(f"{n} {len(c[k])}" for k, n in (("sidebar_pages", "侧栏页"), ("composer_commands", "输入框命令"),
+                                                             ("notify_channels", "通知渠道"), ("item_actions", "件按钮")) if c[k])
+            print(f"[{st}] {p['name']} {p['version'] or ''}  {p['description'] or ''}  （{what or '没有贡献点'}）")
+            for e in p["errors"]:
+                print("    ! " + e)
+            if p["valid"] and not p["compatible"]:
+                print(f"    ! evo_api「{p['evo_api']}」和这版 evo（{doc['evo_api']}）不兼容")
+        return 0
+    if act in ("enable", "disable", "install"):
+        refuse_agents("开关、安装插件")
+        if not a.target:
+            sys.exit(f"要写插件名：evo plugin {act} <名字>" if act != "install" else "要写插件文件夹：evo plugin install <目录>")
+        try:
+            if act == "install":
+                info = PLUG.install(EVO_ROOT, a.target, force=a.force)
+                print(f"已装 {info['name']} → {info['dir']}（默认关着：evo plugin enable {info['name']} 或在 App 设置里打开）")
+                for e in info["errors"]:
+                    print("  ! " + e)
+                return 0 if info["valid"] else 1
+            info = PLUG.set_enabled(EVO_ROOT, a.target, act == "enable")
+        except (LookupError, ValueError, FileExistsError) as e:
+            sys.exit(str(e))
+        if a.json:
+            print(json.dumps({"schema_version": APP_SCHEMA_VERSION, "ok": True, "plugin": PLUG.public(info)}, ensure_ascii=False)); return 0
+        print(f"{info['name']}：{'已打开' if info['enabled'] else '已关掉'}" + ("" if info["valid"] else "（但 plugin.json 不合格：" + "；".join(info["errors"][:2]) + "）"))
+        return 0
+    if act == "validate":
+        if a.target and os.path.isdir(a.target):
+            infos = [PLUG.read_plugin(os.path.abspath(a.target))]
+        elif a.target:
+            i = PLUG.find(EVO_ROOT, a.target)
+            if not i:
+                sys.exit(f"没有插件 {a.target}（也不是目录）")
+            infos = [i]
+        else:
+            infos = PLUG.discover(EVO_ROOT)
+        bad = 0
+        out = []
+        for i in infos:
+            errs = list(i["errors"])
+            if i["valid"] and not i["compatible"]:
+                errs.append(f"evo_api「{i['manifest'].get('evo_api')}」不兼容这版 evo")
+            bad += bool(errs)
+            out.append({"name": i["name"], "dir": i["dir"], "ok": not errs, "errors": errs})
+        if a.json:
+            print(json.dumps({"schema_version": APP_SCHEMA_VERSION, "ok": not bad, "plugins": out}, ensure_ascii=False))
+        else:
+            for o in out:
+                print(("✓ " if o["ok"] else "✗ ") + o["name"] + ("" if o["ok"] else "：" + "；".join(o["errors"])))
+            if not out:
+                print("没有插件")
+        return 1 if bad else 0
+    if act == "run":
+        if not (a.target and a.kind and a.cid):
+            sys.exit("用法：evo plugin run <名字> sidebar_page|composer_command|notify_channel|item_action <id> [--args 文字] [--action A --payload JSON]")
+        req = {"args": a.pargs or "", "action": a.paction, "project": a.project or (CODE if HAS_PROJECT else None), "item": a.item}
+        if a.payload:
+            try:
+                req["payload"] = json.loads(a.payload)
+            except ValueError:
+                sys.exit("--payload 要是 JSON")
+        if a.kind == "notify_channel":
+            req["event"] = NOTE.event("test", "evo 插件通知测试", "收到这条说明插件通知渠道通了。", project=req["project"] or "*")
+        r = PLUG.invoke(EVO_ROOT, a.target, a.kind, a.cid, req)
+        if a.json:
+            print(json.dumps(r, ensure_ascii=False))
+        elif r["ok"]:
+            print(json.dumps(r["card"], ensure_ascii=False, indent=1) if r["card"] else "好了")
+        else:
+            print("插件出错：" + (r["error"] or "?"), file=sys.stderr)
+        return 0 if r["ok"] else 3
+    return 2
+
+
 def cmd_watchdog(a):
     """给 launchd 定时跑：查一遍所有项目的心跳，停了就推送（同一次停只推一次）。"""
     for code in watchdog_check():
@@ -3814,7 +3910,7 @@ if __name__ == "__main__":
         x.add_argument("--arch-preset", dest="arch_preset", help="后端/架构预设：python-fastapi | node-ts | swift-app | none（默认 none）")
         if nm == "new":
             x.add_argument("--create", action="store_true", help="在 GitHub 建私有仓库并推送")
-    sp.add_parser("projects"); sp.add_parser("once")
+    x = sp.add_parser("projects"); x.add_argument("--json", action="store_true"); sp.add_parser("once")
     x = sp.add_parser("panel"); x.add_argument("--host", default="127.0.0.1"); x.add_argument("--port", type=int, default=8765)
     x.add_argument("--show-token", action="store_true", help="只显示面板口令（没有就生成）")
     sp.add_parser("notify-test"); x = sp.add_parser("bot"); x.add_argument("--once", action="store_true")
@@ -3845,9 +3941,17 @@ if __name__ == "__main__":
     x.add_argument("--project"); x.add_argument("--items", type=int, default=5); x.add_argument("--apply", action="store_true")
     x = sp.add_parser("retry"); x.add_argument("key"); sp.add_parser("resume")
     x = sp.add_parser("digest"); x.add_argument("--post", action="store_true")
+    x = sp.add_parser("plugin", help="插件：list | enable <名> | disable <名> | run <名> <类型> <id> | validate [名|目录] | install <目录>")   # 第十六轮
+    x.add_argument("action", choices=["list", "enable", "disable", "run", "validate", "install"])
+    x.add_argument("target", nargs="?"); x.add_argument("kind", nargs="?"); x.add_argument("cid", nargs="?")
+    x.add_argument("--json", action="store_true"); x.add_argument("--args", dest="pargs", default="")
+    x.add_argument("--action", dest="paction"); x.add_argument("--payload"); x.add_argument("--project"); x.add_argument("--item")
+    x.add_argument("--force", action="store_true")
     a = p.parse_args()
     if a.cmd == "team":                                    # 第十四轮：不选项目也能看/改（全局卡片）
         cmd_team(a); sys.exit(0)
+    if a.cmd == "plugin":                                  # 第十六轮：插件和项目无关
+        sys.exit(cmd_plugin(a) or 0)
     if not HAS_PROJECT and a.cmd not in ("new", "import", "projects", "status", "run", "suite", "panel", "notify-test", "bot", "watchdog", "models"):
         sys.exit(f"有多个项目，请加 -p <代号>：{', '.join(list_projects()) or '（还没有项目）'}")
     {"panel": cmd_panel, "new": cmd_new, "import": cmd_import, "projects": cmd_projects, "once": cmd_once, "add": cmd_add, "tick": cmd_tick, "run": cmd_run, "status": cmd_status, "approve": cmd_approve, "ship": cmd_ship, "pull": cmd_pull, "digest": cmd_digest, "retry": cmd_retry, "resume": cmd_resume, "feedback": cmd_feedback, "suite": cmd_suite, "retro": cmd_retro,

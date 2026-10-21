@@ -1,0 +1,375 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/JAY5CXSDMY14/evomap/kit/schemas/status.schema.json",
+  "title": "evo -p <代号> status --json",
+  "description": "单个项目的状态（字段含义见 docs/agent-interface.md 2.1）。",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "project",
+    "name",
+    "count",
+    "stuck",
+    "gates",
+    "items",
+    "log"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1,
+      "description": "大版本。只加字段不升；不兼容的改动才升到 2（App 读到不认识的大版本提示更新）"
+    },
+    "project": {
+      "type": "string"
+    },
+    "name": {
+      "type": "string"
+    },
+    "generated_at": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "ISO 8601 时间，带时区"
+    },
+    "last_tick": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "ISO 8601 时间，带时区"
+    },
+    "count": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "integer"
+      }
+    },
+    "stuck": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "goal": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "ui_preset": {
+      "type": "string"
+    },
+    "arch_preset": {
+      "type": "string"
+    },
+    "roles": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "role",
+          "status"
+        ],
+        "properties": {
+          "role": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "items": {
+            "type": "array"
+          },
+          "why": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "until": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "ISO 8601 时间，带时区"
+          }
+        },
+        "additionalProperties": true
+      }
+    },
+    "stale": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "key"
+        ],
+        "additionalProperties": true,
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "title": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "state": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "raw": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "reason": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "since": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "ISO 8601 时间，带时区"
+          },
+          "hours": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "minutes": {
+            "type": [
+              "number",
+              "null"
+            ]
+          }
+        }
+      }
+    },
+    "no_live_path": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "key"
+        ],
+        "additionalProperties": true,
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "title": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "state": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "raw": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "reason": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "since": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "ISO 8601 时间，带时区"
+          },
+          "hours": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "minutes": {
+            "type": [
+              "number",
+              "null"
+            ]
+          }
+        }
+      }
+    },
+    "gates": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id"
+        ],
+        "additionalProperties": true,
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "question": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "options": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "string"
+            }
+          },
+          "kind": {
+            "enum": [
+              "do",
+              "look",
+              "ship",
+              "external",
+              "ask",
+              "other"
+            ]
+          },
+          "item": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "waiting_since": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "ISO 8601 时间，带时区"
+          }
+        }
+      }
+    },
+    "items": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "key",
+          "title",
+          "state",
+          "raw"
+        ],
+        "additionalProperties": true,
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "kind": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "state": {
+            "type": "string"
+          },
+          "raw": {
+            "type": "string"
+          },
+          "waiting": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "stalled": {
+            "type": "boolean"
+          },
+          "look": {
+            "type": "boolean"
+          },
+          "round": {
+            "type": "integer"
+          },
+          "manual_checks": {
+            "type": "array"
+          },
+          "state_since": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "ISO 8601 时间，带时区"
+          },
+          "no_live_path": {
+            "type": "boolean"
+          },
+          "look_gate": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "usage": {
+            "type": "object",
+            "properties": {
+              "runs": {
+                "type": "integer"
+              },
+              "minutes": {
+                "type": "number"
+              }
+            }
+          }
+        }
+      }
+    },
+    "rate_limits": {
+      "type": "array"
+    },
+    "usage": {
+      "type": "object"
+    },
+    "decider": {
+      "type": "object"
+    },
+    "log": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "team": {
+      "type": [
+        "object",
+        "null"
+      ]
+    }
+  },
+  "additionalProperties": true
+}

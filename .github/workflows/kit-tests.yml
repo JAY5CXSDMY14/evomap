@@ -13,6 +13,6 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - run: pip install pytest import-linter ruff   # 第十五轮：架构预设的真工具测试（只算新增）
+      - run: pip install pytest import-linter ruff jsonschema   # 第十五轮：架构预设的真工具测试（只算新增）；第十六轮：jsonschema 校验 --json 输出
       - name: 跑 kit 测试（假 Orca + 临时仓库 + 裸远端）
         run: python -m pytest kit/tests -q

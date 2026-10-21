@@ -167,6 +167,8 @@ struct SettingsView: View {
                     Hint(text: "心跳超过 \(Int(state.config.heartbeatStaleMinutes)) 分钟算停（全局配置 limits.heartbeat_stale_minutes）")
                 }
                 .staggeredAppear(4)
+                PluginSettingsCard(state: state)          // v0.6.0：插件开关
+                    .staggeredAppear(5)
                 HStack {
                     Button { WindowManager.shared.showSetup() } label: { Label("打开首次设置向导", systemImage: "wand.and.stars") }
                         .buttonStyle(BouncyStyle(kind: .primary))
@@ -267,7 +269,8 @@ final class SetupModel: ObservableObject {
         if preset { return }
         running = "看看这台 Mac 上装了哪些工具、magpie 有哪些组…"
         let r = await Shell.evo(["team", "init", "--json"], timeout: 60)
-        if r.ok, let p = try? TeamProposal.decode(r.out) { proposal = p; proposalNote = nil }
+        if r.ok, let m = ContractCheck.check(r.out, command: .teamInit).message { proposalNote = m }
+        else if r.ok, let p = try? TeamProposal.decode(r.out) { proposal = p; proposalNote = nil }
         else { proposalNote = r.ok ? "看不懂 evo 的回答：\(r.out.prefix(80))" : r.tail }
         running = nil
     }

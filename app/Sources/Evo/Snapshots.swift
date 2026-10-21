@@ -87,6 +87,21 @@ enum Snapshots {
                        TeamConfirmCard(state: tm, change: TeamChange(role: "verify", value: "group/evo-verify"))
                    }.padding(24),
                    width: 948, dark: dark, name: "team-\(sfx)", out: out)
+            // 5c 插件（v0.6.0）：插件页（通用卡片渲染）+ 输入框 /hello 的回话卡片 + 设置里的开关 + 接口版本横幅 + 报错态
+            let pg = AppState.preview(snaps: snaps, beats: beats(snaps))
+            pg.plugins = samplePlugins
+            let ref = PluginPageRef(plugin: "example-hello", id: "hello", title: "你好", icon: "hand.wave")
+            if let c = try? PluginCard.decode(samplePluginCardJSON) { pg.pluginPages[ref.key] = .loaded(c) }
+            let reply = try? PluginCard.decode(#"{"schema_version":1,"title":"你好，老板！","blocks":[{"type":"text","text":"这是 /hello 的回话：插件收到的参数是「老板」，当前项目 TB。"},{"type":"buttons","buttons":[{"label":"掷骰子","action":"roll","style":"primary"}]}]}"#)
+            render(VStack(alignment: .leading, spacing: 18) {
+                       ContractBanner(text: ContractCheck.evoNewer(found: 2, supported: 1, command: .status).message ?? "")
+                       PluginPane(state: pg, ref: ref)
+                       ChatSection(lines: [.init(text: "/hello 老板", mine: true), .init(text: "你好，老板！", mine: false, card: reply)],
+                                   mood: .idle, liveEmotion: .happy)
+                       CardStateView(state: .failed("插件超时（20 秒），已停掉"), onRetry: {})
+                       PluginSettingsCard(state: pg).frame(width: 520)
+                   }.padding(24),
+                   width: 900, dark: dark, name: "plugin-\(sfx)", out: out)
             // 6 角色表情（调度球 / 云宝 / 亮亮）+ 菜单栏小脸
             render(VStack(spacing: 0) {
                        ForEach(MateCharacter.allCases, id: \.self) { c in MateSheetStatic(character: c) }
@@ -108,6 +123,36 @@ enum Snapshots {
         MainWindowController.shared.window?.close()
         print("snapshots → \(out.path)")
     }
+
+    /// 插件样例（和 kit/plugins/example-hello 的输出同形）。
+    static var samplePlugins: PluginList? {
+        try? PluginList.decode(#"""
+        {"schema_version": 1, "evo_api": "1.0", "plugins_dir": "~/.evoloop/plugins", "plugins": [
+         {"name": "example-hello", "version": "0.1.0", "description": "示例插件：侧栏页「你好」、输入框命令 /hello、通知渠道（写本地文件）、件详情页按钮",
+          "evo_api": "^1", "enabled": true, "valid": true, "compatible": true, "active": true, "errors": [],
+          "contributes": {"sidebar_pages": [{"id": "hello", "title": "你好", "icon": "hand.wave"}],
+                          "composer_commands": [{"id": "hello", "name": "hello", "title": "打个招呼", "usage": "/hello 名字"}],
+                          "notify_channels": [{"id": "hello-log", "title": "写到本地文件", "events": "push"}],
+                          "item_actions": [{"id": "hello-item", "title": "跟这件打招呼", "icon": "hand.wave"}]}},
+         {"name": "future-thing", "version": "2.0.0", "description": "要 evo_api ^2 的插件", "evo_api": "^2", "enabled": false,
+          "valid": true, "compatible": false, "active": false, "errors": [],
+          "contributes": {"sidebar_pages": [], "composer_commands": [], "notify_channels": [], "item_actions": []}}]}
+        """#)
+    }
+
+    static let samplePluginCardJSON = #"""
+    {"schema_version": 1, "title": "你好，老板 👋", "subtitle": "example-hello 0.1.0", "blocks": [
+     {"type": "text", "text": "🎲 掷出了 4", "style": "title", "tone": "accent"},
+     {"type": "text", "text": "这页是 example-hello 插件画的：插件只输出一段卡片 JSON，App 用通用渲染器画出来。现在 21:10。"},
+     {"type": "list", "items": [
+       {"title": "侧栏页", "subtitle": "就是这一页", "symbol": "sidebar.left", "badge": "sidebar_pages"},
+       {"title": "输入框命令", "subtitle": "在下面输入框打 /hello 老板", "symbol": "text.cursor", "badge": "composer_commands"},
+       {"title": "通知渠道", "subtitle": "要推的事会追加到插件数据目录的 notify.log", "symbol": "bell", "badge": "notify_channels"},
+       {"title": "件按钮", "subtitle": "件详情页多一个「跟这件打招呼」", "symbol": "hand.wave", "badge": "item_actions"}]},
+     {"type": "table", "columns": ["项", "值"], "rows": [["打开次数", 3], ["插件接口", "1.0"], ["数据目录", "example-hello"]]},
+     {"type": "buttons", "buttons": [{"label": "再打个招呼", "action": "again", "style": "primary"}, {"label": "掷骰子", "action": "roll", "payload": {"sides": 6}}]},
+     {"type": "text", "text": "按钮点了会再跑一次插件命令（request.action = 按钮的 action）。", "style": "caption"}]}
+    """#
 
     /// 团队页样例（和 Tests/EvoCoreTests/Fixtures/team.json、scripts/demo/team.json 同一份）。
     static var sampleTeam: TeamDoc? { try? TeamDoc.decode(teamJSON) }

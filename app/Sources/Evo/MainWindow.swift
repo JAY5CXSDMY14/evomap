@@ -227,8 +227,20 @@ struct SidebarView: View {
                     SidebarRow(symbol: "person.3", title: "团队", badge: state.team?.attention ?? 0, accentBadge: false,
                                selected: current == .team) { go(.team) }
                         .uiProbe("win-sidebar-team")
+                    // v0.6.0：插件分组（打开了的插件的侧栏页；没有就不出现）
+                    let pages = state.plugins?.sidebarPages ?? []
+                    if !pages.isEmpty {
+                        SidebarHeading(text: "插件")
+                        ForEach(Array(pages.enumerated()), id: \.element.key) { i, pg in
+                            SidebarRow(symbol: pg.symbol, title: pg.title, badge: 0, accentBadge: false,
+                                       selected: current == .plugin(pg.plugin, pg.id)) { go(.plugin(pg.plugin, pg.id)) }
+                                .uiProbe("win-sidebar-plugin-\(i)")
+                                .transition(.move(edge: .leading).combined(with: .opacity))
+                        }
+                    }
                 }
                 .padding(.horizontal, 8)
+                .animation(Motion.or(Motion.softSpring), value: state.plugins?.sidebarPages.map(\.key) ?? [])
             }
             Spacer(minLength: 0)
             Rectangle().fill(Theme.border).frame(height: 1).padding(.horizontal, 12)
@@ -372,6 +384,9 @@ struct DetailArea: View {
         VStack(spacing: 0) {
             ScrollView(.vertical) {
                 VStack(alignment: .leading, spacing: 0) {
+                    if let w = state.contractWarning {      // v0.6.0：evo 的接口版本和 App 对不上
+                        ContractBanner(text: w).padding(.bottom, 16)
+                    }
                     Group {
                         switch sel {
                         case .inbox: InboxPane(state: state, width: width)
@@ -379,6 +394,9 @@ struct DetailArea: View {
                         case .item(let p, let k): ItemPane(state: state, project: p, key: k, width: width)
                         case .stale: StalePane(state: state)
                         case .team: TeamPane(state: state, width: width)
+                        case .plugin(let p, let id):
+                            if let ref = state.plugins?.page(p, id) { PluginPane(state: state, ref: ref) }
+                            else { Hint(text: "插件 \(p) 的页「\(id)」不在了（插件关掉或删掉了）", color: Theme.textSecondary) }
                         case .settings: SettingsView(state: state, embedded: true).frame(maxWidth: .infinity)
                         }
                     }
@@ -753,6 +771,7 @@ struct ItemPane: View {
                     }
                 }
             }
+            ItemPluginActions(state: state, project: project, key: key)     // v0.6.0：插件的件按钮
             if !log.notes.isEmpty {
                 InfoCard(title: "你说过", symbol: "text.bubble") {
                     ForEach(Array(log.notes.enumerated()), id: \.offset) { _, n in
@@ -868,10 +887,10 @@ struct ComposerDock: View {
         VStack(spacing: 10) {
             if !state.chat.isEmpty {
                 ScrollView(.vertical, showsIndicators: false) {
-                    ChatSection(lines: Array(state.chat.suffix(4)), mood: state.mood, liveEmotion: state.mateEmotion)
+                    ChatSection(lines: Array(state.chat.suffix(4)), mood: state.mood, liveEmotion: state.mateEmotion, state: state)
                         .padding(.top, 4)
                 }
-                .frame(maxHeight: 200)
+                .frame(maxHeight: state.chat.suffix(4).contains { $0.card != nil } ? 320 : 200)
                 .fixedSize(horizontal: false, vertical: true)
             }
             if let ch = state.pendingTeam {

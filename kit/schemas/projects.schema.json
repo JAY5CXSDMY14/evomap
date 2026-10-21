@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/JAY5CXSDMY14/evomap/kit/schemas/projects.schema.json",
+  "title": "evo projects --json",
+  "description": "项目列表。",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "projects"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1,
+      "description": "大版本。只加字段不升；不兼容的改动才升到 2（App 读到不认识的大版本提示更新）"
+    },
+    "projects": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "code",
+          "name"
+        ],
+        "additionalProperties": true,
+        "properties": {
+          "code": {
+            "type": "string",
+            "pattern": "^[A-Z]{2,4}$"
+          },
+          "name": {
+            "type": "string"
+          },
+          "repo": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "github": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      }
+    }
+  },
+  "additionalProperties": true
+}

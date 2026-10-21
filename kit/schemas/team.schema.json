@@ -1,0 +1,169 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/JAY5CXSDMY14/evomap/kit/schemas/team.schema.json",
+  "title": "evo [-p <代号>] team --json",
+  "description": "岗位卡片（详见 docs/model-coordination.md）。",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "cards",
+    "magpie"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1,
+      "description": "大版本。只加字段不升；不兼容的改动才升到 2（App 读到不认识的大版本提示更新）"
+    },
+    "generated_at": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "ISO 8601 时间，带时区"
+    },
+    "project": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "magpie": {
+      "type": "object",
+      "required": [
+        "ok"
+      ],
+      "properties": {
+        "ok": {
+          "type": "boolean"
+        },
+        "url": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "models": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "groups": {
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "retired": {
+          "type": [
+            "array",
+            "null"
+          ]
+        }
+      }
+    },
+    "cards": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "role",
+          "name",
+          "status"
+        ],
+        "additionalProperties": true,
+        "properties": {
+          "role": {
+            "enum": [
+              "build",
+              "verify",
+              "decide"
+            ]
+          },
+          "name": {
+            "type": "string"
+          },
+          "tool": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "models": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "thinking": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "status": {
+            "type": "object",
+            "required": [
+              "code",
+              "label"
+            ]
+          },
+          "fallback": {
+            "type": [
+              "object",
+              "null"
+            ]
+          },
+          "stats": {
+            "type": "object"
+          },
+          "recommendation": {
+            "type": "object"
+          },
+          "warnings": {
+            "type": "array"
+          }
+        }
+      }
+    },
+    "suggestions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "model"
+        ]
+      }
+    },
+    "thinking_levels": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "projects": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "code"
+        ],
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "overrides": {
+            "type": "object"
+          }
+        }
+      }
+    }
+  },
+  "additionalProperties": true
+}
