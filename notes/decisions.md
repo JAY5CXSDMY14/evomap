@@ -35,3 +35,17 @@
 - 22:10 老板确认：21:27 是他手动退出 Orca（给 Orca 开了一个系统权限，需要重启 app）。Orca 退出不是故障；剩下的疑点只有第一次派工 14 分钟零产出（可能也卡在那个权限上，待 Pi 复现）。
 - 22:22 第 3 次观察定根因：evo 的 dsh 模板「dsh --model {model}」是猜的；dsh 是 profile 启动器，没有 --model、没有交互界面，headless 一次性跑完、模型用 DSH 自己的默认。修：dsh 改为 `dsh --profile headless -` + 任务书写文件「< 文件」启动（一次性工具不打 inject）；启动后读终端尾部，命令报错/立刻回提示符就当派工失败并关终端，任务书不再喂给 shell；旧配置 dsh --model 自动改写；claude 新工作区预先记信任（~/.claude.json hasTrustDialogAccepted），EV-decide 停在信任提示。状态文件真实路径 ~/.evoloop/projects/<代号>/state/state.json。
 - 22:37 老板坚持施工用 DSH（Orca 自带 DeepSeek Harness 选项）。查明 Orca 用交互式 dsh-tui 启动（launchCmd 'dsh-tui .'，进程名 dsh，可监管）。dsh 模板改为 'dsh-tui .'；'dsh --profile headless -' 保留为一次性写法；旧 dsh --model 自动改写。模型 per-run 参数待 Pi 查 dsh-tui --help / orca agent launch --agent dsh --model。
+
+## 2026-10-21 22:54 Air DSH discussion (老板)
+- 施工 DSH 用 FreeDeepseek：老板自己在 DSH/Magpie 里设默认模型。
+- Orca 在 Air 上只装好了，还没配置；Pi 用 `orca agent launch` 命令行打开 DSH 来验证。
+- EV-FEAT-001 作废，修好后重派一件干净的新件。
+- Node 22：批准，之后交给 AI 执行。pmset 先不做。claude 弹的模型名警告不影响运行，先不管。
+- DSH 权限：我建议施工岗在 EV worktree 里全放行，拦 git push、删工作区外文件、读密钥目录、部署。等老板确认 DSH Desktop 有没有自动批准/白名单设置。
+
+## 2026-10-21 22:58 Orca 能否取代 evo（老板提议，待定）
+- 老板提出直接基于 Orca（stablyai/orca，MIT，桌面端 + iOS/Android，内置 GitHub PR/issue，有定时自动化）来改。
+- 我的建议：不 fork（Electron 应用，几乎天天发版，fork 后合并上游成本太高）。界面、手机端、通知、工作区交给 Orca；evo 瘦身成只管循环的大脑（施工→验收→决策、三道关、卡住自救、预设、Magpie 模型）。冻结 Evo App、网页面板和自建推送的开发；审批改成 Orca 里的 issue 标签加评论；evo 只通过 orca CLI 派工。先在 Air 上用 EV 跑通一件再决定。
+- 注意：Orca 自动化支持每次运行单独指定模型（--extra-agent-args）。
+- 已问老板：同意冻结 App/面板、审批改在 Orca 手机端做吗？
+- 23:11 老板想让循环更自由、真正闭环，问能不能锁定 Orca 的一个稳定版来深度融合。我的回答：能做，但手机端风险最大（官方 App 自动更新，可能和锁死的桌面版配对不上）。推荐三层方案：Orca 原版当身体；evo 当确定性的大脑，只依赖 orca CLI；缺钩子时先给上游提 PR，不行再在锁定版本上留一小叠补丁。已提议：把我们的需求和 Orca 逐条对照，做成 HTML（等老板回复）。
