@@ -20,8 +20,10 @@ import evo_time as T
 
 SCHEMA_VERSION = 1
 PUSH_KINDS = {"gate_waiting", "stalled", "state_corrupt", "push_failed", "rate_limited", "usage_abnormal", "deploy_failed"}
+PUSH_KINDS |= {"model_blocked", "magpie_down"}      # 第十四轮：岗位因模型停了、magpie 不通（都要老板动手或知情）
 KIND_NAMES = {"gate_waiting": "等你点头", "stalled": "卡住", "state_corrupt": "卡住", "push_failed": "推送失败",
               "rate_limited": "额度暂停", "usage_abnormal": "用量异常", "deploy_failed": "上线失败"}
+KIND_NAMES.update({"model_blocked": "岗位停了", "magpie_down": "magpie 不通", "fallback_on": "切到备用"})     # 第十四轮
 ENV_ALIASES = {"EVO_TG_TOKEN": "TUBU_TG_TOKEN", "EVO_TG_CHAT": "TUBU_TG_CHAT", "TUBU_TG_TOKEN": "EVO_TG_TOKEN",
                "TUBU_TG_CHAT": "EVO_TG_CHAT"}
 

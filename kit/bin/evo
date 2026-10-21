@@ -30,6 +30,9 @@
   evo panel --show-token         看面板口令
   evo models [--json]            核对施工/验收模型：在不在 magpie /v1/models 里、两边有没有重叠
   evo -p AB models set build <模型> | clear build   单项目覆盖模型（面板「施工模型 / 验收模型」下拉框同此）
+  evo [-p AB] team [--json] [--refresh]   岗位卡片：工具·模型·思考档位·职责·备用·状态灯·本周用量·每个模型的成绩和建议
+  evo team set <岗位> [--model M] [--thinking high] [--tool codex] [--fallback-model M] [--project AB]   换模型（下一次派工生效）
+  evo team clear <岗位> --project AB | trial <岗位> <模型> --project AB [--items 5] | init [--apply] | dismiss <模型>
   evo -p AB log <件号> [--json|--diff]   这件的时间线（派工、交卷、闸门、返工、合并、推送、上线……）
   evo -p AB feedback --item <件号> "原话"  对某件补反馈：它等你的看效果/做不做闸门作废，改完重开
   evo -p AB goal [set "一两句" | clear]   项目目标：写进每份任务书开头「项目目标：…」
@@ -498,8 +501,11 @@ def add_item(s, a):
 
 # ---------- 派工 ----------
 def start_worker(s, key, it, role):
-    c = coord(s); rc = CFG["roles"][role]
+    fb = it.pop("route", None) == "fallback"; okm = it.pop("route_models", None)     # 第十四轮：role_ready 选好的路线
+    c = coord(s); rc = team_rc(role, fb)
     models = rc.get("models") or [None]
+    if okm:
+        models = [m for m in models if m in okm] or models
     # 施工和验收用不同模型：验收取施工没用的那个
     mb = models[it["model_i"] % len(models)]
     model = mb if role == "build" else next((m for m in models if m != it.get("build_model")), models[0])
@@ -508,12 +514,13 @@ def start_worker(s, key, it, role):
         it["worktree"] = res["worktree"]["path"]
     tid = it["build" if role == "build" else "verify"]
     h, did = launch(c, it["worktree"], f"{key}-{role}", rc, model, tid)
-    it["dispatch"][role] = {"id": did, "terminal": h, "since": time.time(), "model": model}
+    it["dispatch"][role] = {"id": did, "terminal": h, "since": time.time(), "model": model, "fallback": fb, "tool": TEAM.tool_of(rc)}
     if role == "build":
         it["build_model"] = model
     it["state"] = "building" if role == "build" else "verifying"
     usage_add(s, it, role, runs=1)
-    tl(key, "dispatch", role=role, model=model, dispatch=did, round=it.get("round", 0), worktree=it["worktree"])
+    tl(key, "dispatch", role=role, model=model, dispatch=did, round=it.get("round", 0), worktree=it["worktree"],
+       tool=TEAM.tool_of(rc), account=TEAM.account_of(rc) if fb else role_account(role), fallback=fb or None)
     log(s, f"{key} 开始{'施工' if role == 'build' else '验收'}（{model}）")
 
 
@@ -521,7 +528,7 @@ def launch(c, path, title, rc, model, tid):
     """开终端、起工人命令、派工。返回 (终端句柄, 派工号)。"""
     res, _ = orca("terminal", "create", "--worktree", f"path:{path}", "--title", title)
     h = res["terminal"]["handle"]
-    cmd = rc["cmd"].replace("{model}", model or "")
+    cmd = TEAM.render_cmd(rc["cmd"], model, rc.get("thinking"))      # {model} / {thinking}；空值连参数一起去掉
     orca("terminal", "send", "--terminal", h, "--text", cmd, "--enter", ok=False)
     time.sleep(rc.get("boot_seconds", 3))
     d, j = orca("orchestration", "dispatch", "--from", c, "--task", tid, "--to", h, "--inject", ok=False)
@@ -827,8 +834,8 @@ def _rl_io(fn):
 def role_account(role):
     """同一个订阅账号的岗位一起暂停：roles.<岗位>.account 可显式写；默认取命令的第一个词（claude、codex、dsh……）。"""
     rc = (CFG.get("roles") or GCFG.get("roles") or {}).get(role) or {}
-    if rc.get("account"):
-        return rc["account"]
+    if rc.get("account") or rc.get("tool"):              # 第十四轮：卡片写了 tool 就按工具算账号
+        return rc.get("account") or rc["tool"]
     try:
         return os.path.basename(shlex.split(rc.get("cmd") or "")[0])
     except (IndexError, ValueError):
@@ -848,20 +855,26 @@ def rl_paused(role):
     e = _rl_io(f)
     if e and "resumed" in e:
         notify("rate_limit_resumed", f"{role} 岗额度恢复", f"暂停自 {TM.local(e['resumed']['since']).strftime('%H:%M')}", role=role)
+        team_fallback_off(role, e["resumed"])
         return None
     return e
 
 
-def rl_pause(role, line, key):
-    """标记岗位（以及同账号的岗位）暂停到重置时间：解析得出就用，否则默认 60 分钟。返回到点时间。"""
+def rl_pause(role, line, key, fallback=False):
+    """标记岗位（以及同账号的岗位）暂停到重置时间：解析得出就用，否则默认 60 分钟。返回到点时间。
+    第十四轮：卡片配了备用（不同账号）的岗位不推「额度暂停」，改记「切到备用」；备用自己也满了记在 <岗位>:fallback。"""
     until = TM.parse_reset(line, zone=(CFG.get("windows") or {}).get("tz"))
     guessed = until is None
     if guessed:
         until = TM.now() + 60 * LIM.get("rate_limit_default_minutes", 60)
-    acct = role_account(role)
-    roles = [r for r in (CFG.get("roles") or {}) if (CFG["roles"][r] or {}).get("cmd") and role_account(r) == acct] or [role]
-    if role not in roles:
-        roles.append(role)
+    if fallback:
+        acct = TEAM.account_of(team_rc(role, True))
+        roles = [role + ":fallback"]
+    else:
+        acct = role_account(role)
+        roles = [r for r in (CFG.get("roles") or {}) if (CFG["roles"][r] or {}).get("cmd") and role_account(r) == acct] or [role]
+        if role not in roles:
+            roles.append(role)
 
     def f(d):
         new = [r for r in roles if r not in d["roles"]]
@@ -871,6 +884,9 @@ def rl_pause(role, line, key):
                              "project": CODE, "item": key, "account": acct, "guessed": guessed}
         return new
     new = _rl_io(f)
+    for r in [r for r in new if team_has_fallback(r, acct)]:
+        team_fallback_on(r, key, until, acct)
+    new = [r for r in new if not team_has_fallback(r, acct)]
     if new:   # 同一次暂停只推一次
         notify("rate_limited", f"{'、'.join(new)} 岗额度用完，暂停", f"到 {TM.local(until).strftime('%m-%d %H:%M')}"
                + ("（没写重置时间，按 60 分钟）" if guessed else "") + f" 自动恢复。提示：{line[:120]}", item=key,
@@ -905,7 +921,7 @@ def worker_end(s, it, role):
 
 def requeue_rate_limited(s, k, it, role, line):
     """工人因额度停了：岗位暂停，这件原样重排（同一轮、同一个模型），不算失败也不算返工。"""
-    until = rl_pause(role, line, k)
+    until = rl_pause(role, line, k, fallback=bool((it["dispatch"].get(role) or {}).get("fallback")))
     worker_end(s, it, role)
     c = coord(s); d = it["dispatch"].get(role) or {}
     if d.get("terminal"):
@@ -1127,6 +1143,453 @@ def cmd_models(a):
     sys.exit(1 if warns else 0)
 
 
+# ---------- 模型协调（第十四轮）：岗位卡片、健康、备用切换、质量统计、新模型；逻辑在 bin/evo_team.py ----------
+# 设计见 docs/model-coordination.md。模型只从 magpie 来，evo 不存密钥；外部 Agent 不能改模型（EVO_AGENT 一律拒绝）。
+import evo_team as TEAM     # noqa: E402
+TEAM_FIELDS = ("tool", "via", "cmd", "models", "thinking", "duty", "fallback", "account")
+
+
+def team_tools():
+    return (GCFG.get("tools") or global_config().get("tools") or {})
+
+
+def team_roles():
+    return (CFG or GCFG).get("roles") or {}
+
+
+def _uses_magpie():
+    for rc in team_roles().values():
+        rc = rc or {}
+        if rc.get("cmd") and (TEAM.via_of(rc) == "magpie" or TEAM.via_of(TEAM.fallback_rc(rc, team_tools()) or {}) == "magpie"):
+            return True
+    return False
+
+
+def team_health(force=False):
+    """健康表（magpie 模型列表、本机 CLI）：缓存 5 分钟；真刷新那次顺带发 magpie 通断 / 新模型 / 模型下线事件（整机只发一次）。"""
+    h, evs = TEAM.health(EVO_ROOT, os.path.expanduser("~"), GCFG.get("magpie_url"), NT.http, TM.now(), team_tools(), force)
+    for kind, data in evs:
+        team_event(kind, data)
+    return h
+
+
+def team_event(kind, data):
+    if kind == "magpie_down" and _uses_magpie():
+        notify("magpie_down", "magpie 不通", f"{data['url']} 没响应。走 magpie 的岗位：有备用的切到备用，没有的先停；"
+               "工具自带模型的岗位照常跑。正在跑的不打断，magpie 恢复后下一次派工自动接上。", url=data["url"])
+    elif kind == "magpie_up":
+        notify("magpie_up", "magpie 恢复", "走 magpie 的岗位下一次派工起恢复", url=data["url"])
+    elif kind == "model_new":
+        notify("model_new", "新模型可用", "magpie 里新出现：" + "、".join(data["models"]) +
+               "。团队页可以挑一个项目、一个岗位试用几件，和现在的比一比再定（evo -p 代号 team trial 岗位 模型）。", models=data["models"])
+    elif kind == "model_gone":
+        notify("model_gone", "模型下线", "magpie 里不见了：" + "、".join(data["models"]) + "。用到它的岗位会停下，等你在团队页换一个。",
+               models=data["models"])
+
+
+def team_rc(role, fallback=False):
+    rc = team_roles().get(role) or {}
+    return (TEAM.fallback_rc(rc, team_tools()) or rc) if fallback else rc
+
+
+def team_route(role, it=None):
+    """这次派工走主模型还是备用：(路线, 原因代号, 说明, 能用的模型)。路线 None = 这个岗位现在不能派。"""
+    rc = team_roles().get(role) or {}
+    e = _rl_peek().get(role) or {}
+    paused = e.get("until", 0) > TM.now()
+    fb = TEAM.fallback_rc(rc, team_tools())
+    fbp = bool(rl_paused(role + ":fallback")) if fb else False
+    if fb and paused and e.get("account") and TEAM.account_of(fb) == e["account"]:
+        fbp = True                                       # 备用和主模型是同一个订阅：一起满
+    return TEAM.route(role, rc, team_health(), TEAM.registry(EVO_ROOT), paused, fbp,
+                      (it or {}).get("build_model") if role == "verify" else None, team_tools())
+
+
+def team_has_fallback(role, acct=None):
+    fb = TEAM.fallback_rc(team_roles().get(role) or {}, team_tools())
+    return bool(fb) and (acct is None or TEAM.account_of(fb) != acct)
+
+
+def team_block(s, k, it, role, code, why):
+    """岗位停了（模型下线/不认识、和施工撞模型、magpie 不通且没备用）：件标「等换模型」，同一原因每个项目只推一次。"""
+    it["waiting"] = "magpie_down" if code == "magpie_down" else "model_blocked"
+    it["model_block"] = why
+    tb = s.setdefault("team_blocked", {})
+    if tb.get(role) == why:
+        return
+    tb[role] = why
+    name = TEAM.ROLE_NAMES.get(role, role)
+    log(s, f"{name}岗停了：{why}")
+    tl(k, "model_blocked", role=role, code=code, why=why)
+    if code != "magpie_down":                            # magpie 不通整机推过一次了
+        notify("model_blocked", f"{name}岗停了：{TEAM.STATUS_LABELS.get(code, code)}",
+               f"{why}。在团队页换一个模型，或 evo team set {role} --model <模型>；换了下一次派工就生效。",
+               item=k, role=role, code=code)
+
+
+def team_unblock(s, role):
+    tb = s.get("team_blocked") or {}
+    if tb.pop(role, None):
+        log(s, f"{TEAM.ROLE_NAMES.get(role, role)}岗恢复派工")
+
+
+def team_fallback_on(role, key, until, acct):
+    """主模型额度满、备用接上：不推送（不打扰），outbox 记一条；免打扰时段里的进早间汇总。时间线记在触发的那件上。"""
+    fb = TEAM.fallback_rc(team_roles().get(role) or {}, team_tools()) or {}
+    to = f"{fb.get('tool')}" + (f" · {'/'.join(fb.get('models') or [])}" if fb.get("models") else "")
+    name = TEAM.ROLE_NAMES.get(role, role)
+    if key:
+        tl(key, "fallback_on", role=role, to=to, until=TM.iso(until), account=acct)
+    ev = notify("fallback_on", f"{name}岗额度满，已切到备用 {to}",
+                f"{acct} 到 {TM.local(until).strftime('%m-%d %H:%M')} 恢复，到点自动切回；正在跑的不打断，下一次派工起用备用。",
+                item=key, role=role, to=to, until=TM.iso(until), account=acct)
+    try:
+        if ev and NOTE.is_quiet():
+            NT._append(NOTE.held, ev)                    # 夜里发生的：早间汇总里有一行
+    except Exception:
+        pass
+
+
+def team_fallback_off(role, entry):
+    if role.endswith(":fallback") or not team_has_fallback(role):
+        return
+    name = TEAM.ROLE_NAMES.get(role, role)
+    if entry.get("item") and entry.get("project") == CODE:
+        tl(entry["item"], "fallback_off", role=role)
+    notify("fallback_off", f"{name}岗切回主模型", f"{entry.get('account') or ''} 额度已恢复，下一次派工起用回主模型。", role=role)
+
+
+def team_records(codes=None):
+    out = []
+    for code in (codes if codes is not None else (list_projects() or ([CODE] if STATE_DIR else []))):
+        p = tl_path(code) if not env("EVO_CONFIG") else tl_path()
+        if not p or not os.path.exists(p):
+            continue
+        for line in open(p, encoding="utf-8", errors="replace"):
+            try:
+                r = json.loads(line)
+            except ValueError:
+                continue
+            r.setdefault("project", code); out.append(r)
+    return out
+
+
+def _proj_override(code):
+    raw = _read_json(_project_cfg_path(code)) if code else {}
+    ov = ((raw.get("overrides") or {}).get("roles") or {})
+    legacy = raw.get("roles") or {}
+    return {r: {**(legacy.get(r) or {}), **(ov.get(r) or {})} for r in set(ov) | set(legacy) if (ov.get(r) or legacy.get(r))}
+
+
+def _card_public(rc):
+    rc = rc or {}
+    return {"tool": TEAM.tool_of(rc), "via": TEAM.via_of(rc), "models": list(rc.get("models") or []), "thinking": rc.get("thinking"),
+            "account": TEAM.account_of(rc)}
+
+
+def team_doc(force=False):
+    """evo team --json：岗位卡片 + 健康 + 每个模型的成绩 + 建议。schema_version 1，只加字段。"""
+    h = team_health(force); reg = TEAM.registry(EVO_ROOT); now = TM.now(); pe = _rl_peek(); tools = team_tools()
+    roles = team_roles()
+    recs = team_records()
+    stats = TEAM.model_stats(recs, since=now - 30 * 86400)
+    week = TEAM.week_usage(recs, now - 7 * 86400)
+    ov = _proj_override(CODE) if HAS_PROJECT else {}
+    pstats = TEAM.model_stats(team_records([CODE]), since=now - 30 * 86400) if HAS_PROJECT else {}
+    cards = []
+    for role in TEAM.CARD_ROLES:
+        rc = roles.get(role) or {}
+        fb = TEAM.fallback_rc(rc, tools)
+        st = TEAM.health_status(role, rc, h, pe.get(role), now, tools, reg)
+        if st.get("until"):
+            st["until"] = TM.iso(st["until"])
+        sub = "build" if role == "build" else "verify"
+        seen = [m for m, e in stats.items() if (e[sub].get("runs") or 0) > 0] if role != "decide" else []
+        acct = role_account(role) if rc.get("cmd") else None
+        card = {"role": role, "name": TEAM.ROLE_NAMES[role], **_card_public(rc), "account": acct,
+                "duty": rc.get("duty"), "configured": bool(rc.get("cmd")),
+                "fallback": _card_public(fb) if fb else None, "status": st,
+                "warnings": TEAM.card_warnings(role, rc, h, reg, tools, roles.get("build") if role == "verify" else None, GCFG.get("model_tiers")),
+                "stats": {m: stats[m][sub] for m in seen} if role != "decide" else {},
+                "recommendation": TEAM.recommend(role, (rc.get("models") or [None])[0], stats),
+                "usage_week": week.get(acct) if acct else None}
+        if HAS_PROJECT:
+            o = ov.get(role) or {}
+            card["scope"] = "project" if o else "global"
+            card["badge"] = "本项目专用" if o else "跟随全局"
+            tr = o.get("trial")
+            if tr:
+                base = (tr.get("base") or [None])[0] or "(工具默认)"
+                done = ((pstats.get(tr["model"]) or {}).get(sub) or {})
+                card["trial"] = {"model": tr["model"], "base": base, "needed": tr.get("items", 5), "started": tr.get("started"),
+                                 "done": done.get("items", 0) if sub == "build" else done.get("runs", 0),
+                                 "compare": {"trial": done or None, "base": ((stats.get(base) or {}).get(sub)) or None}}
+        cards.append(card)
+    mg = h.get("magpie") or {}
+    ids = [m["id"] for m in mg.get("models") or []] if mg.get("ok") else None
+    doc = {"schema_version": 1, "generated_at": TM.iso(), "project": CODE if HAS_PROJECT else None,
+           "health_at": TM.iso(h["at"]) if h.get("at") else None,
+           "magpie": {"ok": bool(mg.get("ok")), "url": mg.get("url"), "models": ids,
+                      "groups": [m["id"] for m in mg.get("models") or [] if m["id"].startswith("group/")] if ids is not None else None,
+                      "retired": [m["id"] for m in mg.get("models") or [] if m.get("retired")] if ids is not None else None},
+           "clis": h.get("clis") or {}, "cards": cards,
+           "suggestions": [{"model": x["model"], "at": TM.iso(x["at"])} for x in reg.get("suggestions") or []],
+           "usage_week": week, "thinking_levels": list(TEAM.THINKING),
+           "projects": [{"code": c, "name": _read_json(_project_cfg_path(c)).get("name", c),
+                         "overrides": {r: {k: v for k, v in o.items() if k in TEAM_FIELDS + ("trial",)} for r, o in _proj_override(c).items()}}
+                        for c in list_projects()]}
+    return doc
+
+
+def team_brief(s):
+    """status --json 顶层 team（只加字段）：每张卡一行 + magpie 通不通 + 新模型建议数 + 停着的岗位。"""
+    try:
+        h = team_health(); reg = TEAM.registry(EVO_ROOT); pe = _rl_peek(); now = TM.now()
+        cards = []
+        for role in TEAM.CARD_ROLES:
+            rc = team_roles().get(role) or {}
+            st = TEAM.health_status(role, rc, h, pe.get(role), now, team_tools(), reg)
+            cards.append({"role": role, "name": TEAM.ROLE_NAMES[role], "tool": TEAM.tool_of(rc), "models": list(rc.get("models") or []),
+                          "thinking": rc.get("thinking"), "status": st["code"], "label": st["label"],
+                          "until": TM.iso(st["until"]) if st.get("until") else None})
+        return {"cards": cards, "magpie_ok": bool((h.get("magpie") or {}).get("ok")),
+                "suggestions": len(reg.get("suggestions") or []), "blocked": s.get("team_blocked") or {}}
+    except Exception as e:                               # 团队信息出错不能拖垮 status
+        return {"error": str(e)[:200]}
+
+
+def team_tick(s):
+    """每轮：刷新健康（缓存 5 分钟）；试用满件数时发一条对比（每次试用只发一次）。"""
+    team_health()
+    ov = _proj_override(CODE)
+    done = s.setdefault("team_trials", {})
+    for role, o in ov.items():
+        tr = o.get("trial")
+        if not tr or done.get(role) == tr["model"]:
+            continue
+        sub = "build" if role == "build" else "verify"
+        st = TEAM.model_stats(team_records([CODE])).get(tr["model"], {}).get(sub) or {}
+        n = st.get("items", 0) if sub == "build" else st.get("runs", 0)
+        if n >= tr.get("items", 5):
+            done[role] = tr["model"]
+            base = (tr.get("base") or ["(工具默认)"])[0] or "(工具默认)"
+            rec = TEAM.recommend(role, base, TEAM.model_stats(team_records()))
+            notify("trial_done", f"{TEAM.ROLE_NAMES.get(role, role)}岗试用 {tr['model']} 满 {n} 件",
+                   f"团队页有对比。{rec['text']} 留用：evo team set {role} --model {tr['model']} --project {CODE}；"
+                   f"不用：evo team clear {role} --project {CODE}。", role=role, model=tr["model"])
+
+
+def _team_cfg_target(project):
+    if project:
+        project = project.upper()
+        if project not in list_projects() and not env("EVO_CONFIG"):
+            sys.exit(f"没有项目 {project}")
+        return _project_cfg_path(project), project
+    return _global_path(), None
+
+
+def _team_write(path, project, role, fn):
+    c = _read_json(path)
+    rs = c.setdefault("overrides", {}).setdefault("roles", {}) if project else c.setdefault("roles", {})
+    r = rs.setdefault(role, {})
+    fn(r)
+    if project:
+        if not r:
+            rs.pop(role)
+        if not rs:
+            c["overrides"].pop("roles")
+        if not c["overrides"]:
+            c.pop("overrides")
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    tmp = path + ".tmp"
+    json.dump(c, open(tmp, "w", encoding="utf-8"), ensure_ascii=False, indent=2); os.replace(tmp, path)
+
+
+def _team_effective(path, project):
+    if project:
+        return effective_config(_read_json(path))
+    return merge(DEFAULTS, _read_json(path))
+
+
+def team_check_change(role, after_cfg, changed_models):
+    """改之前过一遍安全栏：施工≠验收（含组成员）、模型下线/不认识。返回问题列表（空 = 可以改）。"""
+    probs = []
+    h = team_health(); reg = TEAM.registry(EVO_ROOT); tools = team_tools()
+    roles = after_cfg.get("roles") or {}
+    rc = roles.get(role) or {}
+    for m in changed_models:
+        p = TEAM.model_problem(m, rc, h, reg, tools)
+        if p:
+            probs.append(p[1] + "（evo team 看能选的模型）")
+    if role in ("build", "verify") and changed_models:
+        other = roles.get("verify" if role == "build" else "build") or {}
+        mine = set().union(*[TEAM.members(m, h) for m in changed_models])
+        theirs = set().union(*[TEAM.members(m, h) for m in other.get("models") or []]) if other.get("models") else set()
+        if mine & theirs:
+            probs.append(f"施工和验收不能用同一个模型（含 magpie 组成员）：{', '.join(sorted(mine & theirs))}")
+    return probs
+
+
+def cmd_team(a):
+    """evo team [--json] [--refresh]：岗位卡片。set / clear / trial / dismiss / init 见 docs/model-coordination.md。"""
+    act = a.action or "show"
+    if act in ("show", "json"):
+        doc = team_doc(force=a.refresh)
+        if a.json or act == "json":
+            print(json.dumps(doc, ensure_ascii=False)); return
+        mg = doc["magpie"]
+        print(f"magpie：{'✓ ' + str(len(mg['models'] or [])) + ' 个模型/组' if mg['ok'] else '✗ 不通 ' + str(mg['url'])}")
+        for c in doc["cards"]:
+            if not c["configured"]:
+                print(f"■ {c['name']}：没配置"); continue
+            ms = "/".join(c["models"]) or "工具默认模型"
+            print(f"■ {c['name']}  {c['tool']} · {ms}" + (f" · 思考 {c['thinking']}" if c.get("thinking") else "")
+                  + f"  【{c['status']['label']}{'，' + c['status']['until'] + ' 恢复' if c['status'].get('until') else ''}】"
+                  + (f"  {c['badge']}" if c.get("badge") else ""))
+            if c.get("duty"):
+                print(f"    职责：{c['duty']}")
+            if c.get("fallback"):
+                f = c["fallback"]; print(f"    备用：{f['tool']} · {'/'.join(f['models']) or '工具默认模型'}")
+            for w in c["warnings"]:
+                print(f"    ! {w}")
+            print(f"    {c['recommendation']['text']}")
+            if c.get("usage_week"):
+                print(f"    本周（{c['account']}）：{c['usage_week']['runs']} 次 · {int(c['usage_week']['minutes'])} 分钟")
+        for sg in doc["suggestions"]:
+            print(f"新模型可用：{sg['model']}（evo -p 代号 team trial 岗位 {sg['model']} 试几件）")
+        return
+    refuse_agents("改模型")
+    if act == "init":
+        h = team_health(force=True)
+        prop = TEAM.propose(h, team_tools())
+        if a.json and not a.apply:
+            print(json.dumps(prop, ensure_ascii=False)); return
+        if not a.apply:
+            for r, c in prop["cards"].items():
+                print(f"{TEAM.ROLE_NAMES[r]}：{c['tool']} · {'/'.join(c['models']) or '工具默认模型'}"
+                      + (f"，备用 {c['fallback']['tool']} · {'/'.join(c['fallback']['models']) or '工具默认'}" if c.get("fallback") else ""))
+            for n in prop["notes"]:
+                print("  ! " + n)
+            print("确认就跑：evo team init --apply"); return
+        path = _global_path()
+        for r, c in prop["cards"].items():
+            _team_write(path, None, r, lambda x, c=c: (x.update({k: v for k, v in c.items() if k in TEAM_FIELDS}),
+                                                         None if c.get("fallback") else x.pop("fallback", None)))
+        print(json.dumps({"ok": True, "applied": list(prop["cards"]), "notes": prop["notes"]}, ensure_ascii=False) if a.json
+              else f"已写入 {path}：{'、'.join(TEAM.ROLE_NAMES[r] for r in prop['cards'])}。下一次派工生效。")
+        return
+    if act == "dismiss":
+        TEAM.dismiss_suggestion(EVO_ROOT, a.role or ""); print("已收起"); return
+    role = a.role
+    if role not in TEAM.CARD_ROLES:
+        sys.exit("岗位只能是 build（施工）、verify（验收）或 decide（决策）")
+    path, project = _team_cfg_target(a.project)
+    if act == "clear":
+        if not project:
+            sys.exit("clear 只用于项目：evo team clear <岗位> --project <代号>（回到跟随全局）")
+        _team_write(path, project, role, lambda r: r.clear())
+        print(f"{project} {TEAM.ROLE_NAMES[role]}：跟随全局"); return
+    model = a.model or getattr(a, "set_model", None)
+    for nm, v in (("模型", model), ("备用模型", a.fallback_model)):
+        if v and not MODEL_RE.match(v):
+            sys.exit(f"{nm}名只能用字母、数字和 . _ : / @ + -（不超过 128 个字符）")
+    for v in (a.tool, a.fallback_tool):
+        if v and not re.fullmatch(r"[a-z][a-z0-9_-]{0,31}", v):
+            sys.exit("工具名只能是小写字母数字（例如 claude、codex、dsh、pi）")
+    if a.thinking and a.thinking not in TEAM.THINKING:
+        sys.exit("思考档位只能是 " + " / ".join(TEAM.THINKING))
+    if a.duty and len(a.duty) > 80:
+        sys.exit("职责一句话，80 字以内")
+    if act == "trial":
+        if not project or not model:
+            sys.exit("试用要指定项目和模型：evo team trial <岗位> <模型> --project <代号> [--items 5]")
+        base = (effective_config({k: v for k, v in _read_json(path).items() if k != "overrides"})["roles"].get(role) or {}).get("models") or []
+    tools = team_tools()
+
+    def apply(r):
+        if a.tool:
+            r["tool"] = a.tool
+            r["cmd"] = (tools.get(a.tool) or {}).get("cmd") or TEAM.TOOL_CMDS.get(a.tool) or a.tool
+            r.setdefault("via", "cli")
+        if a.via:
+            r["via"] = a.via
+        if model:
+            r["models"] = [model]; r.pop("trial", None)
+        if act == "trial":
+            r["trial"] = {"model": model, "base": base, "items": a.items, "started": TM.iso()}
+        if a.thinking:
+            r["thinking"] = a.thinking
+        if a.duty:
+            r["duty"] = a.duty
+        if a.no_fallback:
+            r.pop("fallback", None)
+        elif a.fallback_model or a.fallback_tool:
+            fb = r.setdefault("fallback", {})
+            if a.fallback_tool:
+                fb["tool"] = a.fallback_tool
+                fb["cmd"] = (tools.get(a.fallback_tool) or {}).get("cmd") or TEAM.TOOL_CMDS.get(a.fallback_tool) or a.fallback_tool
+            if a.fallback_model:
+                fb["models"] = [a.fallback_model]
+                if a.fallback_model.startswith("group/"):
+                    fb.setdefault("via", "magpie")
+    # 先在副本上改，过安全栏，再落盘
+    trial_cfg = _read_json(path)
+    tmp_rs = (trial_cfg.setdefault("overrides", {}).setdefault("roles", {}) if project else trial_cfg.setdefault("roles", {}))
+    apply(tmp_rs.setdefault(role, {}))
+    after = effective_config(trial_cfg) if project else merge(DEFAULTS, trial_cfg)
+    probs = team_check_change(role, after, [model] if model else [])
+    if a.fallback_model:
+        fbrc = TEAM.fallback_rc((after.get("roles") or {}).get(role) or {}, tools) or {}
+        p = TEAM.model_problem(a.fallback_model, fbrc, team_health(), TEAM.registry(EVO_ROOT), tools)
+        if p:
+            probs.append("备用：" + p[1])
+    if probs:
+        sys.exit("没改：" + "；".join(probs))
+    if not (a.tool or a.via or model or a.thinking or a.duty or a.no_fallback or a.fallback_model or a.fallback_tool):
+        sys.exit("要改什么？--model / --thinking / --tool / --duty / --fallback-model / --fallback-tool / --no-fallback")
+    _team_write(path, project, role, apply)
+    rc = (after.get("roles") or {}).get(role) or {}
+    where = f"{project} 本项目专用" if project else "全局"
+    print(f"{TEAM.ROLE_NAMES[role]}（{where}）：{TEAM.tool_of(rc)} · {'/'.join(rc.get('models') or []) or '工具默认模型'}"
+          + (f" · 思考 {rc['thinking']}" if rc.get("thinking") else "")
+          + (f"（试用 {a.items} 件后给你对比）" if act == "trial" else "") + "。下一次派工生效，正在跑的不打断。")
+
+
+def team_panel_get(full_path, run):
+    from urllib.parse import urlparse, parse_qs
+    q = parse_qs(urlparse(full_path).query)
+    code = (q.get("code") or [""])[0].upper()
+    args = (["-p", code] if code in list_projects() else []) + ["team", "--json"] + (["--refresh"] if q.get("refresh") else [])
+    rc, o, e = run(*args)
+    return (200, o) if rc == 0 else (500, json.dumps({"error": e[-200:]}, ensure_ascii=False))
+
+
+def team_panel_post(body, run):
+    """POST /api/team {action: set|clear|trial|dismiss|init, role, model, thinking, tool, fallback_model, fallback_tool, no_fallback, duty, project, items}。
+    真正改配置的是子命令（里面拒绝外部 Agent、校验名字、过安全栏）。"""
+    act = str(body.get("action") or "set")
+    if act not in ("set", "clear", "trial", "dismiss", "init"):
+        return {"ok": False, "error": "action 只能是 set / clear / trial / dismiss / init"}
+    args = ["team", act]
+    if act == "init":
+        args += ["--apply", "--json"]
+    elif act == "dismiss":
+        args.append(str(body.get("model") or ""))
+    else:
+        args.append(str(body.get("role") or ""))
+        if act == "trial":
+            args.append(str(body.get("model") or ""))
+        for k, flag in (("model", "--model"), ("thinking", "--thinking"), ("tool", "--tool"), ("duty", "--duty"),
+                        ("fallback_model", "--fallback-model"), ("fallback_tool", "--fallback-tool"), ("project", "--project"),
+                        ("items", "--items")):
+            if body.get(k) not in (None, "") and not (act == "trial" and k == "model"):
+                args += [flag, str(body[k])]
+        if body.get("no_fallback"):
+            args.append("--no-fallback")
+    rc, o, e = run(*args)
+    return {"ok": rc == 0, "error": None if rc == 0 else (e or o)[-300:], "message": o.strip()[-300:]}
+
+
 # ---------- 时间窗 ----------
 def window_ok(it):
     w = it.get("window")
@@ -1146,8 +1609,10 @@ def waiting_reason(it):
         return "window"
     role = "build" if it["state"] == "queued" else "verify"
     e = _rl_peek().get(role)
-    if e and e["until"] > TM.now():
+    if e and e["until"] > TM.now() and (it.get("waiting") == "rate_limit" or not team_has_fallback(role)):
         return "rate_limit"
+    if it.get("waiting") in ("model_blocked", "magpie_down"):
+        return it["waiting"]
     return None
 
 
@@ -1209,8 +1674,11 @@ def decider_wake(s, T):
     new = [k for k, v in wait.items() if seen.get(k) != v]
     if not new and not inbox:
         return                                         # 都是上批交过、状态没变的：不重复叫
+    dfb = False
     if rl_paused("decide"):
-        return
+        if team_route("decide")[0] != "fallback":      # 第十四轮：决策岗额度满、备用能用就用备用
+            return
+        rc, dfb = team_rc("decide", True), True
     lines = ["## 交给你的事（接棒器批量转来；只做技术决定，四类红线回老板）"]
     for k in wait:
         it = s["items"][k]
@@ -1239,7 +1707,7 @@ def decider_wake(s, T):
     tid = t["task"]["id"]
     models = rc.get("models") or [None]
     h, did = launch(c, CFG["repo"], f"{CODE}-decide", rc, models[0], tid)
-    s["decide"] = {"task": tid, "dispatch": did, "terminal": h, "last": TM.now(), "since": time.time(), "done": False,
+    s["decide"] = {"task": tid, "dispatch": did, "terminal": h, "last": TM.now(), "since": time.time(), "done": False, "fallback": dfb,
                    "items": list(wait), "issues": [e["issue"] for e in inbox if e.get("issue")]}
     seen.update(wait); s["decide_inbox"] = []
     usage_add(s, None, "decide", runs=1)
@@ -1309,6 +1777,7 @@ def cmd_tick(a=None):
     do_push(s); save(s)
     check_stalls(s)                # 3) 停滞
     check_usage(s)
+    team_tick(s)
     gl, j = orca("orchestration", "gate-list", "--from", c, ok=False)
     if j.get("ok"):
         pend = [g for g in gl.get("gates", []) if g.get("status") in (None, "pending")]
@@ -1404,7 +1873,7 @@ def decider_done(s, dec, m, typ, outcome):
         dec["ended"] = time.time(); usage_add(s, None, "decide", minutes=(dec["ended"] - dec.get("since", dec["ended"])) / 60)
     rl = rl_evidence(text, dec.get("terminal") if outcome != "succeeded" else None)
     if rl:
-        rl_pause("decide", rl, None); dec["last"] = 0; s["decide_seen"] = {}   # 额度恢复后整批重叫
+        rl_pause("decide", rl, None, fallback=bool(dec.get("fallback"))); dec["last"] = 0; s["decide_seen"] = {}   # 额度恢复后整批重叫
         return log(s, "决策岗批次因额度中断")
     log(s, "决策岗批次做完")
     apply_decisions(s, m.get("body") or "")
@@ -1456,9 +1925,15 @@ def role_ready(s, k, it, role):
         if it.get("waiting") != "window":
             it["waiting"] = "window"; log(s, f"{k} 等窗口（{it['window']}）")
         return False
-    if rl_paused(role):
-        it["waiting"] = "rate_limit"; return False
-    it.pop("waiting", None)
+    paused = rl_paused(role)
+    rt, code, why, okm = team_route(role, it)          # 第十四轮：主模型 / 备用 / 停（模型下线、撞模型、magpie 不通）
+    if rt is None:
+        if paused or code == "rate_limited":
+            it["waiting"] = "rate_limit"; return False
+        team_block(s, k, it, role, code, why); return False
+    team_unblock(s, role)
+    it["route"], it["route_models"] = rt, okm
+    it.pop("waiting", None); it.pop("model_block", None)
     return True
 
 
@@ -1561,7 +2036,7 @@ def check_stalls(s):
 def restart_worker(s, k, it, role):
     """工人进程不在了（终端被关、进程崩了）：在原工作区、同岗位、同模型自动重启一次。
     次数记在这次派工上（restarts）；重启出来的派工再死一次就走老路（标疑似卡住并推送）。"""
-    c = coord(s); rc = CFG["roles"][role]; d = it["dispatch"][role]
+    c = coord(s); d = it["dispatch"][role]; rc = team_rc(role, bool(d.get("fallback")))
     worker_end(s, it, role)
     orca("terminal", "close", "--terminal", d["terminal"], ok=False)
     old = it["build" if role == "build" else "verify"]
@@ -1579,7 +2054,7 @@ def restart_worker(s, k, it, role):
         it["verify"] = nv["task"]["id"]; tid = it["verify"]
     model = d.get("model")
     h, did = launch(c, it["worktree"], f"{k}-{role}", rc, model, tid)
-    it["dispatch"][role] = {"id": did, "terminal": h, "since": time.time(), "model": model,
+    it["dispatch"][role] = {"id": did, "terminal": h, "since": time.time(), "model": model, "fallback": d.get("fallback"),
                             "restarts": d.get("restarts", 0) + 1, "restarted_from": d["id"]}
     it["restarts"] = it.get("restarts", 0) + 1
     it.pop("stalled", None); it.pop("rl_probe", None)
@@ -1940,7 +2415,8 @@ def roles_doc(s):
         else:
             on = [k for k, it in s["items"].items() if it["state"] == ("building" if role == "build" else "verifying")]
         why, until = None, None
-        if role in rl:
+        fbk = role in rl and team_route(role)[0] == "fallback"     # 第十四轮：额度满但备用接上了 → 不算停
+        if role in rl and not fbk:
             st, until, why = "rate_limited", TM.iso(rl[role]["until"]), (rl[role].get("why") or "")[:120]
         elif on:
             st = "busy"
@@ -1950,7 +2426,8 @@ def roles_doc(s):
             st, why = "paused", f"等你看效果的有 {backlog} 件（超过 {LIM.get('owner_queue_pause', 5)}），暂停新施工"
         else:
             st = "idle"
-        out.append({"role": role, "name": name, "status": st, "label": ROLE_LABELS[st], "items": on, "why": why, "until": until})
+        out.append({"role": role, "name": name, "status": st, "label": ROLE_LABELS[st], "items": on, "why": why, "until": until,
+                    "fallback": fbk})
     return out
 
 
@@ -2669,6 +3146,8 @@ def cmd_panel(a):
                     except ValueError:
                         out.append({"code": code, "name": code + "（读不出）", "gates": 0, "stuck": 1})
                 return self.send(200, json.dumps(out, ensure_ascii=False))
+            if path == "/api/team":                               # 第十四轮：团队页（?code=AB 看本项目徽章）
+                return self.send(*team_panel_get(self.path, run))
             m = re.fullmatch(r"/api/models/([A-Z]{2,4})", path)
             if m and m.group(1) in list_projects():              # 施工/验收模型下拉框：magpie 列表 + 本项目覆盖
                 rc, o, e = run("-p", m.group(1), "models", "--json")
@@ -2723,6 +3202,8 @@ def cmd_panel(a):
                 body = json.loads(raw or b"{}")
             except ValueError:
                 return self.send(400, json.dumps({"ok": False, "error": "不是 JSON"}, ensure_ascii=False))
+            if self.path == "/api/team":                           # 第十四轮：改岗位卡片（子命令里拒绝外部 Agent、过安全栏）
+                return self.send(200, json.dumps(team_panel_post(body, run), ensure_ascii=False))
             code = body.get("code", "")
             if code not in list_projects():
                 return self.send(400, json.dumps({"ok": False, "error": "没有这个项目"}, ensure_ascii=False))
@@ -2885,7 +3366,7 @@ STATUS_SCHEMA_VERSION = 1
 
 def state_name(it):
     w = waiting_reason(it)
-    return {"window": "等窗口", "rate_limit": "等额度"}.get(w) or NAMES.get(it["state"], it["state"])
+    return {"window": "等窗口", "rate_limit": "等额度", "model_blocked": "等换模型", "magpie_down": "等 magpie"}.get(w) or NAMES.get(it["state"], it["state"])
 
 
 def status_doc(s, pend):
@@ -2935,6 +3416,7 @@ def status_doc(s, pend):
         "decider": {"last_woken": TM.iso(dec["last"]) if dec.get("last") else None, "running": bool(dec.get("task") and not dec.get("done")),
                     "items": dec.get("items") or []},
         "log": s["log"][-15:],
+        "team": team_brief(s),
     }
 
 
@@ -3193,9 +3675,17 @@ if __name__ == "__main__":
     x = sp.add_parser("models", help="核对施工/验收模型；-p 代号 models set|clear build|verify [模型] 改单项目覆盖")
     x.add_argument("action", nargs="?", choices=["check", "set", "clear"]); x.add_argument("role", nargs="?"); x.add_argument("model", nargs="?")
     x.add_argument("--json", action="store_true")
+    x = sp.add_parser("team", help="岗位卡片；set / clear / trial / dismiss / init")      # 第十四轮
+    x.add_argument("action", nargs="?", choices=["show", "set", "clear", "trial", "dismiss", "init"]); x.add_argument("role", nargs="?")
+    x.add_argument("model", nargs="?"); x.add_argument("--json", action="store_true"); x.add_argument("--refresh", action="store_true")
+    x.add_argument("--model", dest="set_model"); x.add_argument("--thinking"); x.add_argument("--tool"); x.add_argument("--via", choices=["magpie", "cli"])
+    x.add_argument("--duty"); x.add_argument("--fallback-model"); x.add_argument("--fallback-tool"); x.add_argument("--no-fallback", action="store_true")
+    x.add_argument("--project"); x.add_argument("--items", type=int, default=5); x.add_argument("--apply", action="store_true")
     x = sp.add_parser("retry"); x.add_argument("key"); sp.add_parser("resume")
     x = sp.add_parser("digest"); x.add_argument("--post", action="store_true")
     a = p.parse_args()
+    if a.cmd == "team":                                    # 第十四轮：不选项目也能看/改（全局卡片）
+        cmd_team(a); sys.exit(0)
     if not HAS_PROJECT and a.cmd not in ("new", "import", "projects", "status", "run", "suite", "panel", "notify-test", "bot", "watchdog", "models"):
         sys.exit(f"有多个项目，请加 -p <代号>：{', '.join(list_projects()) or '（还没有项目）'}")
     {"panel": cmd_panel, "new": cmd_new, "import": cmd_import, "projects": cmd_projects, "once": cmd_once, "add": cmd_add, "tick": cmd_tick, "run": cmd_run, "status": cmd_status, "approve": cmd_approve, "ship": cmd_ship, "pull": cmd_pull, "digest": cmd_digest, "retry": cmd_retry, "resume": cmd_resume, "feedback": cmd_feedback, "suite": cmd_suite, "retro": cmd_retro,

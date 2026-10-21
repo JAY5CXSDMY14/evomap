@@ -31,26 +31,43 @@
   },
   "roles": {
     "_说明": "account 可选：同一个订阅账号的岗位一起因额度暂停；不写就按命令第一个词（claude、codex、dsh）算同一个账号。decide 不写 cmd 就不自动叫醒决策岗。models 可以写 magpie 的组名（例如 group/evo-build、group/evo-verify），换模型在 magpie 里点；施工组和验收组的成员不要重叠，evo models 会拿 magpie 的 /v1/models 核对（install.sh 检查时也跑）。单个项目换模型：面板项目页「施工模型 / 验收模型」下拉框，或 evo -p 代号 models set build 模型。",
+    "_岗位卡片": "第十四轮：tool（claude/codex/dsh/pi，决定账号）、via（magpie/cli）、thinking（off/low/medium/high/max，命令里写 {thinking} 才填）、duty（一句话职责）、fallback（额度满/magpie 不通/模型下线时用，最好另一个账号）。改卡片用 evo team set，首次用 evo team init。施工和验收的模型（含 magpie 组成员）不能重叠。",
     "build": {
-      "cmd": "dsh",
-      "models": ["glm/glm-5.3-flash", "deepseek/deepseek-v4.1"],
+      "tool": "dsh",
+      "via": "magpie",
+      "cmd": "dsh --model {model}",
+      "models": ["group/evo-build"],
+      "thinking": "medium",
+      "duty": "按任务书写代码和测试，交 JSON 报告",
+      "fallback": {"tool": "codex", "cmd": "codex --model {model} -c model_reasoning_effort={thinking}", "models": [], "via": "cli"},
       "prompt": "roles/builder.md"
     },
     "verify": {
-      "cmd": "claude",
-      "models": ["deepseek/deepseek-v4.1", "glm/glm-5.3-flash"],
+      "tool": "claude",
+      "via": "cli",
+      "cmd": "claude --model {model}",
+      "models": [],
+      "thinking": "high",
+      "duty": "换一个模型从头核对：跑命令、看证据、不过就打回",
+      "fallback": {"tool": "pi", "cmd": "pi --model {model} --thinking {thinking}", "models": ["group/evo-verify"], "via": "magpie"},
       "prompt": "roles/verifier.md"
     },
     "decide": {
-      "cmd": "claude",
+      "tool": "claude",
+      "cmd": "claude --model {model}",
       "models": [],
+      "thinking": "high",
+      "duty": "只做技术决定（重试、返工、拆分、问老板）；四类红线回老板",
       "prompt": "roles/decider.md",
-      "_models": "填 magpie 里的贵模型名；决策岗只做技术决定"
+      "_models": "决策岗用最强（贵）的模型；不比成绩"
     },
     "retro": {
       "prompt": "roles/retro.md"
     }
   },
+  "_tools": "可选：tools.<工具>.cmd 覆盖内置命令模板；tools.<工具>.models 写这个 CLI 自己的模型目录（可带 {\"id\":…, \"retired\": true}），写了才核对；login_files 覆盖「是否登录」的猜法（相对 HOME）。model_tiers 可标 {\"模型\": \"strong\"}，决策岗提醒用。",
+  "tools": {},
+  "model_tiers": {},
   "notify": {
     "_说明": "channels 可多选同时发：telegram、email、webhook；outbox（~/.evoloop/outbox.jsonl）永远写，不用列。只推五类事：闸门 gate_push_minutes 分钟没人处理、件卡住、推送连续失败 3 次、岗位额度暂停、用量异常。免打扰时段里要推的先攒着，digest_at 发早间汇总到 telegram + email。环境变量：EVO_TG_TOKEN、EVO_TG_CHAT、EVO_TG_OWNER（你的 Telegram 用户 id，群里用必填）；EVO_SMTP_HOST/PORT/USER/PASS/TLS、EVO_MAIL_FROM、EVO_MAIL_TO；webhook 的 secret_env 指向的变量。",
     "macos": true,

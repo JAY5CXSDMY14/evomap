@@ -165,6 +165,17 @@ Telegram 环境变量改名 `EVO_TG_TOKEN` / `EVO_TG_CHAT`，旧名 `TUBU_TG_TOK
 - **交卷时自动查**（所有件，开了预设才查）：施工交卷后、送验收前对比 merge-base 和 HEAD 的清单，新加禁用库 / 同类第二个库 → 直接打回返工（算一轮，原因写哪一类、已定什么、加了什么、怎么申请换库）；lockfile 里才有的禁用库、手写了预设已有的组件（新文件名撞 shadcn 组件且不在 `components/ui/`）、交卷没提到的新依赖 → 只记提示（时间线 `ui_advisory`）。
 - **档案**：ST `ui_preset: swiftui`（REASTOCK 原生 SwiftUI）；TB 不动，土布 web 先 `evo -p TB ui show web-react` 看现有栈冲突再决定开不开。`roles/builder.md` 第 17–19 条、`roles/verifier.md` 第 19–20 条。
 
+## 第十四轮：模型协调——岗位卡片、额度满切备用、模型成绩（均有自动测试，`kit/tests/test_model_coord.py` 26 个，全套 198 个；设计见 docs/model-coordination.md）
+- **岗位卡片**：`roles.<build|verify|decide>` 多了 `tool`（claude / codex / dsh / pi，决定账号）、`via`（magpie / cli；模型是 `group/…` 时默认 magpie）、`thinking`（off/low/medium/high/max，命令里写 `{thinking}` 才填）、`duty`（一句话职责）、`fallback {tool, cmd?, models, via?, account?}`。没写 cmd 时按 `tools.<工具>.cmd`、内置模板的顺序找。`{model}` / `{thinking}` 为空时连同前面的参数一起去掉。evo 不存任何密钥，模型只从 magpie 来。
+- **`evo [-p AB] team [--json] [--refresh]`**：每张卡的工具、模型、思考档位、职责、备用、状态灯（可用 / 用备用中 / 额度满（恢复时间）/ 没装 / 未登录 / 模型已下线 / 模型不认识 / 和施工撞模型 / magpie 不通）、每个模型近 30 天的成绩、一句建议、本周用量（按账号）；加 `-p` 再给「跟随全局 / 本项目专用」和试用进度。JSON 的 `projects` 列出每个项目改了哪些岗位。
+- **健康检查**：magpie `GET /v1/models` + 本机 CLI 在不在、登录文件在不在（只是猜），缓存 5 分钟（`~/.evoloop/team_health.json`）。由通变不通推一次「magpie 不通」，恢复记「magpie 恢复」。
+- **额度满先切备用**：卡片配了另一账号的备用 → 不推「额度暂停」，记 `fallback_on`（时间线 + outbox；免打扰时段进早间汇总），这件原样重排，下一次派工用备用（同一个工作区）；正在跑的不打断。到重置时间自动切回，记 `fallback_off`。备用也满（记在 `<岗位>:fallback`）或同账号 → 照旧暂停并推送。决策岗同理。
+- **停岗位**：走 magpie 的模型不在列表里（或标了下线、或上次在这次没了）→ 这个岗位不派工，件显示「等换模型」，推一次「X 岗停了」带改法；验收挑不到和这件施工不撞的模型（含组成员）→ 同上；magpie 不通且没有工具自带的备用 → 件显示「等 magpie」，工具自带模型的岗位照跑。换好后下一轮自动派。
+- **模型成绩**（从时间线算，近 30 天、全部项目）：施工看验收打回率、每件返工轮数、看效果打回率、分钟/件、没活路次数；验收看打回、漏放（放行后被你看效果打回）。少于 5 件不下结论，差 15 个百分点才建议，**只建议不自动换**。决策卡模型不像最强档时只提醒。
+- **新模型**：magpie 列表新出现的（第一次只记下）合成一条 `model_new` 建议；`evo team dismiss <模型>` 收起。**试用**：`evo team trial <岗位> <模型> --project AB [--items 5]`，满了发一条 `trial_done` 对比，留用 `team set … --project AB`，不用 `team clear … --project AB`。
+- **改卡片**：`evo team set <岗位> [--model M] [--thinking L] [--tool T] [--duty …] [--fallback-model M] [--fallback-tool T] [--no-fallback] [--project AB]`；先在副本上改、过安全栏（施工≠验收含组成员、magpie 通时模型必须在列表里），过了才落盘，下一次派工生效。`evo team clear <岗位> --project AB` 回到跟随全局。`evo team init [--json] [--apply]`：首次安装向导（看装了哪些 CLI、magpie 有哪些组，按「施工验收不同家、决策用最强、备用不同账号」配）。设了 `EVO_AGENT` 一律拒绝（看可以）。
+- **状态与接口**：`status --json` 新增顶层 `team`（每张卡一行、`magpie_ok`、`suggestions`、`blocked`），`roles[].fallback`，件的 `waiting` 多了 `model_blocked` / `magpie_down`；schema_version 仍是 1。面板 `GET /api/team[?code=AB]`、`POST /api/team {action: set|clear|trial|dismiss|init, role, model, thinking, tool, fallback_model, fallback_tool, no_fallback, duty, project, items}`，都要口令；实际由 `evo team …` 执行。新推送类：`model_blocked`、`magpie_down`。
+
 ## 只能在 Mac mini 上验的
 - 真施工模型会不会按「UI 规范」块选库、交卷写清新依赖理由；`npx shadcn@latest create --preset nova` / `add` 在本机网络（代理）下能不能跑通。
 - 真 Orca 的消息有没有 `id` 字段（evo 依次认 `id` / `message_id` / `messageId`；都没有就不去重）、没确认的消息会不会重投。
@@ -186,3 +197,4 @@ Telegram 环境变量改名 `EVO_TG_TOKEN` / `EVO_TG_CHAT`，旧名 `TUBU_TG_TOK
 - 真浏览器里看效果闸门的沙盒 iframe：HTML 产出物里的脚本能跑但连不了网、读不到面板 cookie；图片、下载链接正常。
 - 真 Orca 对 `gate-resolve --resolution "作废（有新反馈）"` 的显示（手机端会不会当成老板点了一个选项）。
 - GitHub 评论的 `created_at` 时区和 `--paginate` 输出格式；`<!-- evo -->` 标记在 gh 留言里是否原样保留。
+- 第十四轮：各 CLI 的命令模板（`codex --model … -c model_reasoning_effort=…`、`pi --thinking …`、`dsh --model …`）是按文档猜的，claude 没有思考档位参数；「未登录」只看登录文件（钥匙串里的看不到）；magpie `/v1/models` 有没有 `members`、`retired`/`deprecated`；切到备用后新工具在同一工作区接着做是否顺（对话上下文不会带过去）。

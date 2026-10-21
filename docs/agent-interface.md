@@ -68,12 +68,13 @@
 | `no_live_path` | 没有活路超过 `limits.no_live_path_minutes`（默认 30）分钟的件（面板标红，已交决策岗一次）：`{"key","title","state","raw","reason","why","since","minutes"}`；`reason` 取 `stalled` `dep_dead` `task_dead` `no_decider` `decider_idle` `unknown_state`。第十二轮新增 |
 | `items[].state_since` | 进入当前状态的时间。第十二轮新增 |
 | `items[].no_live_path` | 这件此刻有没有活路的判断（`true` = 没有，正在计时；到阈值才进顶层 `no_live_path`）。第十二轮新增 |
+| `team` | 岗位卡片摘要：`{"cards": [{"role","name","tool","models","thinking","status","label","until"}], "magpie_ok", "suggestions": 新模型建议条数, "blocked": {岗位: 停下的原因}}`；`roles[].fallback`（额度满但备用接上了）；`items[].waiting` 多了 `model_blocked`（等换模型）、`magpie_down`（等 magpie）。第十四轮新增，详细见 `evo team --json` |
 | `items[].look_gate` | 这件的看效果闸门号（没有为 `null`）。第十二轮新增 |
 
 第十二轮只加字段，`schema_version` 仍是 1。
 
 ### 2.1c `evo -p <代号> log <件号> --json`（每件时间线）
-读 `~/.evoloop/projects/<代号>/state/timeline.jsonl`（只追加，一行一个事件）。每行 `{"at", "item", "event", …}`，`event` 取 `add` `dispatch` `report` `gate_open` `gate_approve` `gate_reject` `gate_superseded` `feedback` `rework` `merge` `push` `ship` `deploy_failed` `restart` `decision` `drop` `state` `no_live_path` `live_again`；打回/补充反馈的原话在 `words`，合并、推送带 `sha`。`--diff` 输出这件的改动（工作区还在看分支，合并后看合并提交）。不抢锁，只读。
+读 `~/.evoloop/projects/<代号>/state/timeline.jsonl`（只追加，一行一个事件）。每行 `{"at", "item", "event", …}`，`event` 取 `add` `dispatch` `report` `gate_open` `gate_approve` `gate_reject` `gate_superseded` `feedback` `rework` `merge` `push` `ship` `deploy_failed` `restart` `decision` `drop` `state` `no_live_path` `live_again` `fallback_on` `fallback_off` `model_blocked`（第十四轮；`dispatch` 另带 `tool` `account` `fallback`）；打回/补充反馈的原话在 `words`，合并、推送带 `sha`。`--diff` 输出这件的改动（工作区还在看分支，合并后看合并提交）。不抢锁，只读。
 
 不带 `-p` 的 `evo status` 是多项目总览（纯文本，不是稳定接口）；要多项目就对每个代号各跑一次 `--json`（`evo projects` 列代号）。
 
@@ -104,6 +105,10 @@
 | `state_corrupt` | push | 项目状态文件损坏，接棒暂停 |
 | `push_failed` | push | 推送 GitHub 连续失败 3 次 |
 | `rate_limited` | push | 岗位订阅额度用完，暂停；`data.until`、`data.roles` |
+| `model_blocked` | push | 第十四轮：岗位因模型停了（下线 / 不认识 / 和施工撞模型）；`data.role`、`data.code` |
+| `magpie_down` | push | 第十四轮：magpie 由通变不通（只在有岗位走 magpie 时推）；`magpie_up` 只进 outbox |
+| `fallback_on` / `fallback_off` | info | 第十四轮：额度满切到备用 / 到点切回；免打扰时段的 `fallback_on` 进早间汇总 |
+| `model_new` / `model_gone` / `trial_done` | info | 第十四轮：magpie 新模型、模型不见了、试用满件数的对比 |
 | `usage_abnormal` | push | 一件的派工次数或工人分钟数超过上限 |
 | `deploy_failed` | push | 点了「上线」但上线命令失败；件留在可收菜，`data.items` |
 | `watchdog_recovered` | info | 看门狗报过停的项目又转起来了 |
@@ -161,6 +166,7 @@
 | 批闸门 / 打回 | `evo approve` 在设了 `EVO_AGENT` 时直接拒绝；面板要口令；Telegram 只认老板的 chat id / 用户 id；issue 评论里的「/approve」之类一律不解析为批准（第十二轮起，可信作者在闸门开着之后写的新评论只会让旧闸门作废、带着原话返工，不会通过任何东西） |
 | 对某件补反馈（会作废老板的闸门） | `evo feedback --item` 在设了 `EVO_AGENT` 时拒绝 |
 | 改项目目标 | `evo goal set/clear` 在设了 `EVO_AGENT` 时拒绝；面板改要口令 |
+| 改模型 / 岗位卡片 | `evo team set/clear/trial/init/dismiss` 在设了 `EVO_AGENT` 时拒绝；`POST /api/team` 要口令且同样拒绝 |
 | 上线 | `evo ship` 同上；上线还要老板点「上线」闸门 |
 | 自己给 issue 打 `autopilot:ready` | 不可信作者的 issue 要查打标签的人 |
 | 红线请求 | 转老板闸门 |
