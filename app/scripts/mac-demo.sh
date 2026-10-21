@@ -115,7 +115,18 @@ waitpt() { local p; for _ in $(seq 1 40); do p=$(pt "$1"); [ -n "$p" ] && { echo
 waitstable() { local a b; a=$(pt "$1"); for _ in $(seq 1 20); do sleep 0.35; b=$(pt "$1"); [ -n "$b" ] && [ "$a" = "$b" ] && return 0; a=$b; done; return 1; }
 geo() { python3 -c "import json,sys;print(json.load(open('$GEO')).get('$1',''))" 2>/dev/null; }
 shot() { screencapture -x -C "$OUT/shots/$1.png" && echo "  📸 $1"; }
+# 第十九轮：探点文件要是新的才信它的坐标（主线程忙的那几秒文件不更新，按旧坐标点会点到别的控件上）
+waitfresh() {
+  local _i age
+  for _i in $(seq 1 48); do
+    age=$(( $(date +%s) - $(stat -f %m "$GEO" 2>/dev/null || echo 0) ))
+    [ "$age" -le 1 ] && return 0
+    sleep 0.25
+  done
+  note "  ⚠ 探点 12 秒没更新（主线程忙），照旧坐标继续"; return 1
+}
 click() {
+  waitfresh || true
   local p; p=$(waitpt "$1") || { note "  ✗ 找不到控件 $1"; return 1; }
   "$CLICLICK" -e 300 "m:$p" >/dev/null; sleep 0.2
   "$CLICLICK" "c:$p" >/dev/null
@@ -146,7 +157,7 @@ open_popover() {   # 弹窗是开关式的：先看是不是已经开着，没�
 }
 window_open() { [ -n "$(pt win-sidebar-inbox)" ]; }
 evo_front() {     # 键盘事件只在 Evo 在最前面时发，免得打进 Finder（应用自己报 NSApp.isActive）
-  sleep 0.35; [ "$(geo active)" = "1" ]
+  sleep 0.35; waitfresh || true; [ "$(geo active)" = "1" ]
 }
 
 tcc_grant() {
@@ -286,7 +297,7 @@ drive() {
     key kd:cmd t:k ku:cmd; sleep 1.0
     if [ -n "$(pt palette-field)" ]; then
       shot 19c-palette-sections
-      paste_text "EV-NOTI"; sleep 0.9; shot 19d-palette-item; key kp:return; sleep 2.6
+      paste_text "EV-NOTI"; sleep 0.9; shot 19d-palette-item; waitfresh || true; key kp:return; sleep 2.6; waitfresh || true
       waitpt item-diagnosis >/dev/null && note "  ✓ ⌘K 跳到件详情，有「为什么卡住」" || { note "  ✗ ⌘K 没跳到件详情"; fails=$((fails+1)); }
       shot 19e-item-stuck-light
     else note "  ✗ ⌘K 面板没出来"; fails=$((fails+1)); fi
@@ -295,7 +306,7 @@ drive() {
   if evo_front; then
     key kd:cmd t:k ku:cmd; sleep 1.0
     if [ -n "$(pt palette-field)" ]; then
-      paste_text "深色"; sleep 1.0; shot 10-palette; key kp:return; sleep 0.8
+      paste_text "深色"; sleep 1.0; shot 10-palette; key kp:return; sleep 1.5; waitfresh || true
       if [ -n "$(pt palette-field)" ]; then note "  ⚠ 回车后面板还开着，再按一次 enter"; key kp:enter; sleep 0.8; fi
     else note "  ✗ ⌘K 面板没出来"; fails=$((fails+1)); fi
   else note "  ✗ Evo 不在最前面，跳过键盘步骤"; fails=$((fails+1)); fi
@@ -308,7 +319,11 @@ drive() {
   click composer-send || fails=$((fails+1)); sleep 3.6; shot 13-composer-reply
   if evo_front; then
     key kd:cmd t:k ku:cmd; sleep 1.0
-    if [ -n "$(pt palette-field)" ]; then paste_text "EV-NOTI"; sleep 0.8; key kp:return; sleep 2.6; shot 19f-item-stuck-dark; fi
+    if [ -n "$(pt palette-field)" ]; then
+      paste_text "EV-NOTI"; sleep 0.8; waitfresh || true; key kp:return; sleep 2.6; waitfresh || true
+      waitpt item-diagnosis >/dev/null && note "  ✓ 深色下 ⌘K 跳到件详情" || note "  ✗ 深色下 ⌘K 没跳到件详情"
+      shot 19f-item-stuck-dark
+    fi
   fi
   open_popover || fails=$((fails+1)); sleep 1.8; shot 14-popover-dark
   popover_open && click status-item; sleep 0.6

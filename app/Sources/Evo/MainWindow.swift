@@ -526,7 +526,9 @@ struct InboxPane: View {
         let cards = state.allCards
         let home = state.home
         VStack(alignment: .leading, spacing: 0) {
-            PaneTitle(title: "等你处理", count: cards.count, subtitle: home.headline)
+            // 标题旁的角标已经是件数：有事时副标题只说「最久的一件等了多久」，不重复「有 N 件」
+            PaneTitle(title: "等你处理", count: cards.count,
+                      subtitle: home.phase == .attention ? (home.detail ?? state.speech) : home.headline)
             switch home.phase {
             case .loading:
                 HomeLoadingView(width: width).transition(.opacity)
@@ -546,10 +548,6 @@ struct InboxPane: View {
                 .frame(maxWidth: 520).padding(.bottom, Theme.Space.s)
                 .uiProbe("home-empty")
             case .attention:
-                if let d = home.detail {
-                    Label(d, systemImage: "clock").font(Theme.caption(12)).foregroundStyle(Theme.textSecondary)
-                        .padding(.top, -Theme.Space.s).padding(.bottom, Theme.Space.m)
-                }
                 GateGridView(state: state, cards: cards, width: width)
             }
             if state.showHarvest {
@@ -566,7 +564,7 @@ struct InboxPane: View {
                 }
                 if let bg = home.backgroundLine {
                     HomeQuietRow(symbol: "circle.dotted", tint: Theme.success, text: "其余：" + bg,
-                                 trailing: showProjects ? "收起" : "展开", chevronDown: !showProjects) {
+                                 trailing: showProjects ? "收起" : "展开", chevron: showProjects ? "chevron.up" : "chevron.down") {
                         withAnimation(Motion.or(Motion.softSpring)) { showProjects.toggle() }
                     }
                     .uiProbe("home-projects-toggle")
@@ -599,7 +597,7 @@ struct HomeQuietRow: View {
     let tint: Color
     let text: String
     let trailing: String
-    var chevronDown = false
+    var chevron = "chevron.right"
     let action: () -> Void
     @State private var hover = false
 
@@ -610,7 +608,7 @@ struct HomeQuietRow: View {
                 Text(text).font(Theme.body(Theme.Size.body)).foregroundStyle(Theme.textPrimary).lineLimit(1).truncationMode(.tail)
                 Spacer(minLength: Theme.Space.s)
                 Text(trailing).font(Theme.caption(11.5)).foregroundStyle(Theme.textSecondary)
-                Image(systemName: chevronDown ? "chevron.down" : "chevron.right").font(.system(size: 10, weight: .semibold))
+                Image(systemName: chevron).font(.system(size: 10, weight: .semibold))
                     .foregroundStyle(Theme.textSecondary)
             }
             .padding(.horizontal, Theme.Space.m + 2).padding(.vertical, Theme.Space.s + 2)

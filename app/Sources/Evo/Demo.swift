@@ -82,7 +82,7 @@ enum UIProbe {
 }
 
 /// 第十九轮：CI 演示时的主线程卡顿探针（EVO_UITEST_GEOMETRY 设了才开）。
-/// 后台每 0.5 秒看两拍：GCD 主队列一拍、MainActor 一拍。任何一拍超过 3 秒没跳 → 记「主线程卡」并跑一次
+/// 后台每 0.5 秒看两拍：GCD 主队列一拍、MainActor 一拍。任何一拍超过 1.5 秒没跳 → 记「主线程卡」并跑一次
 /// `/usr/bin/sample <pid> 3`，把主线程的调用栈写到 $EVO_STALL_DIR/stall-N.txt（mac-demo 收进构件）；恢复时记卡了多久。
 enum StallWatch {
     private final class Beats: @unchecked Sendable {
@@ -108,7 +108,7 @@ enum StallWatch {
             let lag = max(lagMain, lagActor)
             var sampleN: Int?
             var recovered: Double?
-            if lag > 3, !b.stalled {
+            if lag > 1.5, !b.stalled {      // 1.5 秒就开始 sample，赶在卡顿结束前抓到栈
                 b.stalled = true; b.since = now.addingTimeInterval(-lag); b.count += 1; sampleN = b.count
             } else if lag < 1, b.stalled {
                 b.stalled = false; recovered = now.timeIntervalSince(b.since)

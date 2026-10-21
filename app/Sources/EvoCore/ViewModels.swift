@@ -285,8 +285,10 @@ public struct PaletteEntry: Identifiable, Equatable, Sendable {
     public var subtitle: String
     public var symbol: String
     public var action: Action
+    /// 第十九轮：只用来搜、不显示的词（英文别名、「时间线」之类）。
+    public var keywords: String = ""
 
-    public var searchText: String { "\(title) \(subtitle)" }
+    public var searchText: String { "\(title) \(subtitle) \(keywords)" }
 
     /// 第十九轮：面板分组（没输入时按组显示小标题，像 Linear）。
     public var section: String {
@@ -320,11 +322,11 @@ public struct PaletteEntry: Identifiable, Equatable, Sendable {
     public static func build(cards: [GateCard], rows: [ProjectRow], paused: Bool?,
                              items: [ItemRef] = [], teamVisible: Bool = false) -> [PaletteEntry] {
         var out: [PaletteEntry] = [
-            .init(id: "window", title: "打开 Evo 窗口", subtitle: "window ⌘0", symbol: "macwindow", action: .openWindow),
+            .init(id: "window", title: "打开 Evo 窗口", subtitle: "主窗口", symbol: "macwindow", action: .openWindow, keywords: "window"),
             .init(id: "tick", title: "立即 tick", subtitle: "每个项目转一轮 tick", symbol: "bolt", action: .tick),
             .init(id: "panel", title: "打开面板", subtitle: "panel 网页面板", symbol: "rectangle.on.rectangle", action: .openPanel),
             .init(id: "harvest", title: "收菜清单", subtitle: "已合并可上线 harvest", symbol: "basket", action: .harvest),
-            .init(id: "refresh", title: "刷新", subtitle: "重新读状态 refresh", symbol: "arrow.clockwise", action: .refresh),
+            .init(id: "refresh", title: "刷新", subtitle: "重新读状态", symbol: "arrow.clockwise", action: .refresh, keywords: "refresh"),
             .init(id: "watchdog", title: "看门狗检查", subtitle: "evo watchdog", symbol: "heart.text.square", action: .watchdog),
             .init(id: "appearance", title: "切换深色 / 浅色", subtitle: "dark light appearance 外观", symbol: "circle.lefthalf.filled", action: .toggleAppearance),
             .init(id: "settings", title: "设置", subtitle: "settings", symbol: "gearshape", action: .settings),
@@ -339,15 +341,17 @@ public struct PaletteEntry: Identifiable, Equatable, Sendable {
             out.append(.init(id: "ok/\(c.id)", title: "\(c.approveChoice)：\(c.title)", subtitle: sub, symbol: "checkmark.circle", action: .approve(c.id)))
             out.append(.init(id: "no/\(c.id)", title: "\(c.rejectChoice)：\(c.title)", subtitle: sub, symbol: "arrow.uturn.backward.circle", action: .reject(c.id)))
         }
-        out.append(.init(id: "go/inbox", title: "去「等你处理」", subtitle: "首页 home inbox ⌘1", symbol: "tray", action: .go(.inbox)))
-        out.append(.init(id: "go/stale", title: "去「卡太久」", subtitle: "卡住 stuck stale 为什么卡住", symbol: "hourglass", action: .go(.stale)))
+        out.append(.init(id: "go/inbox", title: "去「等你处理」", subtitle: "首页", symbol: "tray", action: .go(.inbox), keywords: "home inbox"))
+        out.append(.init(id: "go/stale", title: "去「卡太久」", subtitle: "没活路、同一状态太久的件", symbol: "hourglass", action: .go(.stale),
+                         keywords: "卡住 stuck stale 为什么卡住"))
         if teamVisible {
-            out.append(.init(id: "go/team", title: "去「团队」", subtitle: "模型 team model", symbol: "person.3", action: .go(.team)))
+            out.append(.init(id: "go/team", title: "去「团队」", subtitle: "施工 / 验收 / 决策用哪个模型", symbol: "person.3", action: .go(.team), keywords: "team model"))
         }
         for i in items.sorted(by: { $0.stuck && !$1.stuck }) {
             out.append(.init(id: "i/\(i.project)/\(i.key)", title: "\(i.key) \(i.title)",
-                             subtitle: (i.stuck ? "卡住 · " : "") + "\(i.project) · \(i.note) 件 item 时间线",
-                             symbol: i.stuck ? "exclamationmark.triangle" : "doc.text.magnifyingglass", action: .openItem(project: i.project, key: i.key)))
+                             subtitle: (i.stuck ? "卡住 · " : "") + "\(i.project) · \(i.note)",
+                             symbol: i.stuck ? "exclamationmark.triangle" : "doc.text.magnifyingglass", action: .openItem(project: i.project, key: i.key),
+                             keywords: "件 item 时间线 为什么卡住"))
         }
         for r in rows {
             out.append(.init(id: "p/\(r.code)", title: "\(r.code) \(r.name)", subtitle: "项目 project", symbol: "folder", action: .focusProject(r.code)))
