@@ -6,6 +6,7 @@ import json, os, sys
 from conftest import KIT, state_is
 
 sys.path.insert(0, os.path.join(KIT, "bin"))
+sys.path.insert(0, os.path.join(KIT, "features", "ui-preset"))   # 第十八轮：UI 预设搬成功能包
 import evo_ui as UI  # noqa: E402
 
 K = "AB-FIX-001"

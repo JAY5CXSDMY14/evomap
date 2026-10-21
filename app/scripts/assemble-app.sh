@@ -37,6 +37,8 @@ cp Resources/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
 # bin/ 设成只读：launchd 常驻直接用包里的 evo 时，python 写不进 __pycache__ 就静默跳过，
 # 不会改动签过名的包（否则签名失效，Gatekeeper 可能报「已损坏」）
 chmod 555 "$APP/Contents/Resources/evo/bin"
+# 第十八轮：功能包目录同理（evo 也设了 sys.dont_write_bytecode）
+find "$APP/Contents/Resources/evo/features" -type d -exec chmod 555 {} + 2>/dev/null || true
 
 if command -v plutil >/dev/null; then plutil -lint "$APP/Contents/Info.plist" >/dev/null; fi
 if [ -n "$SIGN" ] && command -v codesign >/dev/null; then

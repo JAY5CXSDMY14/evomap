@@ -43,12 +43,12 @@
 import argparse, datetime, fcntl, hashlib, hmac, json, os, re, secrets, subprocess, sys, time, shlex
 
 # realpath：~/.local/bin/evo 是软链时也能找到套件目录（以前用 abspath，软链下找不到 roles/ 和 panel/）
+sys.dont_write_bytecode = True     # 第十八轮：功能包目录也在签过名的 App 包里，别写 __pycache__
 SELF = os.path.realpath(__file__)
 KIT = os.path.dirname(os.path.dirname(SELF))
 sys.path.insert(0, os.path.dirname(SELF))
 import evo_time as TM       # noqa: E402
 import evo_notify as NT     # noqa: E402
-import evo_ui as UI         # noqa: E402
 import evo_arch as ARCH     # noqa: E402  第十五轮：后端/架构预设
 import evo_plugin as PLUG   # noqa: E402  第十六轮：插件
 # 多项目：每个项目一个目录 ~/.evoloop/projects/（旧 ~/.tubu 自动沿用）<代号>/{config.json, state/}；命令用 -p <代号> 指定
@@ -213,6 +213,53 @@ GCFG = CFG or global_config()      # 没选项目时用全局配置
 NOTE = NT.Notifier(GCFG, EVO_ROOT, CODE if HAS_PROJECT else None)
 
 
+# ---------- 第十八轮：内核 = 状态机 + 事件总线 + 存储 + 调度 + 锁 + 功能包运行时；功能在 kit/features/<id>/ ----------
+import evo_bus as BUSMOD    # noqa: E402
+import evo_rt as RTMOD      # noqa: E402
+FEATURES_DIR = os.environ.get("EVO_FEATURES_DIR") or os.path.join(KIT, "features")
+EVENTS_PATH = os.path.join(EVO_ROOT, "events.jsonl")
+
+
+class _Kernel:
+    """功能包看到的内核（ctx.k / in_use 的第一个参数）：就是 evo 自己的全局名字。能用哪些见 docs/architecture.md「内核接口」。"""
+
+    def __getattr__(self, n):
+        try:
+            return globals()[n]
+        except KeyError:
+            raise AttributeError(f"内核没有 {n}")
+
+
+K = _Kernel()
+BUS = BUSMOD.Bus(EVENTS_PATH, CODE if HAS_PROJECT else None)
+RT = RTMOD.Runtime(FEATURES_DIR, EVO_ROOT, K, BUS)
+_RT_READY = []
+
+
+def rt():
+    """功能包运行时（第一次用时读 features.yml、载入、对齐）。"""
+    if not _RT_READY:
+        _RT_READY.append(1)
+        RT.refresh(force=True)
+    return RT
+
+
+def svc(name, default=None):
+    """内核拿服务：功能包关着就是 default（内核按「没有这个功能」走）。"""
+    return rt().service(name, default)
+
+
+def hook(slot):
+    """某个槽位上所有功能包的贡献 [(功能id, key, 值)]。"""
+    return rt().contributions(slot)
+
+
+def emit(event, item=None, live=None, record=True, **data):
+    """发一个内核事件（落 events.jsonl，订阅的功能包各自兜错）。record=False：只给订阅者，不落盘（一轮里的阶段钩子）。"""
+    rt()
+    return BUS.publish(event, {k: v for k, v in data.items() if v is not None}, item=item, live=live, record=record)
+
+
 # ---------- 基础 ----------
 def orca(*args, ok=True):
     r = run_cmd(ORCA + list(args) + ["--json"], timeout=tmo("orca"), extra_env=False)   # 第十七轮：超时 / 没装都转成 SystemExit，不让进程直接崩
@@ -358,6 +405,28 @@ def tl(k, event, **data):
             f.write(json.dumps(rec, ensure_ascii=False) + "\n")
     except OSError as e:
         print(f"时间线没写进去：{e}", file=sys.stderr)
+    tl_event(k, event, rec)
+
+
+TL_EVENTS = {"add": "item.created", "merge": "item.merged", "push": "push.done", "ship": "item.shipped", "drop": "item.dropped",
+             "deploy_failed": "deploy.failed", "gate_open": "gate.pending", "gate_approve": "gate.resolved",
+             "gate_reject": "gate.resolved", "gate_external": "gate.resolved"}
+
+
+def tl_event(k, event, rec):
+    """第十八轮：每条时间线同时是一个总线事件（App 的 evo watch 靠它；功能包也订阅它）。"""
+    data = {x: v for x, v in rec.items() if x not in ("at", "item", "event")}
+    name = TL_EVENTS.get(event)
+    if event == "dispatch":
+        name = {"build": "build.started", "verify": "verify.started"}.get(rec.get("role"))
+    elif event == "report" and rec.get("role") == "build":
+        name = "build.done"
+    if not name:
+        name, data = "item.timeline", dict(data, kind=event)
+    try:
+        emit(name, item=k, **{x: (v[:300] if isinstance(v, str) else v) for x, v in data.items()})
+    except Exception as e:              # 总线出事不拖垮接棒
+        print(f"事件没发出去：{e}", file=sys.stderr)
 
 
 def read_timeline(k, code=None):
@@ -391,58 +460,6 @@ def goal_head(cfg=None):
     """项目目标（项目配置 goal，一两句）：写在每份任务书最前面，让工人知道「为什么做」。"""
     g = str((cfg or CFG).get("goal") or "").strip()
     return f"项目目标：{g}\n\n" if g else ""
-
-
-_UI = {}
-
-
-def ui_eff():
-    """本项目实际生效的 UI 规范（ui_preset=none 时 None）。一个进程算一次；预设文件坏了只提示、不拦接棒。"""
-    if "eff" not in _UI:
-        try:
-            _UI["eff"] = UI.effective(CFG)
-        except (ValueError, OSError) as e:
-            print(f"UI 预设读不出：{e}", file=sys.stderr)
-            _UI["eff"] = None
-    return _UI["eff"]
-
-
-def ui_conflicts_once(s):
-    """仓库某一类已经在用别的库（现有的赢）：日志 + 提醒各一次；冲突内容变了再报。"""
-    eff = ui_eff()
-    sig = UI.conflict_sig(eff) if eff and eff["conflicts"] else ""
-    if sig and s.get("ui_reported") != sig:
-        txt = "；".join(UI.conflict_text(eff))
-        log(s, f"UI 预设 {eff['name']} 与仓库现有栈有冲突，现有的赢、不迁移：{txt}")
-        notify("ui_conflict", "UI 预设：仓库现有栈优先", txt)
-    if sig or s.get("ui_reported"):
-        s["ui_reported"] = sig
-
-
-def ui_delivery_check(s, k, it):
-    """施工交卷后、送验收前：对比本件改动前后的依赖清单。新加禁用库/同类第二个库 → 返回打回原因；
-    lockfile 里才有的、手写了预设已有的组件、新依赖没在交卷里说明 → 只记提示（时间线 ui_advisory），不拦。"""
-    eff = ui_eff(); wt = it.get("worktree")
-    if not eff or not wt:
-        return None
-    base = git(wt, "merge-base", CFG["main_branch"], "HEAD", check=False)
-    if not base:
-        return None
-    eff = UI.effective(CFG, present=UI.git_deps(wt, base)["manifest"])   # 「现有」按改动前的主线算
-    r = UI.check(wt, base, "HEAD", eff)
-    rep = json.dumps(it.get("report") or {}, ensure_ascii=False)
-    unexplained = [p for p in r["new_deps"] if p not in rep]
-    notes = [f"lockfile 新出现禁用库 {x['package']}（{x['label']}，可能是传递依赖）" for x in r["lock_only"]] + \
-            [f"新文件 {x['path']} 像是手写的 {x['component']}，预设里已有（{eff['component_dir'] or '系统组件'}）" for x in r["handrolled"]] + \
-            [f"新依赖 {p} 不在 UI 规范里，交卷没写理由" for p in unexplained]
-    if notes:
-        it["ui_notes"] = notes
-        tl(k, "ui_advisory", notes=notes)
-        log(s, f"{k} UI 规范提示：" + "；".join(notes)[:200])
-    if r["violations"]:
-        return ("新加了 UI 规范不允许的依赖：" + UI.violation_text(r["violations"]) +
-                "。改用规范里的库并删掉这个依赖；确实要换，先 ask 决策岗，老板批准后写进项目 ui_overrides")
-    return None
 
 
 _ARCH = {}
@@ -496,7 +513,8 @@ def arch_delivery_check(s, k, it):
 
 def spec_head(role, it):
     """任务书开头：项目目标一行，接着（只对碰界面的件）「UI 规范」块，（只对碰后端路径的件）「架构规范」块。"""
-    return goal_head() + UI.head(role, it, ui_eff(), CODE) + ARCH.head(role, it, arch_eff(), CODE)
+    # 第十八轮：UI / 架构规范块来自功能包（prompt.head 槽位，按 key 排序：10-ui、20-arch）；功能关着就没有
+    return goal_head() + "".join(fn(role, it) or "" for _, _, fn in hook("prompt.head")) + ARCH.head(role, it, arch_eff(), CODE)
 
 
 def notify(kind, title, body="", item=None, gate=None, **data):
@@ -1063,7 +1081,7 @@ def check_delivery(s, k, it, body):
         red = [t["command"] for t in rep["tests"] if t["result"] == "failed"]
         if red:
             build_reject(s, k, it, "报告里有没通过的测试：" + "；".join(red)); return False
-    why = ui_delivery_check(s, k, it) or arch_delivery_check(s, k, it)
+    why = next((r for r in (fn(s, k, it) for _, _, fn in hook("delivery.check")) if r), None) or arch_delivery_check(s, k, it)   # 第十八轮：功能包的交卷检查
     if why:
         build_reject(s, k, it, why)
         return False
@@ -2188,7 +2206,7 @@ def cmd_tick(a=None):
         print("check keys:", list(res.keys()))
     T = tasks(s)
 
-    ui_conflicts_once(s)
+    emit("tick.before_dispatch", live={"s": s}, record=False)    # 第十八轮：功能包在派工前的事（UI / 架构冲突提示…）
     arch_conflicts_once(s)
     dispatch_all(s, c, T)          # 2) 派工、合并
     do_push(s); save(s)
@@ -2208,6 +2226,8 @@ def cmd_tick(a=None):
     auto_ship(s, gl.get("gates", []) if j.get("ok") else None)
     save(s)
     heartbeat()
+    emit("tick", count={st: sum(1 for it in s["items"].values() if it["state"] == st)
+                        for st in sorted({it["state"] for it in s["items"].values()})})
 
 
 def handle_msg(s, m, by_task):
@@ -2268,6 +2288,7 @@ def handle_msg(s, m, by_task):
     elif typ == "worker_done" and role == "verify":
         if outcome == "succeeded":
             it["state"] = "verified"; it["verified_sha"] = git(it["worktree"], "rev-parse", "HEAD")
+            emit("verify.passed", item=k, sha=it["verified_sha"])
             it["verified_patch"] = patch_id(it["worktree"])
             log(s, f"{k} 验收通过（{it['verified_sha'][:8]}）")
             if it["ui"] and it["gates"].get("look"):
@@ -2280,6 +2301,7 @@ def handle_msg(s, m, by_task):
                 notify("gate_created", "等你看效果", it["title"] + ("\n请看：" + "；".join(map(str, mc)) if mc else ""),
                        item=k, gate=it["gates"].get("look"), manual_checks=mc)
         else:
+            emit("verify.failed", item=k, why=(m.get("body") or "")[:300])
             it["round"] += 1
             if it["round"] > LIM["rework_rounds"]:
                 it["state"] = "escalated"; log(s, f"{k} 返工 {it['round']-1} 轮仍不过，交决策岗换方案")
@@ -2957,80 +2979,6 @@ def _write_project_cfg(c):
     json.dump(c, open(tmp, "w", encoding="utf-8"), ensure_ascii=False, indent=2); os.replace(tmp, p)
 
 
-def cmd_ui(a):
-    """evo -p AB ui [show]：看本项目生效的 UI 规范；ui set <预设> / set 类别=包名 / set 类别=：改（外部 Agent 不能改）；
-    ui check [--path 目录] [--base 提交]：在工作区对比依赖，有禁用库退出码 1（验收岗用）。"""
-    act = a.action or "show"
-    if act == "show":
-        pv = (a.text or [None])[0]               # ui show web-react：不改配置，先看这个预设套到本仓库会怎样
-        if pv and pv not in UI.NAMES:
-            sys.exit(f"UI 预设只能是：{' | '.join(UI.NAMES)}")
-        eff = UI.effective({**CFG, "ui_preset": pv}) if pv else ui_eff()
-        if a.json:
-            print(json.dumps({"schema_version": APP_SCHEMA_VERSION, "ui_preset": CFG.get("ui_preset") or "none", "effective": eff}, ensure_ascii=False, indent=1)); return
-        print(UI.table(eff) if eff else "UI 预设：none（没开；evo -p " + CODE + " ui set web-react | swiftui）"); return
-    if act == "check":
-        path = a.path or (os.getcwd() if git(os.getcwd(), "rev-parse", "--git-dir", check=False) else CFG["repo"])
-        if not ui_eff():
-            print("UI 预设：none，不查"); return
-        base = a.base or git(path, "merge-base", CFG["main_branch"], "HEAD", check=False) or "HEAD"
-        eff = UI.effective(CFG, present=UI.git_deps(path, base)["manifest"])   # 「现有」按改动前算，新加的不算现有
-        r = UI.check(path, base, "HEAD", eff)
-        if a.json:
-            print(json.dumps({"schema_version": APP_SCHEMA_VERSION, **r}, ensure_ascii=False, indent=1))
-        else:
-            print(f"UI 依赖检查（预设 {eff['name']}，对比 {base[:10]}..HEAD）")
-            for x in r["violations"]:
-                print(f"  ✗ 不合规：{x['label']}已定「{x['choice']}」，新加了 {x['package']}")
-            for x in r["lock_only"]:
-                print(f"  ! 提示：lockfile 新出现禁用库 {x['package']}（{x['label']}，可能是传递依赖，核对一下）")
-            for p in r["new_deps"]:
-                print(f"  ? 新依赖 {p} 不在规范里：交卷 changes 里要写明为什么")
-            for x in r["handrolled"]:
-                print(f"  ! 建议：{x['path']} 像是手写的 {x['component']}，预设里已有，优先用现成组件")
-            for t in UI.conflict_text(eff):
-                print("  · 现有栈优先：" + t)
-            if not any(r.values()):
-                print("  ✓ 没有问题")
-        sys.exit(1 if r["violations"] else 0)
-    refuse_agents("改 UI 预设")
-    arg = " ".join(a.text or []).strip()
-    if not arg:
-        sys.exit("用法：evo ui set web-react | swiftui | none，或 evo ui set 类别=包名[,包名]（类别= 清掉）")
-    c = _read_json(_project_cfg_path(CODE))
-    if "=" in arg:
-        cat, _, val = arg.partition("=")
-        cat = cat.strip()
-        if not re.fullmatch(r"[a-z][a-z0-9_-]{0,23}", cat):
-            sys.exit("类别名只许小写字母、数字、- _（例 icons）")
-        pk = [x.strip() for x in val.split(",") if x.strip()]
-        if any(not re.fullmatch(r"[@A-Za-z0-9._/*+-]{1,80}", x) for x in pk):
-            sys.exit("包名只许字母数字和 @ . _ / * + -")
-        ov = dict(c.get("ui_overrides") or {})
-        if pk:
-            ov[cat] = pk
-        else:
-            ov.pop(cat, None)
-        if ov:
-            c["ui_overrides"] = ov
-        else:
-            c.pop("ui_overrides", None)
-        _write_project_cfg(c)
-        print(f"{CODE} UI 覆盖：{cat} = {'、'.join(pk) if pk else '（已清掉，回到预设）'}。下一份任务书起生效")
-        return
-    if arg not in UI.NAMES:
-        sys.exit(f"UI 预设只能是：{' | '.join(UI.NAMES)}")
-    if arg == "none":
-        c.pop("ui_preset", None)
-    else:
-        c["ui_preset"] = arg
-    _write_project_cfg(c)
-    print(f"{CODE} UI 预设：{arg}。下一份任务书起生效（只管新代码，旧栈不迁移）")
-    eff = UI.effective({**CFG, **c})
-    for t in UI.conflict_text(eff) if eff else []:
-        print("  · 现有栈优先：" + t)
-
-
 # ---------- 后端/架构预设（第十五轮，见 kit/presets/arch/README.md）----------
 ARCH_SET_RE = re.compile(r"(root|layout|allow_dirs|migrations_dir|migrations_pattern|arch_paths|config_modules|layers\.[a-z][a-z0-9_-]{0,23}|deps\.[a-z][a-z0-9_-]{0,23}|checks\.[a-z][a-z0-9_-]{0,31})")
 
@@ -3484,10 +3432,7 @@ def _setup_project(code, name, path, github, test_cmd, notes, goal=None, ui_pres
         base["goal"] = goal
     if ui_preset and ui_preset != "none":
         base["ui_preset"] = ui_preset
-        eff = UI.effective(base)
-        notes.append(f"UI 预设 {ui_preset}：碰界面的件任务书里会带「UI 规范」，验收查依赖（evo -p {code} ui 看全表）")
-        for t in UI.conflict_text(eff):
-            notes.append("UI 预设与现有栈冲突，现有的赢、不迁移：" + t)
+        notes += preset_svc("ui").setup_notes(base, code, ui_preset)
     if arch_preset and arch_preset != "none":
         base["arch_preset"] = arch_preset
         eff = ARCH.effective(base)
@@ -3524,10 +3469,18 @@ def _goal_arg(a):
     return g or None
 
 
+def preset_svc(kind):
+    """第十八轮：UI / 架构预设是功能包（服务 preset.ui / preset.arch）；关着时给 --ui-preset 就说清楚。"""
+    p = svc("preset." + kind)
+    if not p:
+        raise SystemExit(f"功能 {kind}-preset 关着，--{kind}-preset 用不了。打开：evo feature on {kind}-preset")
+    return p
+
+
 def _ui_arg(a):
     v = getattr(a, "ui_preset", None)
-    if v and v not in UI.NAMES:
-        raise SystemExit(f"--ui-preset 只能是：{' | '.join(UI.NAMES)}")
+    if v and v != "none" and v not in preset_svc("ui").NAMES:
+        raise SystemExit(f"--ui-preset 只能是：{' | '.join(preset_svc('ui').NAMES)}")
     return v
 
 
@@ -4060,13 +4013,12 @@ def status_doc(s, pend):
     rl = [{"role": r, "until": TM.iso(e["until"]), "since": TM.iso(e.get("since")), "why": e.get("why"), "account": e.get("account"),
            "guessed": bool(e.get("guessed"))} for r, e in _rl_peek().items() if e["until"] > TM.now()]
     dec = s.get("decide") or {}
-    return {
+    doc = {
         "schema_version": STATUS_SCHEMA_VERSION, "project": CODE, "name": CFG.get("name", CODE), "generated_at": TM.iso(),
         "last_tick": read_heartbeats().get(CODE),
         "count": cnt,
         "stuck": sum(1 for it in s["items"].values() if it.get("stalled") or it["state"] in ("escalated", "asking")),
         "goal": CFG.get("goal") or None,
-        "ui_preset": CFG.get("ui_preset") or "none",
         "arch_preset": CFG.get("arch_preset") or "none",
         "roles": roles_doc(s),
         "stale": stale_list(s),
@@ -4093,6 +4045,13 @@ def status_doc(s, pend):
         "log": s["log"][-15:],
         "team": team_brief(s),
     }
+    for fid, key, fn in hook("status"):            # 第十八轮：功能包往 status 里加字段（ui_preset、arch_preset、limits…）
+        try:
+            fn(s, doc)
+        except Exception as e:
+            doc.setdefault("feature_errors", []).append({"feature": fid, "error": f"{type(e).__name__}: {e}"[:200]})
+    doc["features"] = [x for x in rt().order]
+    return doc
 
 
 def refuse_agents(what):
@@ -4590,6 +4549,101 @@ def cmd_watchdog(a):
         print(f"{code} 心跳过期，已推送")
 
 
+# ---------- 第十八轮：功能开关 / 事件流 ----------
+FEATURE_SCHEMA_VERSION = 1
+
+
+def feature_doc():
+    r = rt()
+    return {"schema_version": FEATURE_SCHEMA_VERSION, "api": RTMOD.API, "preset": r.preset, "file": r.path,
+            "file_error": r.file_error, "features": r.dump()}
+
+
+def _feature_line(f):
+    lamp = {"active": "●", "pending": "◐", "failed": "✗", "off": "○", "disposed": "○"}.get(f["state"], "?")
+    extra = []
+    if f["essential"]:
+        extra.append("精简也开")
+    if f["in_use"]:
+        extra.append("在用：" + f["in_use_text"])
+    if f["why"]:
+        extra.append(f["why"])
+    return f"{lamp} {f['id']:<16} {f['name']}（{f['state']}）" + (f"  — {'；'.join(extra)}" if extra else "")
+
+
+def cmd_feature(a):
+    r = rt()
+    act = a.action or "list"
+    try:
+        if act == "on" or act == "off":
+            if not a.target:
+                sys.exit(f"用法：evo feature {act} <功能id>")
+            f = r.set_enabled(a.target, act == "on")
+            emit("feature.changed", feature=a.target, enabled=act == "on")
+            d = next(x for x in r.dump() if x["id"] == a.target)
+            print(f"{a.target} 已{'开' if act == 'on' else '关'}：{d['state']}" + (f"（{d['why']}）" if d["why"] else ""))
+            return 0
+        if act == "set":
+            if not a.target or not a.kv:
+                sys.exit("用法：evo feature set <功能id> 键=值 [键=值…]")
+            f = r.features.get(a.target)
+            if not f:
+                raise RTMOD.FeatureError(f"没有功能 {a.target}")
+            props = ((f.m.get("settings") or {}).get("properties") or {})
+            vals = {}
+            for kv in a.kv:
+                if "=" not in kv:
+                    sys.exit(f"要写成 键=值：{kv}")
+                k, v = kv.split("=", 1)
+                if k not in props:
+                    raise RTMOD.FeatureError(f"{a.target} 没有设置 {k}（有：{', '.join(props) or '无'}）")
+                vals[k] = RTMOD.coerce(props[k], v.strip())
+            r.set_config(a.target, vals)
+            emit("feature.changed", feature=a.target, config=vals)
+            print(f"{a.target} 设置已存：" + "，".join(f"{k}={v}" for k, v in vals.items()))
+            return 0
+        if act == "preset":
+            if a.target not in RTMOD.PRESETS:
+                sys.exit("用法：evo feature preset all | essentials")
+            r.set_preset(a.target)
+            emit("feature.changed", preset=a.target)
+            print(f"预设：{a.target}")
+            return 0
+    except RTMOD.FeatureError as e:
+        print(str(e), file=sys.stderr)
+        return 2
+    doc = feature_doc()
+    if act == "dump" or a.json:
+        print(json.dumps(doc, ensure_ascii=False, indent=None if a.json else 2))
+        return 0
+    if doc["file_error"]:
+        print(f"⚠ features.yml 坏了（{doc['file_error']}）：现在按全开跑；修好或删掉它才能改开关")
+    print(f"预设：{doc['preset']}    开关文件：{doc['file']}")
+    for f in doc["features"]:
+        print(_feature_line(f))
+    return 0
+
+
+def cmd_watch(a):
+    """行分隔 JSON 事件流（App 订阅它；每行带 schema_version）。Ctrl-C 退出。"""
+    if not a.json:
+        print("（evo watch 只有 --json 一种格式：每行一个事件）", file=sys.stderr)
+    proj = CODE if HAS_PROJECT and a.project_only else None
+    limit = time.time() + a.seconds if a.seconds else None
+    try:
+        BUSMOD.watch(EVENTS_PATH, project=proj, replay=a.replay, ping=a.ping,
+                     stop=(lambda: time.time() > limit) if limit else None)
+    except (KeyboardInterrupt, BrokenPipeError):
+        pass
+    return 0
+
+
+def feature_off_stub(f, name):
+    def run(a):
+        sys.exit(f"功能「{f.m.get('name') or f.id}」（{f.id}）现在关着，{name} 用不了。打开：evo feature on {f.id}")
+    return run
+
+
 if __name__ == "__main__":
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sp = p.add_subparsers(dest="cmd", required=True)
@@ -4619,9 +4673,6 @@ if __name__ == "__main__":
     x.add_argument("--source", help=argparse.SUPPRESS)
     x = sp.add_parser("log"); x.add_argument("key"); x.add_argument("--json", action="store_true"); x.add_argument("--diff", action="store_true")
     x = sp.add_parser("goal"); x.add_argument("action", nargs="?", choices=["show", "set", "clear"]); x.add_argument("text", nargs="*")
-    x = sp.add_parser("ui", help="UI 栈预设：show | set <预设|类别=包名> | check")
-    x.add_argument("action", nargs="?", choices=["show", "set", "check"]); x.add_argument("text", nargs="*")
-    x.add_argument("--json", action="store_true"); x.add_argument("--path"); x.add_argument("--base")
     x = sp.add_parser("arch", help="后端/架构预设：show | set <预设|键=值> | check")      # 第十五轮
     x.add_argument("action", nargs="?", choices=["show", "set", "check"]); x.add_argument("text", nargs="*")
     x.add_argument("--json", action="store_true"); x.add_argument("--path"); x.add_argument("--base")
@@ -4649,13 +4700,40 @@ if __name__ == "__main__":
     x.add_argument("--json", action="store_true"); x.add_argument("--args", dest="pargs", default="")
     x.add_argument("--action", dest="paction"); x.add_argument("--payload"); x.add_argument("--project"); x.add_argument("--item")
     x.add_argument("--force", action="store_true")
+    x = sp.add_parser("feature", help="功能开关（第十八轮）：list | on <id> | off <id> | set <id> 键=值 | preset all|essentials | dump")
+    x.add_argument("action", nargs="?", choices=["list", "on", "off", "set", "preset", "dump"]); x.add_argument("target", nargs="?")
+    x.add_argument("kv", nargs="*"); x.add_argument("--json", action="store_true")
+    x = sp.add_parser("watch", help="事件流（第十八轮）：--json 每行一个事件，App 订阅它")
+    x.add_argument("--json", action="store_true"); x.add_argument("--replay", type=int, default=0, help="先吐最后 N 条")
+    x.add_argument("--ping", type=int, default=15, help="多少秒没事件吐一行 watch.ping"); x.add_argument("--seconds", type=float, default=0, help=argparse.SUPPRESS)
+    x.add_argument("--project-only", dest="project_only", action="store_true", help="只要 -p 这个项目的事件")
+    FEATURE_CMDS = {}
+    for f in sorted(rt().features.values(), key=lambda f: f.id):     # 功能包的子命令：开着用它的，关着给一个说明
+        for part in f.m.get("parts") or []:
+            if part.get("slot") != "cli" or part.get("key") in FEATURE_CMDS:
+                continue
+            nm = part["key"]
+            c = rt().contribution("cli", nm)
+            if c:
+                x = sp.add_parser(nm, help=c.get("help"))
+                c["setup"](x)
+                FEATURE_CMDS[nm] = (c["run"], c.get("no_project", False))
+            else:
+                x = sp.add_parser(nm, help=f"（功能 {f.id} 关着）"); x.add_argument("rest", nargs=argparse.REMAINDER)
+                FEATURE_CMDS[nm] = (feature_off_stub(f, nm), True)
     a = p.parse_args()
+    if a.cmd in ("feature", "watch"):
+        sys.exit({"feature": cmd_feature, "watch": cmd_watch}[a.cmd](a) or 0)
+    if a.cmd in FEATURE_CMDS and FEATURE_CMDS[a.cmd][1]:
+        sys.exit(FEATURE_CMDS[a.cmd][0](a) or 0)
     if a.cmd == "team":                                    # 第十四轮：不选项目也能看/改（全局卡片）
         cmd_team(a); sys.exit(0)
     if a.cmd == "plugin":                                  # 第十六轮：插件和项目无关
         sys.exit(cmd_plugin(a) or 0)
     if not HAS_PROJECT and a.cmd not in ("new", "import", "projects", "status", "run", "suite", "panel", "notify-test", "bot", "watchdog", "models", "limits"):
         sys.exit(f"有多个项目，请加 -p <代号>：{', '.join(list_projects()) or '（还没有项目）'}")
+    if a.cmd in FEATURE_CMDS:
+        sys.exit(FEATURE_CMDS[a.cmd][0](a) or 0)
     {"panel": cmd_panel, "new": cmd_new, "import": cmd_import, "projects": cmd_projects, "once": cmd_once, "add": cmd_add, "tick": cmd_tick, "run": cmd_run, "status": cmd_status, "approve": cmd_approve, "ship": cmd_ship, "pull": cmd_pull, "digest": cmd_digest, "retry": cmd_retry, "resume": cmd_resume, "feedback": cmd_feedback, "suite": cmd_suite, "retro": cmd_retro,
      "notify-test": cmd_notify_test, "bot": cmd_bot, "watchdog": cmd_watchdog, "models": cmd_models, "log": cmd_log,
-     "goal": cmd_goal, "ui": cmd_ui, "arch": cmd_arch, "relocate": cmd_relocate, "limits": cmd_limits}[a.cmd](a)
+     "goal": cmd_goal, "arch": cmd_arch, "relocate": cmd_relocate, "limits": cmd_limits}[a.cmd](a)

@@ -12,7 +12,7 @@
 """
 import fnmatch, json, os, re, shutil, subprocess, tempfile
 
-import evo_ui as UI
+import evo_deps as UI      # 第十八轮：共用的依赖工具在内核库（以前 import evo_ui）
 
 try:
     import tomllib
