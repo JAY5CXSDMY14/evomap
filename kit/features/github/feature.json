@@ -1,0 +1,15 @@
+{
+  "id": "github",
+  "api": "^1",
+  "version": "1.0.0",
+  "name": "GitHub 来源",
+  "sub": "从 issue 拉件、老板在 issue 下的评论当补反馈；合并 / 上线时回写 issue",
+  "essential": true,
+  "requires": ["state", "config"],
+  "provides": ["github"],
+  "parts": [
+    {"slot": "cli", "key": "pull"}
+  ],
+  "one": "1 个项目连着 GitHub",
+  "many": "{n} 个项目连着 GitHub"
+}

@@ -232,6 +232,9 @@ def test_no_undefined_names_in_kernel_and_features():
     ruff = shutil.which("ruff")
     if not ruff:
         pytest.skip("没装 ruff")
-    files = glob.glob(os.path.join(FEATURES, "*", "*.py")) + _kernel_files()
+    files = glob.glob(os.path.join(FEATURES, "*", "*.py")) + _kernel_files()[1:]
     r = subprocess.run([ruff, "check", "--no-cache", "--select", "F821", *files], capture_output=True, text=True)
+    assert r.returncode == 0, r.stdout[-3000:]
+    r = subprocess.run([ruff, "check", "--no-cache", "--select", "F821", "--stdin-filename", "evo.py"],     # 没扩展名的 evo 本体
+                       stdin=open(_kernel_files()[0], encoding="utf-8"), capture_output=True, text=True)
     assert r.returncode == 0, r.stdout[-3000:]
