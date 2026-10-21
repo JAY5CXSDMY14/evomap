@@ -28,7 +28,9 @@ extension AppState {
         }
         DemoLog.note("feature list code=\(r.code) team=\((try? FeatureList.decode(r.out))?.feature("team")?.state ?? "?")")
         if r.ok, let l = try? FeatureList.decode(r.out) {
-            features = l; featureNote = nil
+            // 第十九轮：内容没变就不重新赋值——每次赋值都让整个窗口（设置页的表单）重算一遍，CI 上一次 3–4 秒
+            if features != l { features = l }
+            if featureNote != nil { featureNote = nil }
             for f in l.features where featureForms[f.id] != nil { featureForms[f.id]?.sync(f) }
         } else if !r.ok && (r.err.contains("invalid choice") || r.err.contains("argument cmd")) {
             features = nil; featureNote = nil           // 老 evo：没有功能开关
@@ -45,8 +47,15 @@ extension AppState {
         let sel = windowSelection ?? .inbox
         let fb = reg.fallback(sel)
         if fb != sel { windowSelection = fb }
-        if !reg.teamVisible { team = nil; teamError = nil }
-        if !reg.pluginsVisible { plugins = nil; pluginNote = "功能「插件」关着（设置 → 功能里打开），第三方插件不跑。" }
+        if !reg.teamVisible {
+            if team != nil { team = nil }
+            if teamError != nil { teamError = nil }
+        }
+        if !reg.pluginsVisible {
+            let note = "功能「插件」关着（设置 → 功能里打开），第三方插件不跑。"
+            if plugins != nil { plugins = nil }
+            if pluginNote != note { pluginNote = note }
+        }
     }
 
     func setFeatureEnabled(_ id: String, _ on: Bool) {
@@ -328,7 +337,7 @@ struct FeatureRowView: View {
             let busy = state.featureBusy.contains(feature.id)
             Toggle(isOn: Binding(get: { feature.enabled }, set: { on in
                 let id = feature.id
-                DispatchQueue.main.async { AppState.shared.setFeatureEnabled(id, on) }
+                Task { @MainActor in AppState.shared.setFeatureEnabled(id, on) }   // 排到下一拍，不在按钮动作里同步改
             })) {
                 HStack(spacing: 7) {
                     Text(feature.name).font(.system(size: 13, weight: .medium)).foregroundStyle(Theme.textPrimary).lineLimit(1)

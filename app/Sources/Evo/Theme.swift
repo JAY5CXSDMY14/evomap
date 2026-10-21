@@ -31,8 +31,21 @@ enum Theme {
     static let mascotFace    = dynamic(0xFBF6EE, 0xFBF6EE)
     static let mascotInk     = dynamic(0x2A2522, 0x2A2522)
 
-    static let radius: CGFloat = 14
-    static let radiusSmall: CGFloat = 10
+    // 第十九轮：数字令牌只在 EvoCore/DesignTokens.swift 定义，这里换成 CGFloat 给 SwiftUI 用
+    static let radius = CGFloat(Tokens.Radius.card)
+    static let radiusSmall = CGFloat(Tokens.Radius.small)
+    static let radiusField = CGFloat(Tokens.Radius.field)
+
+    enum Space {
+        static let xxs = CGFloat(Tokens.Space.xxs), xs = CGFloat(Tokens.Space.xs), s = CGFloat(Tokens.Space.s)
+        static let m = CGFloat(Tokens.Space.m), l = CGFloat(Tokens.Space.l), xl = CGFloat(Tokens.Space.xl), xxl = CGFloat(Tokens.Space.xxl)
+    }
+
+    enum Size {
+        static let micro = CGFloat(Tokens.FontSize.micro), caption = CGFloat(Tokens.FontSize.caption), body = CGFloat(Tokens.FontSize.body)
+        static let bodyLarge = CGFloat(Tokens.FontSize.bodyLarge), section = CGFloat(Tokens.FontSize.section)
+        static let pane = CGFloat(Tokens.FontSize.pane), hero = CGFloat(Tokens.FontSize.hero)
+    }
 
     static func tone(_ t: LoopState.Tone) -> Color {
         switch t {
@@ -44,8 +57,8 @@ enum Theme {
     }
 
     // 字体：标题用 New York（serif），正文 SF
-    static func title(_ size: CGFloat = 17) -> Font { .system(size: size, weight: .semibold, design: .serif) }
-    static func body(_ size: CGFloat = 13) -> Font { .system(size: size) }
+    static func title(_ size: CGFloat = Size.section) -> Font { .system(size: size, weight: .semibold, design: .serif) }
+    static func body(_ size: CGFloat = Size.body) -> Font { .system(size: size) }
     static func caption(_ size: CGFloat = 11) -> Font { .system(size: size) }
 }
 
@@ -68,18 +81,26 @@ extension EnvironmentValues {
 }
 
 enum Motion {
-    /// 主弹簧：按下回弹、卡片弹入。
-    static let spring = Animation.spring(response: 0.3, dampingFraction: 0.55)
-    static let softSpring = Animation.spring(response: 0.45, dampingFraction: 0.75)
-    static let pop = Animation.spring(response: 0.35, dampingFraction: 0.5)
+    // 第十九轮：弹簧参数来自 Tokens.Spring（阻尼 ≥ 0.6：QQ 弹弹但只过冲一点点）
+    static func make(_ sp: Tokens.Spring) -> Animation { .spring(response: sp.response, dampingFraction: sp.damping) }
+    static let spring = make(.press)        // 按下回弹
+    static let pop = make(.pop)             // 卡片弹入、角标
+    static let softSpring = make(.soft)     // 页切换、展开收起
+    static let fade = Animation.easeInOut(duration: Tokens.Duration.fast)
 
-    static var reduce: Bool { NSWorkspace.shared.accessibilityDisplayShouldReduceMotion }
+    static let forceDemo = ProcessInfo.processInfo.environment["EVO_DEMO_MOTION"] == "1"
+    static var policy: MotionPolicy {
+        MotionPolicy.resolve(reduceMotion: NSWorkspace.shared.accessibilityDisplayShouldReduceMotion, forceDemo: forceDemo)
+    }
+    /// 系统开了「减弱动态效果」（CI 录屏 EVO_DEMO_MOTION=1 时照常动）。
+    static var reduced: Bool { policy != .full }
+    static var reduce: Bool { reduced }
 
     /// 尊重「减弱动态效果」：开了就只淡入淡出。
-    static func or(_ a: Animation) -> Animation { reduce ? .easeInOut(duration: 0.15) : a }
+    static func or(_ a: Animation) -> Animation { reduced ? fade : a }
 }
 
-/// 按钮 / 小胶囊：按下压到 0.92，松手弹过头到 1.04 再回 1。
+/// 按钮 / 小胶囊：按下压到 0.96，松手由弹簧带一点点过冲回到 1（不再手动弹到 1.04）。
 struct BouncyStyle: ButtonStyle {
     enum Kind { case primary, secondary, ghost, chip, danger }
     var kind: Kind = .secondary
@@ -93,32 +114,20 @@ struct BouncyStyle: ButtonStyle {
         let configuration: ButtonStyleConfiguration
         let kind: Kind
         let compact: Bool
-        @State private var overshoot = false
         @Environment(\.isEnabled) private var enabled
-        @Environment(\.accessibilityReduceMotion) private var reduceMotion
+        private var reduceMotion: Bool { Motion.reduced }
 
         var body: some View {
             configuration.label
-                .font(.system(size: compact ? 12 : 13, weight: kind == .primary ? .semibold : .medium))
+                .font(.system(size: compact ? 12 : Theme.Size.body, weight: kind == .primary ? .semibold : .medium))
                 .padding(.horizontal, compact ? 10 : 14)
                 .padding(.vertical, compact ? 5 : 7)
                 .foregroundStyle(fg)
                 .background(bgShape)
                 .contentShape(Capsule())
-                .scaleEffect(scale)
+                .scaleEffect(reduceMotion || !configuration.isPressed ? 1 : CGFloat(Tokens.pressScale))
                 .opacity(enabled ? 1 : 0.45)
                 .animation(reduceMotion ? nil : Motion.spring, value: configuration.isPressed)
-                .animation(reduceMotion ? nil : Motion.spring, value: overshoot)
-                .onChange(of: configuration.isPressed) { pressed in
-                    guard !pressed, !reduceMotion else { return }
-                    overshoot = true
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) { overshoot = false }
-                }
-        }
-
-        private var scale: CGFloat {
-            if reduceMotion { return 1 }
-            return configuration.isPressed ? 0.92 : (overshoot ? 1.04 : 1)
         }
 
         private var fg: Color {
@@ -166,7 +175,7 @@ struct CardBackground: ViewModifier {
 extension View {
     func card(highlighted: Bool = false) -> some View { modifier(CardBackground(highlighted: highlighted)) }
 
-    /// 依次弹入：index 越大越晚（每个 40ms），从下面 8pt、0.96 倍弹到位。
+    /// 依次弹入：index 越大越晚（每个 Tokens.Duration.stagger，最多 8 个），从下面 6pt、0.98 倍弹到位。
     func staggeredAppear(_ index: Int) -> some View { modifier(StaggerIn(index: index)) }
 }
 
@@ -174,17 +183,17 @@ struct StaggerIn: ViewModifier {
     let index: Int
     @State private var shown = false
     @Environment(\.evoStatic) private var isStatic
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     func body(content: Content) -> some View {
         let on = shown || isStatic
+        let policy = Motion.policy
         content
             .opacity(on ? 1 : 0)
-            .offset(y: on || reduceMotion ? 0 : 8)
-            .scaleEffect(on || reduceMotion ? 1 : 0.96, anchor: .top)
+            .offset(y: on || policy != .full ? 0 : 6)
+            .scaleEffect(on || policy != .full ? 1 : 0.98, anchor: .top)
             .onAppear {
                 guard !isStatic else { return }
-                withAnimation(reduceMotion ? .easeOut(duration: 0.15) : Motion.pop.delay(Double(min(index, 10)) * 0.04)) { shown = true }
+                withAnimation(policy == .full ? Motion.pop.delay(policy.staggerDelay(index)) : Motion.fade) { shown = true }
             }
     }
 }
@@ -212,7 +221,7 @@ struct PillToggleStyle: ToggleStyle {
 /// 圆点 + 文字的状态胶囊。
 struct StatePill: View {
     let state: LoopState
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    private var reduceMotion: Bool { Motion.reduced }   // 第十九轮：统一走 Motion.policy（CI 可强制动）
 
     var body: some View {
         let c = Theme.tone(state.tone)

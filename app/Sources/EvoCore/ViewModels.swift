@@ -270,11 +270,15 @@ public enum Fuzzy {
 
 // MARK: - 命令面板条目
 
+public enum PaletteDestination: String, Equatable, Sendable { case inbox, stale, team, settings }
+
 public struct PaletteEntry: Identifiable, Equatable, Sendable {
     public enum Action: Equatable, Sendable {
         case tick, openPanel, togglePause, harvest, refresh, settings, setup, watchdog, openWindow, toggleAppearance
         case approve(String), reject(String)      // GateCard.id
         case focusProject(String)
+        case openItem(project: String, key: String)    // 第十九轮：跳到件详情（时间线 + 为什么卡住）
+        case go(PaletteDestination)                    // 第十九轮：跳页
     }
     public var id: String
     public var title: String
@@ -284,7 +288,37 @@ public struct PaletteEntry: Identifiable, Equatable, Sendable {
 
     public var searchText: String { "\(title) \(subtitle)" }
 
-    public static func build(cards: [GateCard], rows: [ProjectRow], paused: Bool?) -> [PaletteEntry] {
+    /// 第十九轮：面板分组（没输入时按组显示小标题，像 Linear）。
+    public var section: String {
+        switch action {
+        case .approve, .reject: return "等你处理"
+        case .openItem: return "件"
+        case .focusProject: return "项目"
+        case .go: return "跳转"
+        default: return "动作"
+        }
+    }
+
+    /// 右侧显示的快捷键提示（没有就 nil）。
+    public var shortcut: String? {
+        switch action {
+        case .openWindow: return "⌘0"
+        case .refresh: return "⌘R"
+        case .settings: return "⌘,"
+        default: return nil
+        }
+    }
+
+    /// 第十九轮：面板里能直接跳到的件（卡住的排前面，然后是其余件）。
+    public struct ItemRef: Equatable, Sendable {
+        public var project: String, key: String, title: String, note: String, stuck: Bool
+        public init(project: String, key: String, title: String, note: String, stuck: Bool = false) {
+            self.project = project; self.key = key; self.title = title; self.note = note; self.stuck = stuck
+        }
+    }
+
+    public static func build(cards: [GateCard], rows: [ProjectRow], paused: Bool?,
+                             items: [ItemRef] = [], teamVisible: Bool = false) -> [PaletteEntry] {
         var out: [PaletteEntry] = [
             .init(id: "window", title: "打开 Evo 窗口", subtitle: "window ⌘0", symbol: "macwindow", action: .openWindow),
             .init(id: "tick", title: "立即 tick", subtitle: "每个项目转一轮 tick", symbol: "bolt", action: .tick),
@@ -304,6 +338,16 @@ public struct PaletteEntry: Identifiable, Equatable, Sendable {
             let sub = "\(c.project) · \(c.kindLabel)" + (c.itemID.map { " · \($0)" } ?? "")
             out.append(.init(id: "ok/\(c.id)", title: "\(c.approveChoice)：\(c.title)", subtitle: sub, symbol: "checkmark.circle", action: .approve(c.id)))
             out.append(.init(id: "no/\(c.id)", title: "\(c.rejectChoice)：\(c.title)", subtitle: sub, symbol: "arrow.uturn.backward.circle", action: .reject(c.id)))
+        }
+        out.append(.init(id: "go/inbox", title: "去「等你处理」", subtitle: "首页 home inbox ⌘1", symbol: "tray", action: .go(.inbox)))
+        out.append(.init(id: "go/stale", title: "去「卡太久」", subtitle: "卡住 stuck stale 为什么卡住", symbol: "hourglass", action: .go(.stale)))
+        if teamVisible {
+            out.append(.init(id: "go/team", title: "去「团队」", subtitle: "模型 team model", symbol: "person.3", action: .go(.team)))
+        }
+        for i in items.sorted(by: { $0.stuck && !$1.stuck }) {
+            out.append(.init(id: "i/\(i.project)/\(i.key)", title: "\(i.key) \(i.title)",
+                             subtitle: (i.stuck ? "卡住 · " : "") + "\(i.project) · \(i.note) 件 item 时间线",
+                             symbol: i.stuck ? "exclamationmark.triangle" : "doc.text.magnifyingglass", action: .openItem(project: i.project, key: i.key)))
         }
         for r in rows {
             out.append(.init(id: "p/\(r.code)", title: "\(r.code) \(r.name)", subtitle: "项目 project", symbol: "folder", action: .focusProject(r.code)))

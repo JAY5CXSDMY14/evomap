@@ -163,7 +163,33 @@ final class AppState: ObservableObject {
     }
     var speech: String { Speech.status(state: loopState, cards: allCards, rows: rows, beats: beats) }
     var palette: [PaletteEntry] {
-        PaletteEntry.build(cards: allCards, rows: rows, paused: loopRunning.map { !$0 })
+        PaletteEntry.build(cards: allCards, rows: rows, paused: loopRunning.map { !$0 }, items: paletteItems,
+                           teamVisible: registry.teamVisible)
+    }
+
+    /// 第十九轮：⌘K 里能直接跳的件（没合并 / 没上线 / 没放弃的；卡住的排前面）。
+    var paletteItems: [PaletteEntry.ItemRef] {
+        let stuck = Set(stuckEntries.map { "\($0.project)/\($0.key)" })
+        let quiet: Set<String> = ["merged", "shipped", "dropped", "deployed"]
+        return snaps.flatMap { s in
+            (s.doc?.items ?? []).filter { !quiet.contains(($0.raw ?? "").lowercased()) }.map { it in
+                PaletteEntry.ItemRef(project: s.code, key: it.key, title: it.title, note: it.state,
+                                     stuck: stuck.contains("\(s.code)/\(it.key)") || it.noLivePath || it.stalled)
+            }
+        }
+    }
+
+    /// 第十九轮：首页要说的话（三态 + 等你处理几件）。
+    var home: HomeSummary {
+        HomeSummary.derive(loaded: lastRefresh != nil, globalError: globalError, cards: allCards, rows: rows,
+                           stuck: stuckEntries.count, paused: loopRunning == false)
+    }
+
+    /// 第十九轮：件详情「为什么卡住」。
+    func diagnosis(project: String, key: String) -> ItemDiagnosis {
+        let doc = snapshot(project)?.doc
+        return ItemDiagnosis.explain(item: doc?.items.first { $0.key == key }, log: logs["\(project)/\(key)"],
+                                     stale: doc?.staleList.first { $0.key == key }, noLivePath: doc?.noLivePathList.first { $0.key == key })
     }
 
     func start() {
@@ -390,6 +416,15 @@ final class AppState: ObservableObject {
         case .focusProject(let code): windowSelection = .project(code); MainWindowController.shared.show()
         case .openWindow: MainWindowController.shared.show()
         case .toggleAppearance: toggleAppearance()
+        case .openItem(let p, let k): windowSelection = .item(project: p, key: k); MainWindowController.shared.show()
+        case .go(let d):
+            switch d {
+            case .inbox: windowSelection = .inbox
+            case .stale: windowSelection = .stale
+            case .team: windowSelection = .team
+            case .settings: windowSelection = .settings
+            }
+            MainWindowController.shared.show()
         }
     }
 

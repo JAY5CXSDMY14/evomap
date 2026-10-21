@@ -40,7 +40,10 @@ final class PaletteController {
     private func installMonitor() {
         guard monitor == nil else { return }
         monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] e in
-            guard let self, let p = self.panel, p.isKeyWindow else { return e }
+            guard let self, let p = self.panel, p.isKeyWindow else {
+                if e.keyCode == 36 || e.keyCode == 76 { DemoLog.note("⌘K 回车没进面板：面板 key=\(self?.panel?.isKeyWindow ?? false)") }
+                return e
+            }
             switch e.keyCode {
             case 125: self.model.move(1); return nil                 // ↓
             case 126: self.model.move(-1); return nil                // ↑
@@ -53,6 +56,7 @@ final class PaletteController {
 
     func runSelected() {
         let list = model.filtered(AppState.shared.palette)
+        DemoLog.note("⌘K 执行：第 \(model.selected) 项 / 共 \(list.count) 项「\(model.query)」")
         guard model.selected < list.count else { return }
         run(list[model.selected])
     }
@@ -95,7 +99,7 @@ struct PaletteView: View {
         VStack(spacing: 0) {
             HStack(spacing: 10) {
                 Image(systemName: "magnifyingglass").foregroundStyle(Theme.textSecondary)
-                ThemedField(placeholder: "搜动作、闸门、项目…", text: $model.query) {
+                ThemedField(placeholder: "搜动作、闸门、件、项目…", text: $model.query) {
                     PaletteController.shared.runSelected()
                 }
                 .font(.system(size: 15))
@@ -112,7 +116,14 @@ struct PaletteView: View {
                     if list.isEmpty {
                         Text("没有匹配的").font(Theme.body()).foregroundStyle(Theme.textSecondary).padding(24)
                     }
-                    ForEach(Array(list.prefix(isStatic ? 7 : 60).enumerated()), id: \.element.id) { i, e in
+                    let shown = Array(list.prefix(isStatic ? 7 : 60))
+                    ForEach(Array(shown.enumerated()), id: \.element.id) { i, e in
+                        // 第十九轮：没输入时按组显示小标题（动作 / 跳转 / 等你处理 / 件 / 项目），像 Linear
+                        if model.query.trimmingCharacters(in: .whitespaces).isEmpty, i == 0 || shown[i - 1].section != e.section {
+                            Text(e.section).font(.system(size: Theme.Size.micro, weight: .semibold)).foregroundStyle(Theme.textSecondary)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(.horizontal, 10).padding(.top, i == 0 ? 2 : Theme.Space.s).padding(.bottom, 2)
+                        }
                         PaletteRow(entry: e, selected: i == model.selected)
                             .onTapGesture { PaletteController.shared.run(e) }
                             .onHover { if $0 { model.selected = i } }
@@ -144,6 +155,11 @@ struct PaletteRow: View {
                 Text(entry.subtitle).font(Theme.caption()).foregroundStyle(Theme.textSecondary).lineLimit(1)
             }
             Spacer()
+            if let k = entry.shortcut {
+                Text(k).font(.system(size: 11, design: .rounded)).foregroundStyle(Theme.textSecondary)
+                    .padding(.horizontal, 5).padding(.vertical, 1)
+                    .background(RoundedRectangle(cornerRadius: CGFloat(Tokens.Radius.chip) - 1).strokeBorder(Theme.border))
+            }
             if selected { Image(systemName: "return").font(.system(size: 11)).foregroundStyle(Theme.textSecondary) }
         }
         .padding(.horizontal, 10).padding(.vertical, 7)

@@ -515,37 +515,145 @@ struct GateGridView: View {
     }
 }
 
+/// 首页（第十九轮）：只把「等老板处理」的事放最前。项目在转、卡住的件收成一行，点开才看。
+/// 三态：加载（占位卡片 + 系统转圈）、出错（错误卡片 + 重试）、空（一切顺利）。
 struct InboxPane: View {
     @ObservedObject var state: AppState
     let width: CGFloat
+    @AppStorage("homeShowProjects") private var showProjects = false
 
     var body: some View {
         let cards = state.allCards
+        let home = state.home
         VStack(alignment: .leading, spacing: 0) {
-            PaneTitle(title: "等你处理", count: cards.count, subtitle: state.speech)
-            if cards.isEmpty {
-                EmptyState().frame(maxWidth: 520).padding(.bottom, 8)
-            } else {
+            PaneTitle(title: "等你处理", count: cards.count, subtitle: home.headline)
+            switch home.phase {
+            case .loading:
+                HomeLoadingView(width: width).transition(.opacity)
+            case .error:
+                PageErrorCard(error: PageError(message: home.detail ?? "", title: "读不到要你处理的事"), busy: state.pageRetrying) {
+                    state.retryPage(.inbox)
+                }
+                .transition(.opacity)
+            case .clear:
+                VStack(alignment: .leading, spacing: Theme.Space.s) {
+                    EmptyState()
+                    if let d = home.detail {
+                        Text(d).font(Theme.caption(12)).foregroundStyle(Theme.textSecondary).frame(maxWidth: .infinity)
+                            .multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                .frame(maxWidth: 520).padding(.bottom, Theme.Space.s)
+                .uiProbe("home-empty")
+            case .attention:
+                if let d = home.detail {
+                    Label(d, systemImage: "clock").font(Theme.caption(12)).foregroundStyle(Theme.textSecondary)
+                        .padding(.top, -Theme.Space.s).padding(.bottom, Theme.Space.m)
+                }
                 GateGridView(state: state, cards: cards, width: width)
             }
             if state.showHarvest {
-                HarvestCard(state: state).frame(maxWidth: 560).padding(.top, 18)
-                    .transition(.scale(scale: 0.9, anchor: .top).combined(with: .opacity))
+                HarvestCard(state: state).frame(maxWidth: 560).padding(.top, Theme.Space.l + 2)
+                    .transition(.scale(scale: 0.96, anchor: .top).combined(with: .opacity))
             }
-            if !state.rows.isEmpty {
-                Text("项目").font(Theme.title(17)).foregroundStyle(Theme.textPrimary).padding(.top, 30).padding(.bottom, 10)
+            // 次要的事：一行一行，默认收起
+            VStack(alignment: .leading, spacing: Theme.Space.s) {
+                if let st = home.stuckLine {
+                    HomeQuietRow(symbol: "hourglass", tint: Theme.warning, text: st, trailing: "看看") {
+                        withAnimation(Motion.or(Motion.softSpring)) { state.windowSelection = .stale }
+                    }
+                    .uiProbe("home-stuck")
+                }
+                if let bg = home.backgroundLine {
+                    HomeQuietRow(symbol: "circle.dotted", tint: Theme.success, text: "其余：" + bg,
+                                 trailing: showProjects ? "收起" : "展开", chevronDown: !showProjects) {
+                        withAnimation(Motion.or(Motion.softSpring)) { showProjects.toggle() }
+                    }
+                    .uiProbe("home-projects-toggle")
+                }
+            }
+            .padding(.top, Theme.Space.xl + 4)
+            if showProjects && !state.rows.isEmpty {
                 let n = max(1, min(3, Int((width + 14) / 274)))
-                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 14, alignment: .top), count: n), alignment: .leading, spacing: 14) {
+                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: Theme.Space.m + 2, alignment: .top), count: n),
+                          alignment: .leading, spacing: Theme.Space.m + 2) {
                     ForEach(Array(state.rows.enumerated()), id: \.element.id) { i, r in
                         ProjectTile(row: r, beat: state.beat(r.code), index: i) {
                             withAnimation(Motion.or(Motion.softSpring)) { state.windowSelection = .project(r.code) }
                         }
-                        .staggeredAppear(cards.count + i)
+                        .staggeredAppear(i)
                     }
                 }
+                .padding(.top, Theme.Space.m)
+                .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
         .animation(Motion.or(Motion.softSpring), value: state.showHarvest)
+        .animation(Motion.or(Motion.softSpring), value: home.phase)
+    }
+}
+
+/// 首页的一行次要信息（卡住几件、其余项目在转）：低调、整行可点。
+struct HomeQuietRow: View {
+    let symbol: String
+    let tint: Color
+    let text: String
+    let trailing: String
+    var chevronDown = false
+    let action: () -> Void
+    @State private var hover = false
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: Theme.Space.s + 2) {
+                Image(systemName: symbol).font(.system(size: 12, weight: .semibold)).foregroundStyle(tint).frame(width: 18)
+                Text(text).font(Theme.body(Theme.Size.body)).foregroundStyle(Theme.textPrimary).lineLimit(1).truncationMode(.tail)
+                Spacer(minLength: Theme.Space.s)
+                Text(trailing).font(Theme.caption(11.5)).foregroundStyle(Theme.textSecondary)
+                Image(systemName: chevronDown ? "chevron.down" : "chevron.right").font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(Theme.textSecondary)
+            }
+            .padding(.horizontal, Theme.Space.m + 2).padding(.vertical, Theme.Space.s + 2)
+            .background(RoundedRectangle(cornerRadius: Theme.radiusSmall, style: .continuous)
+                .fill(hover ? Theme.surface : Theme.surfaceSunk.opacity(0.55)))
+            .overlay(RoundedRectangle(cornerRadius: Theme.radiusSmall, style: .continuous).strokeBorder(Theme.border.opacity(hover ? 1 : 0.6)))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(PressScale())
+        .onHover { h in withAnimation(.easeOut(duration: Tokens.Duration.instant)) { hover = h } }
+        .frame(maxWidth: 640, alignment: .leading)
+        .accessibilityLabel(text)
+    }
+}
+
+/// 首页加载中：两张占位卡（系统 redacted 占位）+ 转圈，不是一片空白。
+struct HomeLoadingView: View {
+    let width: CGFloat
+    var body: some View {
+        VStack(alignment: .leading, spacing: Theme.Space.m) {
+            HStack(spacing: Theme.Space.s) {
+                Spinner(size: 13)
+                Text("正在读每个项目的状态…").font(Theme.body()).foregroundStyle(Theme.textSecondary)
+            }
+            HStack(alignment: .top, spacing: CGFloat(GateGrid.spacing)) {
+                ForEach(0..<max(1, min(2, GateGrid.columns(width: Double(width)))), id: \.self) { _ in
+                    VStack(alignment: .leading, spacing: Theme.Space.s) {
+                        Text("土布 · 看效果").font(Theme.caption(11.5))
+                        Text("注册页主按钮改成陶土色").font(Theme.title(16))
+                        Text("施工和验收都过了，等你看一眼再上线").font(Theme.body(12.5))
+                        HStack { Capsule().frame(width: 64, height: 26); Capsule().frame(width: 64, height: 26) }
+                    }
+                    .redacted(reason: .placeholder)
+                    .foregroundStyle(Theme.textSecondary.opacity(0.5))
+                    .padding(Theme.Space.l)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .card()
+                }
+            }
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("正在读取")
+        .uiProbe("home-loading")
     }
 }
 
@@ -736,6 +844,10 @@ struct ItemPane: View {
                         .padding(.horizontal, 10).padding(.vertical, 4).background(Capsule().fill(Theme.accentSoft))
                 }
             }
+            // 第十九轮：「为什么卡住」——从状态 / 卡太久 / 没活路 / 时间线推出一句人话 + 你能做什么
+            DiagnosisCard(diagnosis: state.diagnosis(project: project, key: key))
+                .padding(.bottom, Theme.Space.l + 2)
+                .uiProbe("item-diagnosis")
             if let log {
                 if width >= 760 {
                     HStack(alignment: .top, spacing: 18) {
@@ -748,7 +860,7 @@ struct ItemPane: View {
             } else if let e = state.logErrors[k] {
                 Hint(text: "读不出时间线：\(e)", color: Theme.danger)
             } else {
-                HStack(spacing: 8) { Spinner(); Text("正在读 evo log \(key) …").font(Theme.body()).foregroundStyle(Theme.textSecondary) }
+                TimelineLoading(key: key)
             }
         }
         .task(id: k) { await state.loadLog(project: project, key: key) }
@@ -758,11 +870,17 @@ struct ItemPane: View {
         VStack(alignment: .leading, spacing: 0) {
             SectionTitle(text: "时间线", count: nil).padding(.bottom, 12)
             if log.events.isEmpty {
-                Text("还没有记录").font(Theme.body()).foregroundStyle(Theme.textSecondary)
+                VStack(spacing: Theme.Space.s) {
+                    Image(systemName: "clock.badge.questionmark").font(.system(size: 22)).foregroundStyle(Theme.textSecondary)
+                    Text("还没有记录").font(Theme.body()).foregroundStyle(Theme.textSecondary)
+                    Text("登记后第一次派工就会出现在这里").font(Theme.caption(11.5)).foregroundStyle(Theme.textSecondary)
+                }
+                .frame(maxWidth: .infinity).padding(.vertical, Theme.Space.l)
             }
             ForEach(Array(log.timeline.enumerated()), id: \.element.id) { i, e in
                 TimelineRow(event: e, time: e.date.map { Self.df.string(from: $0) } ?? String(e.at.prefix(16)),
-                            last: i == log.timeline.count - 1)
+                            last: i == log.timeline.count - 1, latest: i == 0,
+                            ago: e.date.map { HeartbeatStatus.human(max(0, Date().timeIntervalSince($0) / 60)) + "前" })
                     .staggeredAppear(i)
             }
         }
@@ -843,6 +961,8 @@ struct TimelineRow: View {
     let event: ItemLog.Event
     let time: String
     let last: Bool
+    var latest = false          // 第十九轮：最新一条加重（实心圆点、相对时间）
+    var ago: String? = nil
 
     private var color: Color {
         switch event.tone {
@@ -857,14 +977,18 @@ struct TimelineRow: View {
         HStack(alignment: .top, spacing: 12) {
             ZStack {
                 Circle().fill(Theme.surface).frame(width: 26, height: 26)
-                Circle().fill(color.opacity(0.15)).frame(width: 26, height: 26)
-                Image(systemName: event.symbol).font(.system(size: 11, weight: .semibold)).foregroundStyle(color)
+                Circle().fill(color.opacity(latest ? 1 : 0.15)).frame(width: 26, height: 26)
+                Image(systemName: event.symbol).font(.system(size: 11, weight: .semibold)).foregroundStyle(latest ? Theme.onAccent : color)
             }
             .frame(width: 26)
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 8) {
                     Text(event.label).font(.system(size: 13, weight: .semibold)).foregroundStyle(Theme.textPrimary)
                     Text(time).font(.system(size: 11, design: .monospaced)).foregroundStyle(Theme.textSecondary)
+                    if latest, let ago {
+                        Text(ago).font(Theme.caption(10.5)).foregroundStyle(color)
+                            .padding(.horizontal, 6).padding(.vertical, 1).background(Capsule().fill(color.opacity(0.12)))
+                    }
                 }
                 if let d = event.detail {
                     Text(d).font(Theme.caption(12)).foregroundStyle(Theme.textSecondary).fixedSize(horizontal: false, vertical: true)
@@ -877,6 +1001,88 @@ struct TimelineRow: View {
             if !last { Rectangle().fill(Theme.border).frame(width: 2).padding(.top, 26).padding(.leading, 12) }
         }
         .accessibilityElement(children: .combine)
+    }
+}
+
+/// 件详情顶上的「为什么卡住」卡片（第十九轮）。不卡时是一行平静的进展说明。
+struct DiagnosisCard: View {
+    let diagnosis: ItemDiagnosis
+
+    private var tint: Color {
+        switch diagnosis.tone {
+        case .calm: return Theme.success
+        case .waitingOnYou: return Theme.accent
+        case .warning: return Theme.warning
+        case .danger: return Theme.danger
+        }
+    }
+    private var symbol: String {
+        switch diagnosis.tone {
+        case .calm: return "checkmark.circle.fill"
+        case .waitingOnYou: return "hand.raised.fill"
+        case .warning: return "hourglass"
+        case .danger: return "exclamationmark.triangle.fill"
+        }
+    }
+    private var label: String {
+        diagnosis.stuck ? "为什么卡住" : (diagnosis.tone == .waitingOnYou ? "在等你" : "进展")
+    }
+
+    var body: some View {
+        HStack(alignment: .top, spacing: Theme.Space.m) {
+            Image(systemName: symbol).font(.system(size: 16, weight: .semibold)).foregroundStyle(tint)
+                .frame(width: 30, height: 30).background(Circle().fill(tint.opacity(0.14)))
+            VStack(alignment: .leading, spacing: Theme.Space.xs + 1) {
+                Text(label).font(.system(size: Theme.Size.micro, weight: .semibold)).foregroundStyle(tint)
+                Text(diagnosis.headline).font(Theme.title(Theme.Size.section - 1)).foregroundStyle(Theme.textPrimary)
+                    .fixedSize(horizontal: false, vertical: true)
+                if !diagnosis.because.isEmpty {
+                    VStack(alignment: .leading, spacing: 2) {
+                        ForEach(diagnosis.because, id: \.self) { b in
+                            Text("· " + b).font(Theme.caption(11.5)).foregroundStyle(Theme.textSecondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                }
+                if let n = diagnosis.next {
+                    Label(n, systemImage: "arrow.turn.down.right").font(Theme.body(12.5)).foregroundStyle(Theme.textPrimary)
+                        .fixedSize(horizontal: false, vertical: true).padding(.top, 2)
+                }
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(Theme.Space.l)
+        .frame(maxWidth: 760, alignment: .leading)
+        .background(RoundedRectangle(cornerRadius: Theme.radius, style: .continuous).fill(tint.opacity(diagnosis.stuck ? 0.08 : 0.05)))
+        .overlay(RoundedRectangle(cornerRadius: Theme.radius, style: .continuous).strokeBorder(tint.opacity(diagnosis.stuck ? 0.4 : 0.22), lineWidth: 1))
+        .accessibilityElement(children: .combine)
+    }
+}
+
+/// 时间线读取中：三行占位（系统 redacted）+ 一句说明。
+struct TimelineLoading: View {
+    let key: String
+    var body: some View {
+        VStack(alignment: .leading, spacing: Theme.Space.m) {
+            HStack(spacing: Theme.Space.s) {
+                Spinner()
+                Text("正在读 \(key) 的时间线…").font(Theme.body()).foregroundStyle(Theme.textSecondary)
+            }
+            ForEach(0..<3, id: \.self) { _ in
+                HStack(spacing: Theme.Space.m) {
+                    Circle().frame(width: 26, height: 26)
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("派活 · 10-21 09:30").font(.system(size: 13, weight: .semibold))
+                        Text("施工岗接了这件，开始做").font(Theme.caption(12))
+                    }
+                }
+                .redacted(reason: .placeholder)
+                .foregroundStyle(Theme.textSecondary.opacity(0.45))
+            }
+        }
+        .padding(Theme.Space.l)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .card()
     }
 }
 

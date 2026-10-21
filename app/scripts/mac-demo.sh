@@ -276,10 +276,28 @@ drive() {
   python3 scripts/demo/fake-evo.py _demo fix log | tee -a "$HOW"
   click page-error-retry || fails=$((fails+1)); sleep 2.4; shot 09l-page-error-retried
   if [ -n "$(pt page-error-card)" ]; then note "  ✗ 重试后错误卡片还在"; fails=$((fails+1)); fi
+  # 第十九轮：首页只放「等你处理」，其余收成一行（点开看项目）
+  click win-sidebar-inbox || fails=$((fails+1)); sleep 1.6; shot 19a-home-light
+  [ -n "$(pt home-projects-toggle)" ] || note "  ✗ 首页没有「其余」那一行"
+  click home-projects-toggle || fails=$((fails+1)); sleep 1.4; shot 19b-home-projects
+  click home-projects-toggle || true; sleep 0.8
+  # 第十九轮：⌘K 分组 + 直接跳到件 → 时间线 +「为什么卡住」
+  if evo_front; then
+    key kd:cmd t:k ku:cmd; sleep 1.0
+    if [ -n "$(pt palette-field)" ]; then
+      shot 19c-palette-sections
+      paste_text "EV-NOTI"; sleep 0.9; shot 19d-palette-item; key kp:return; sleep 2.6
+      waitpt item-diagnosis >/dev/null && note "  ✓ ⌘K 跳到件详情，有「为什么卡住」" || { note "  ✗ ⌘K 没跳到件详情"; fails=$((fails+1)); }
+      shot 19e-item-stuck-light
+    else note "  ✗ ⌘K 面板没出来"; fails=$((fails+1)); fi
+  fi
   click win-sidebar-project-TB || true; sleep 1.0; click win-item-0 || true; sleep 1.6
   if evo_front; then
     key kd:cmd t:k ku:cmd; sleep 1.0
-    if [ -n "$(pt palette-field)" ]; then paste_text "深色"; sleep 1.0; shot 10-palette; key kp:return; else note "  ✗ ⌘K 面板没出来"; fails=$((fails+1)); fi
+    if [ -n "$(pt palette-field)" ]; then
+      paste_text "深色"; sleep 1.0; shot 10-palette; key kp:return; sleep 0.8
+      if [ -n "$(pt palette-field)" ]; then note "  ⚠ 回车后面板还开着，再按一次 enter"; key kp:enter; sleep 0.8; fi
+    else note "  ✗ ⌘K 面板没出来"; fails=$((fails+1)); fi
   else note "  ✗ Evo 不在最前面，跳过键盘步骤"; fails=$((fails+1)); fi
   sleep 2.4; shot 11-dark-item
   # 第十九轮：深色下设置页的开关（关着的 team 开关底色要看得清）
@@ -288,11 +306,15 @@ drive() {
   click composer-field || fails=$((fails+1)); sleep 0.4
   if evo_front; then paste_text "注册页在手机上按钮太挤了"; fi; sleep 0.6
   click composer-send || fails=$((fails+1)); sleep 3.6; shot 13-composer-reply
+  if evo_front; then
+    key kd:cmd t:k ku:cmd; sleep 1.0
+    if [ -n "$(pt palette-field)" ]; then paste_text "EV-NOTI"; sleep 0.8; key kp:return; sleep 2.6; shot 19f-item-stuck-dark; fi
+  fi
   open_popover || fails=$((fails+1)); sleep 1.8; shot 14-popover-dark
   popover_open && click status-item; sleep 0.6
-  grep -E "feature|watch:|主线程|慢命令|sample" "$OUT/app.log" | tail -30 | sed 's/^/    app: /' | tee -a "$HOW"
+  grep -E "feature|watch:|主线程|慢命令|sample|⌘K" "$OUT/app.log" | tail -40 | sed 's/^/    app: /' | tee -a "$HOW"
   note "真鼠标驱动完成，失败 $fails 处；最后状态：$(geo selection) · 卡片 $(geo cards) · 深色 $(geo dark)"
-  [ $fails -le 6 ]
+  [ $fails -le 6 ]   # 失败数也写在 HOW.txt，CI 绿不等于每一步都过
 }
 
 demo_mode() {

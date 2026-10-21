@@ -192,7 +192,7 @@ struct JiggleBadge: View {
     let count: Int
     @State private var angle: Double = 0
     @State private var scale: CGFloat = 1
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    private var reduceMotion: Bool { Motion.reduced }   // 第十九轮：统一走 Motion.policy（CI 可强制动）
 
     var body: some View {
         Text("\(count)")
@@ -207,10 +207,10 @@ struct JiggleBadge: View {
 
     private func jiggle() {
         guard !reduceMotion else { return }
-        let steps: [(Double, CGFloat)] = [(-14, 1.25), (11, 1.15), (-7, 1.05), (3, 1.0), (0, 1.0)]
+        let steps: [(Double, CGFloat)] = [(-8, 1.12), (6, 1.06), (-3, 1.0), (0, 1.0)]   // 第十九轮：克制一点
         for (i, s) in steps.enumerated() {
             DispatchQueue.main.asyncAfter(deadline: .now() + Double(i) * 0.07) {
-                withAnimation(.spring(response: 0.18, dampingFraction: 0.5)) { angle = s.0; scale = s.1 }
+                withAnimation(Motion.make(Tokens.Spring(response: 0.2, damping: 0.6))) { angle = s.0; scale = s.1 }
             }
         }
     }
@@ -446,7 +446,7 @@ struct ProjectRowView: View {
 
 /// 整行按下时轻轻缩一下再弹回。
 struct PressScale: ButtonStyle {
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    private var reduceMotion: Bool { Motion.reduced }   // 第十九轮：统一走 Motion.policy（CI 可强制动）
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .scaleEffect(configuration.isPressed && !reduceMotion ? 0.97 : 1)
@@ -676,10 +676,10 @@ struct ChipLook: ViewModifier {
 }
 
 struct PressBounce: ButtonStyle {
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    private var reduceMotion: Bool { Motion.reduced }   // 第十九轮：统一走 Motion.policy（CI 可强制动）
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .scaleEffect(configuration.isPressed && !reduceMotion ? 0.88 : 1)
+            .scaleEffect(configuration.isPressed && !reduceMotion ? 0.92 : 1)
             .animation(reduceMotion ? nil : Motion.spring, value: configuration.isPressed)
     }
 }
