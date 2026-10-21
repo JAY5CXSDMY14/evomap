@@ -390,3 +390,43 @@ def test_outputs_match_schemas(loop):
     jsonschema.validate(json.loads(loop.ok("projects", "--json").stdout), ps)
     ss = json.load(open(os.path.join(KIT, "schemas", "status.schema.json")))
     jsonschema.validate(loop.status_json("AB"), ss)
+
+
+# ---------- 第十八轮两个待定项按推荐默认（docs/multi-machine.md、docs/self-maintenance.md 写明怎么改）----------
+def test_push_channels_telegram_email_off_not_protected(loop):
+    """推送渠道 Telegram / 邮件关掉不受「在用」保护（维持现状）；webhook 配了算在用（外部 bot 在等它）。"""
+    loop.write_global({"notify": {"macos": False, "email": {"mode": "fallback", "to": "boss@example.com"},
+                                  "webhook": {"url": "http://127.0.0.1:9/hook"}}})
+    env = {**loop.env, "EVO_TG_TOKEN": "t", "EVO_TG_CHAT": "1"}
+    def ev(*a):
+        return subprocess.run([sys.executable, EVO, *a], env=env, capture_output=True, text=True)
+    ids = {f["id"]: f for f in json.loads(ev("feature", "list", "--json").stdout)["features"]}
+    assert ids["notify-telegram"]["in_use"] == 0 and ids["notify-email"]["in_use"] == 0
+    assert ids["notify-webhook"]["in_use"] == 1
+    for fid in ("notify-telegram", "notify-email"):
+        r = ev("feature", "off", fid)
+        assert r.returncode == 0, r.stderr
+    r = ev("feature", "off", "notify-webhook")
+    assert r.returncode != 0 and "在用" in (r.stderr + r.stdout)
+    ids = {f["id"]: f for f in json.loads(ev("feature", "list", "--json").stdout)["features"]}
+    assert ids["notify-telegram"]["state"] == "off" and ids["notify-email"]["state"] == "off"
+    assert ids["notify-webhook"]["state"] == "active"
+
+
+def test_remote_lease_default_on_global_off(loop):
+    """远端租约默认开（全局配置没写 lease_remote）；全局 lease_remote: false 关掉；项目里写的优先。"""
+    loop.write_global({})
+    p = os.path.join(loop.root, "config.json")
+    g = json.load(open(p)); g.pop("lease_remote"); json.dump(g, open(p, "w"))       # 没写 = 默认开
+    loop.project("AB")
+    loop.tick("AB")
+    refs = loop.git(loop.remote("AB"), "for-each-ref", "--format=%(refname)", "refs/evo/")
+    assert refs.strip() == "refs/evo/owner/air"
+    g["lease_remote"] = False; json.dump(g, open(p, "w"))                             # 全局关
+    loop.project("BB")
+    loop.tick("BB")
+    assert loop.git(loop.remote("BB"), "for-each-ref", "--format=%(refname)", "refs/evo/").strip() == ""
+    c = json.load(open(loop.cfg_path("BB"))); c["lease_remote"] = True; json.dump(c, open(loop.cfg_path("BB"), "w"))   # 项目里开，优先
+    os.remove(os.path.join(loop.projects, "BB", "state", "lease.json")) if os.path.exists(os.path.join(loop.projects, "BB", "state", "lease.json")) else None
+    loop.tick("BB")
+    assert loop.git(loop.remote("BB"), "for-each-ref", "--format=%(refname)", "refs/evo/").strip() == "refs/evo/owner/air"
