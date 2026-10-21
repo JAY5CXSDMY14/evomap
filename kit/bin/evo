@@ -49,7 +49,6 @@ KIT = os.path.dirname(os.path.dirname(SELF))
 sys.path.insert(0, os.path.dirname(SELF))
 import evo_time as TM       # noqa: E402
 import evo_notify as NT     # noqa: E402
-import evo_plugin as PLUG   # noqa: E402  第十六轮：插件
 # 多项目：每个项目一个目录 ~/.evoloop/projects/（旧 ~/.tubu 自动沿用）<代号>/{config.json, state/}；命令用 -p <代号> 指定
 _old = os.path.expanduser("~/.tubu/projects")
 HOME_DIR = os.environ.get("EVO_HOME") or os.environ.get("TUBU_HOME") or (
@@ -232,7 +231,8 @@ K = _Kernel()
 BUS = BUSMOD.Bus(EVENTS_PATH, CODE if HAS_PROJECT else None)
 RT = RTMOD.Runtime(FEATURES_DIR, EVO_ROOT, K, BUS)
 NOTE.channel_list = lambda: [v for _, _, v in hook("notify.channel")]     # 推送渠道是功能包（Telegram / 邮件 / webhook）
-NOTE.hold_ok = lambda: svc("digest") is not None                          # 早报功能关着：夜里不攒，直接推
+NOTE.hold_ok = lambda: svc("digest") is not None
+NOTE.plugins_ok = lambda: svc("plugins.host") is not None                 # 第三方插件层（功能包 plugins）关着：插件渠道不收通知                          # 早报功能关着：夜里不攒，直接推
 _RT_READY = []
 
 
@@ -3372,92 +3372,6 @@ def _emit_for(code, kind, title, body):
         print(f"提醒没发出去：{e}", file=sys.stderr)
 
 
-def cmd_plugin(a):
-    """evo plugin …（第十六轮）。插件见 docs/plugins.md；输出格式见 docs/app-contract.md。"""
-    act = a.action
-    if act == "list":
-        doc = PLUG.list_doc(EVO_ROOT)
-        if a.json:
-            print(json.dumps(doc, ensure_ascii=False)); return 0
-        if not doc["plugins"]:
-            print(f"没有插件（{doc['plugins_dir']}）。装示例：evo plugin install {os.path.join(KIT, 'plugins', 'example-hello')}"); return 0
-        for p in doc["plugins"]:
-            st = "开" if p["active"] else ("关" if p["valid"] and p["compatible"] else "坏")
-            c = p["contributes"]
-            what = "、".join(f"{n} {len(c[k])}" for k, n in (("sidebar_pages", "侧栏页"), ("composer_commands", "输入框命令"),
-                                                             ("notify_channels", "通知渠道"), ("item_actions", "件按钮")) if c[k])
-            print(f"[{st}] {p['name']} {p['version'] or ''}  {p['description'] or ''}  （{what or '没有贡献点'}）")
-            for e in p["errors"]:
-                print("    ! " + e)
-            if p["valid"] and not p["compatible"]:
-                print(f"    ! evo_api「{p['evo_api']}」和这版 evo（{doc['evo_api']}）不兼容")
-        return 0
-    if act in ("enable", "disable", "install"):
-        refuse_agents("开关、安装插件")
-        if not a.target:
-            sys.exit(f"要写插件名：evo plugin {act} <名字>" if act != "install" else "要写插件文件夹：evo plugin install <目录>")
-        try:
-            if act == "install":
-                info = PLUG.install(EVO_ROOT, a.target, force=a.force)
-                print(f"已装 {info['name']} → {info['dir']}（默认关着：evo plugin enable {info['name']} 或在 App 设置里打开）")
-                for e in info["errors"]:
-                    print("  ! " + e)
-                return 0 if info["valid"] else 1
-            info = PLUG.set_enabled(EVO_ROOT, a.target, act == "enable")
-        except (LookupError, ValueError, FileExistsError) as e:
-            sys.exit(str(e))
-        if a.json:
-            print(json.dumps({"schema_version": APP_SCHEMA_VERSION, "ok": True, "plugin": PLUG.public(info)}, ensure_ascii=False)); return 0
-        print(f"{info['name']}：{'已打开' if info['enabled'] else '已关掉'}" + ("" if info["valid"] else "（但 plugin.json 不合格：" + "；".join(info["errors"][:2]) + "）"))
-        return 0
-    if act == "validate":
-        if a.target and os.path.isdir(a.target):
-            infos = [PLUG.read_plugin(os.path.abspath(a.target))]
-        elif a.target:
-            i = PLUG.find(EVO_ROOT, a.target)
-            if not i:
-                sys.exit(f"没有插件 {a.target}（也不是目录）")
-            infos = [i]
-        else:
-            infos = PLUG.discover(EVO_ROOT)
-        bad = 0
-        out = []
-        for i in infos:
-            errs = list(i["errors"])
-            if i["valid"] and not i["compatible"]:
-                errs.append(f"evo_api「{i['manifest'].get('evo_api')}」不兼容这版 evo")
-            bad += bool(errs)
-            out.append({"name": i["name"], "dir": i["dir"], "ok": not errs, "errors": errs})
-        if a.json:
-            print(json.dumps({"schema_version": APP_SCHEMA_VERSION, "ok": not bad, "plugins": out}, ensure_ascii=False))
-        else:
-            for o in out:
-                print(("✓ " if o["ok"] else "✗ ") + o["name"] + ("" if o["ok"] else "：" + "；".join(o["errors"])))
-            if not out:
-                print("没有插件")
-        return 1 if bad else 0
-    if act == "run":
-        if not (a.target and a.kind and a.cid):
-            sys.exit("用法：evo plugin run <名字> sidebar_page|composer_command|notify_channel|item_action <id> [--args 文字] [--action A --payload JSON]")
-        req = {"args": a.pargs or "", "action": a.paction, "project": a.project or (CODE if HAS_PROJECT else None), "item": a.item}
-        if a.payload:
-            try:
-                req["payload"] = json.loads(a.payload)
-            except ValueError:
-                sys.exit("--payload 要是 JSON")
-        if a.kind == "notify_channel":
-            req["event"] = NOTE.event("test", "evo 插件通知测试", "收到这条说明插件通知渠道通了。", project=req["project"] or "*")
-        r = PLUG.invoke(EVO_ROOT, a.target, a.kind, a.cid, req)
-        if a.json:
-            print(json.dumps(r, ensure_ascii=False))
-        elif r["ok"]:
-            print(json.dumps(r["card"], ensure_ascii=False, indent=1) if r["card"] else "好了")
-        else:
-            print("插件出错：" + (r["error"] or "?"), file=sys.stderr)
-        return 0 if r["ok"] else 3
-    return 2
-
-
 def cmd_relocate(a):
     """已登记的项目改用专用克隆（老板决定②）：config.json 加 clone: true，建 ~/.evoloop/repos/<代号>。
     有件正在工作区里（施工到等推送之间）就不迁：它们的分支在老目录里，等合并完再迁（--force 硬迁，这些件要重做）。"""
@@ -3496,7 +3410,9 @@ FEATURE_SCHEMA_VERSION = 1
 def feature_doc():
     r = rt()
     return {"schema_version": FEATURE_SCHEMA_VERSION, "api": RTMOD.API, "preset": r.preset, "file": r.path,
-            "file_error": r.file_error, "features": r.dump()}
+            "file_error": r.file_error, "features": r.dump(),
+            # 第三方层：~/.evoloop/plugins 的外部插件（接口不变，见 docs/plugins.md）；功能包 plugins 关着时为 null
+            "third_party": svc("plugins.host").list() if svc("plugins.host") else None}
 
 
 def _feature_line(f):
@@ -3618,12 +3534,6 @@ if __name__ == "__main__":
     x = sp.add_parser("retry"); x.add_argument("key"); sp.add_parser("resume")
     x = sp.add_parser("relocate", help="改用 evo 专用克隆 ~/.evoloop/repos/<代号>（老板的工作副本以后不碰）")
     x.add_argument("--force", action="store_true")
-    x = sp.add_parser("plugin", help="插件：list | enable <名> | disable <名> | run <名> <类型> <id> | validate [名|目录] | install <目录>")   # 第十六轮
-    x.add_argument("action", choices=["list", "enable", "disable", "run", "validate", "install"])
-    x.add_argument("target", nargs="?"); x.add_argument("kind", nargs="?"); x.add_argument("cid", nargs="?")
-    x.add_argument("--json", action="store_true"); x.add_argument("--args", dest="pargs", default="")
-    x.add_argument("--action", dest="paction"); x.add_argument("--payload"); x.add_argument("--project"); x.add_argument("--item")
-    x.add_argument("--force", action="store_true")
     x = sp.add_parser("feature", help="功能开关（第十八轮）：list | on <id> | off <id> | set <id> 键=值 | preset all|essentials | dump")
     x.add_argument("action", nargs="?", choices=["list", "on", "off", "set", "preset", "dump"]); x.add_argument("target", nargs="?")
     x.add_argument("kv", nargs="*"); x.add_argument("--json", action="store_true")
@@ -3650,8 +3560,6 @@ if __name__ == "__main__":
         sys.exit({"feature": cmd_feature, "watch": cmd_watch}[a.cmd](a) or 0)
     if a.cmd in FEATURE_CMDS and FEATURE_CMDS[a.cmd][1]:
         sys.exit(FEATURE_CMDS[a.cmd][0](a) or 0)
-    if a.cmd == "plugin":                                  # 第十六轮：插件和项目无关
-        sys.exit(cmd_plugin(a) or 0)
     if not HAS_PROJECT and a.cmd not in ("new", "import", "projects", "status", "run", "suite", "panel", "notify-test", "bot", "watchdog"):
         sys.exit(f"有多个项目，请加 -p <代号>：{', '.join(list_projects()) or '（还没有项目）'}")
     if a.cmd in FEATURE_CMDS:

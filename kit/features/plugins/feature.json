@@ -1,0 +1,16 @@
+{
+  "id": "plugins",
+  "api": "^1",
+  "version": "1.0.0",
+  "name": "第三方插件",
+  "sub": "~/.evoloop/plugins 里的外部插件（侧栏页 / 输入框命令 / 通知渠道 / 件按钮），接口见 docs/plugins.md",
+  "essential": false,
+  "requires": ["notify"],
+  "provides": ["plugins.host"],
+  "parts": [
+    {"slot": "page", "key": "plugins", "title": "插件", "icon": "puzzlepiece.extension"},
+    {"slot": "cli", "key": "plugin"}
+  ],
+  "one": "打开着 1 个第三方插件",
+  "many": "打开着 {n} 个第三方插件"
+}

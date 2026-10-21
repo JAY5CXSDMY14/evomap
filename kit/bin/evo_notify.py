@@ -103,7 +103,8 @@ class Notifier:
         self.outbox = os.path.join(root, "outbox.jsonl")
         self.held = os.path.join(root, "held.jsonl")
         self.channel_list = lambda: []        # 第十八轮：内核接上功能包的 notify.channel 槽位
-        self.hold_ok = lambda: True           # 第十八轮：早报功能（digest）关着时内核设成 False：夜里不攒，直接推
+        self.hold_ok = lambda: True
+        self.plugins_ok = lambda: True        # 第十八轮：第三方插件层（功能包 plugins）关着时内核设成 False           # 第十八轮：早报功能（digest）关着时内核设成 False：夜里不攒，直接推
 
     # -- 通道配置 --
     def channels(self):
@@ -180,7 +181,7 @@ class Notifier:
 
     def plugins(self, ev, push):
         """第十六轮：插件通知渠道。插件出什么事都不能拖垮提醒（evo_plugin.invoke 不抛异常，这里再兜一层）。"""
-        if os.environ.get("EVO_NO_PLUGINS"):
+        if os.environ.get("EVO_NO_PLUGINS") or not self.plugins_ok():
             return {}
         try:
             import evo_plugin
