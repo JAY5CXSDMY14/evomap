@@ -1,5 +1,5 @@
 {
- "_说明": "Web（React）默认 UI 栈。老板定的四条原则原样保留；source=owner 是老板点名的，source=suggested 是按同样原则补的建议，老板可在项目 ui_overrides 里换。banned 只拦「新加」，仓库原来就有的不拦、不迁移。包名支持 @scope/* 通配。",
+ "_说明": "Web（React）默认 UI 栈。老板定的四条原则原样保留；source=owner 是老板点名的，补充的六类（表单、请求、表格、提示、图表、日期）老板 2026-10-21 已确认，也标 owner；老板可在项目 ui_overrides 里换。banned 只拦「新加」，仓库原来就有的不拦、不迁移。包名支持 @scope/* 通配。",
  "name": "web-react",
  "title": "Web（React）",
  "principles": [
@@ -196,7 +196,7 @@
   },
   "forms": {
    "label": "表单与校验",
-   "source": "suggested",
+   "source": "owner",
    "choice": "react-hook-form + zod（@hookform/resolvers 接起来；shadcn Form 就是这一套）",
    "packages": [
     "react-hook-form",
@@ -221,7 +221,7 @@
   },
   "data": {
    "label": "数据请求与缓存",
-   "source": "suggested",
+   "source": "owner",
    "choice": "TanStack Query（@tanstack/react-query）",
    "packages": [
     "@tanstack/react-query",
@@ -240,7 +240,7 @@
   },
   "tables": {
    "label": "表格",
-   "source": "suggested",
+   "source": "owner",
    "choice": "TanStack Table + shadcn Table / Data Table",
    "packages": [
     "@tanstack/react-table"
@@ -260,7 +260,7 @@
   },
   "toasts": {
    "label": "轻提示",
-   "source": "suggested",
+   "source": "owner",
    "choice": "sonner（shadcn Sonner）",
    "packages": [
     "sonner"
@@ -275,7 +275,7 @@
   },
   "charts": {
    "label": "图表",
-   "source": "suggested",
+   "source": "owner",
    "choice": "Recharts（shadcn Chart 封装）",
    "packages": [
     "recharts"
@@ -300,7 +300,7 @@
   },
   "dates": {
    "label": "日期",
-   "source": "suggested",
+   "source": "owner",
    "choice": "date-fns（日期选择用 shadcn Calendar，底下是 react-day-picker）",
    "packages": [
     "date-fns",

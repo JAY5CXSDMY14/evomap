@@ -42,7 +42,7 @@ def test_preset_files_have_categories_banned_principles_and_rules():
     assert c["state"]["packages"] == ["zustand"] and {"redux", "jotai", "mobx"} <= set(c["state"]["banned"])
     assert c["layout"]["packages"] == ["react-resizable-panels"] and c["dnd"]["packages"] == ["@dnd-kit/*"]
     for n in ("forms", "data", "tables", "toasts", "charts", "dates"):
-        assert c[n]["source"] == "suggested"
+        assert c[n]["source"] == "owner"
     assert "SF Symbols" in sw["categories"]["icons"]["choice"] and "lottie-ios" in sw["categories"]["animation"]["banned"]
     readme = open(os.path.join(KIT, "presets", "ui", "README.md"), encoding="utf-8").read()
     assert all(p in readme for p in PRINCIPLES) and "TB" in readme
