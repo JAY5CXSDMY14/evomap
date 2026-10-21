@@ -246,3 +246,9 @@ def test_red_line_no_self_built_components_in_both_blocks():
     for name in ("web-react", "swiftui"):
         pre = json.load(open(os.path.join(KIT, "presets", "ui", name + ".json"), encoding="utf-8"))
         assert "不重复造轮子" in pre["principles"] and any(r.startswith("红线") and "严禁" in r for r in pre["rules"])
+
+
+def test_three_states_rule_in_both_presets():
+    for name in ("web-react", "swiftui"):
+        pre = json.load(open(os.path.join(KIT, "presets", "ui", name + ".json"), encoding="utf-8"))
+        assert any(r.startswith("三态") and "空状态" in r and "加载中" in r and "报错" in r for r in pre["rules"])

@@ -230,7 +230,7 @@ def _lines(eff):
 def builder_block(eff):
     lines = [f"UI 规范（预设 {eff['name']}；只管新写的代码，旧代码不迁移）：",
              "原则：" + "、".join(eff["principles"]) + "。"] + _lines(eff)
-    red = [r for r in eff.get("rules", []) if r.startswith("红线")]
+    red = [r for r in eff.get("rules", []) if r.startswith(("红线", "三态"))]
     lines += red
     lines.append("规矩：上面覆盖不了才加新依赖，并在交卷 changes 里写明为什么；新加禁用库或同类第二个库，接棒器直接打回。"
                  + ("界面组件先用 shadcn 已有的（npx shadcn@latest add <组件>），不手写同名组件。" if eff["components"] else
@@ -242,7 +242,8 @@ def verifier_block(eff, code):
     lines = [f"UI 规范检查（预设 {eff['name']}）：",
              f"- 依赖检查：在工作区跑 `evo -p {code} ui check`（对比 package.json / lockfile / Package.swift）。"
              "新加了禁用库或同类第二个库 → 不通过；新依赖不在规范里、交卷又没写理由 → 不通过。",
-             "- 自造组件/行为（红线）：已有依赖能正确表达的组件或交互（例如自己写 Button / Modal / Toast / 下拉 / 拖拽 / 弹簧动画）却手写了一份 → 不通过，写明该用哪个库的哪个现成实现；交卷里写清查过哪些、为什么不够的除外。"]
+             "- 自造组件/行为（红线）：已有依赖能正确表达的组件或交互（例如自己写 Button / Modal / Toast / 下拉 / 拖拽 / 弹簧动画）却手写了一份 → 不通过，写明该用哪个库的哪个现成实现；交卷里写清查过哪些、为什么不够的除外。",
+             "- 三态：会取数据或可能为空的界面，缺空状态、加载中、报错任一种样子 → 不通过；截图要三态各一张（看效果门让老板看全）。"]
     lines += _lines(eff)
     return "\n".join(lines) + "\n\n"
 

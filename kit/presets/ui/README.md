@@ -10,6 +10,8 @@
 
 第五条是红线。已有依赖能正确表达的组件和行为，严禁自行设计实现。先参考业界实现和成熟库。验收发现即不通过。
 
+另一条硬要求是三态必做。会取数据或可能为空的界面，要做空状态、加载中、报错三种样子。Web 用 shadcn Empty、Skeleton、Alert 和 sonner。SwiftUI 用 ContentUnavailableView、ProgressView 和骨架占位。验收要三态截图各一张。
+
 ## 三种模式
 
 | 项目配置 `ui_preset` | 用在哪 | 说明 |
