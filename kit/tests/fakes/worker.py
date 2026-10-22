@@ -9,13 +9,32 @@
           die（工人进程死掉：不回报，worker-show 报这次派工 exited）
   decide（决策岗）：默认 pass（不交决定 JSON）；剧本项写成对象 {"decisions": [...]} 就原样放进 ```json 块交卷
   FAKE_ORCA_NO_ACK=1 时假 Orca 不认确认，消息每轮重投（测去重）
+  第二十轮：也由假 multica 启动（有 MULTICA_ISSUE）。这时交卷 = 在 issue 上留言（multica issue comment add），
+  退出码非 0 = run failed；silent / ratelimit-hang = 退出码 99（假 multica 当它一直在跑）；ask = 留言提问并把 issue 标 blocked。
 每次出招记一行到 workers.log：角色、任务号、招式、任务说明（JSON）。
 """
 import fcntl, json, os, re, subprocess, sys
 
 D = os.environ["FAKE_ORCA_DIR"]; role = sys.argv[1]
-task, disp = os.environ["ORCA_TASK_ID"], os.environ["ORCA_DISPATCH_ID"]
-spec = open(os.environ["ORCA_SPEC_FILE"], encoding="utf-8").read()
+MX = os.environ.get("MULTICA_ISSUE")
+if MX:
+    task, disp = f"{MX}-{os.environ['MULTICA_RUN_ID'][:8]}", os.environ["MULTICA_RUN_ID"]
+    spec = open(os.environ["MULTICA_SPEC_FILE"], encoding="utf-8").read()
+else:
+    task, disp = os.environ["ORCA_TASK_ID"], os.environ["ORCA_DISPATCH_ID"]
+    spec = open(os.environ["ORCA_SPEC_FILE"], encoding="utf-8").read()
+
+
+def send(outcome, body, typ="worker_done", block=False):
+    """交卷：Orca = orchestration send；Multica = 在 issue 上留言，退出码表示 run 成没成。"""
+    if MX:
+        subprocess.run(["multica", "issue", "comment", "add", MX, "--content-stdin"], input=body, text=True, check=True,
+                       capture_output=True, env={**os.environ, **({"FAKE_MULTICA_BLOCK": "1"} if block else {})})
+        sys.exit(0 if outcome == "succeeded" else 1)
+    subprocess.run(["orca", "orchestration", "send", "--from", os.environ["ORCA_TERMINAL_HANDLE"], "--type", typ,
+                    "--subject", f"{role} {outcome}" if typ == "worker_done" else body, "--body", body, "--task-id", task,
+                    "--dispatch-id", disp, "--outcome", outcome, "--json"], check=True, capture_output=True)
+    sys.exit(0)
 with open(os.path.join(D, "plan.lock"), "w") as lk:
     fcntl.flock(lk, fcntl.LOCK_EX)
     pf = os.path.join(D, "plan.json")
@@ -31,18 +50,17 @@ outcome = "succeeded"
 RL = os.environ.get("FAKE_RL_TEXT", "Claude usage limit reached. Your limit will reset at 5pm (Asia/Shanghai).")
 if isinstance(move, dict):               # 决策岗交决定：剧本里直接写 {"decisions": [...]}
     body = "假决策岗\n```json\n" + json.dumps(move, ensure_ascii=False) + "\n```"
-    subprocess.run(["orca", "orchestration", "send", "--from", os.environ["ORCA_TERMINAL_HANDLE"], "--type", "worker_done",
-                    "--subject", f"{role} succeeded", "--body", body, "--task-id", task, "--dispatch-id", disp,
-                    "--outcome", "succeeded", "--json"], check=True, capture_output=True)
-    sys.exit(0)
+    send("succeeded", body)
 if move == "ratelimit":                  # 额度用完：打印提示，回报失败
     print("working...\n" + RL); outcome = "failed"
 elif move == "ratelimit-hang":           # 额度用完：打印提示后不回报（停在提示上）
-    print("working...\n" + RL); sys.exit(0)
+    print("working...\n" + RL); sys.exit(99 if MX else 0)
 elif move == "silent":                   # 什么都不回报（模拟卡住）
-    sys.exit(0)
+    sys.exit(99 if MX else 0)
 elif move == "die":                      # 工人进程死掉：不回报，假 Orca 的 worker-show 对这次派工报「不在了」
-    open(os.path.join(D, "dead.txt"), "a").write(disp + "\n"); sys.exit(0)
+    open(os.path.join(D, "dead.txt"), "a").write(disp + "\n"); sys.exit(1 if MX else 0)
+elif move == "ask":                      # 第二十轮：提问（Multica：留言 + issue 标 blocked；Orca：question 消息）
+    send("succeeded", "假施工提问：用哪个配色？", typ="question", block=True)
 elif role == "build" and move == "same":  # 返工时什么都不改（改动指纹不变），照常按格式交卷
     pass
 elif role == "build":
@@ -77,6 +95,9 @@ elif role == "build":
 else:
     outcome = "succeeded" if move == "pass" else "failed"
 body = f"假{role}：{move}"
+if MX and role == "verify":              # Multica 验收结论看评论里的 verdict（run 成功 ≠ 验收通过）
+    body += "\n```json\n" + json.dumps({"verdict": "pass" if move == "pass" else "fail", "reasons": [move]}) + "\n```"
+    outcome = "succeeded"
 if role == "build" and outcome == "succeeded" and move != "noreport":
     rep = {"status": {"blocked": "blocked", "unfinished": "in_progress"}.get(move, "done"), "summary": f"假施工 {task}",
            "changes": [{"path": "web/", "why": "测试"}],
@@ -84,6 +105,4 @@ if role == "build" and outcome == "succeeded" and move != "noreport":
            "unfinished": ["还差一半"] if move in ("unfinished", "blocked") else [], "risks": [],
            "manual_checks": ["在 1280px 宽度下看注册页"]}
     body += "\n```json\n" + json.dumps(rep, ensure_ascii=False) + "\n```"
-subprocess.run(["orca", "orchestration", "send", "--from", os.environ["ORCA_TERMINAL_HANDLE"], "--type", "worker_done",
-                "--subject", f"{role} {outcome}", "--body", body, "--task-id", task, "--dispatch-id", disp,
-                "--outcome", outcome, "--json"], check=True, capture_output=True)
+send(outcome, body)

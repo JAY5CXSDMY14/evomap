@@ -34,7 +34,7 @@ class Loop:
                     "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t", "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@t",
                     "EVO_TG_TOKEN": "tok", "EVO_TG_CHAT": "chat", "PYTHONDONTWRITEBYTECODE": "1",
                     # 不联网：HTTP / 邮件记到假目录；时间固定在周二中午（免打扰、时间窗、额度暂停都按它算）
-                    "EVO_FAKE_NET": self.orca_dir, "EVO_NOW": "2026-10-20T12:00:00+08:00", "EVO_HOST": "air"}
+                    "EVO_FAKE_NET": self.orca_dir, "FAKE_MULTICA_DIR": os.path.join(self.orca_dir, "multica"), "EVO_NOW": "2026-10-20T12:00:00+08:00", "EVO_HOST": "air"}
         self.write_global({})
 
     # ---------- 配置 ----------
@@ -146,6 +146,17 @@ class Loop:
     # ---------- 假 Orca / 工人 / 提醒 ----------
     def plan(self, **roles):
         json.dump(roles, open(os.path.join(self.orca_dir, "plan.json"), "w"))
+
+    def multica_project(self, code, **cfg):
+        """第二十轮：用 Multica 执行端的项目（假 multica，项目绑定 evo 实际合并的那个目录）。"""
+        repo = self.project(code, **cfg)
+        self.patch_cfg(code, executor="multica", multica={"project": code, "app_url": "http://multica.test"})
+        self.env["FAKE_MULTICA_REPO"] = self.repo(code)
+        return repo
+
+    def multica_state(self):
+        p = os.path.join(self.orca_dir, "multica", "state.json")
+        return json.load(open(p)) if os.path.exists(p) else {"issues": {}, "runs": [], "comments": [], "calls": []}
 
     def orca_state(self):
         return json.load(open(os.path.join(self.orca_dir, "state.json")))
