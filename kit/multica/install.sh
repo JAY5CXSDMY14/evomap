@@ -2,7 +2,11 @@
 # evo × Multica · 本机执行端安装（Air 先用，mini 接 TB 时同一份脚本）
 #   bash install.sh                 只检查，不改任何东西
 #   bash install.sh --apply         安装/更新：隔离 dsh（钉版本 + 自动补丁）、DSH_HOME、wrapper、启动脚本、LaunchAgent
-#   bash install.sh --apply --from-tmp   另外把旧的 ~/tmp/dsh-home-multica 里除 profiles 外的文件（登录凭据等）拷过来，不删旧的
+#   bash install.sh --apply --from-tmp   另外把旧的 ~/tmp/dsh-home-multica 里 profiles/ 以外的文件（登录凭据、缓存等）拷过来：
+#                                        新位置已有同名文件就跳过不覆盖；旧目录不删
+#   Multica 的 dsh profile 包（multica-ai/dsh-multica-runtime）还没发到 npm（multica#6936）：脚本 clone + build + npm pack 成 tarball，
+#   再用 `dsh plugin --profile multica add <tarball>` 装进 DSH_HOME（官方文档的做法），最后 `dsh --profile multica --probe` 验证：
+#     默认源 = MULTICA_DSH_RUNTIME_PATH（已 clone/构建好的目录）> ~/.evoloop/multica/src/dsh-multica-runtime > 从 GitHub clone 到后者
 #   bash install.sh --uninstall-agent    只卸 LaunchAgent（文件留着）
 # 不碰：全局 dsh / DSH 桌面端、~/.dsh、evo 状态、Multica 服务端、sudo。可以反复跑。
 # 服务端地址和登录（PAT）不在这里做：先 `multica login --token …`，本脚本只管 daemon 能起、能找到 dsh。
@@ -52,6 +56,12 @@ if [ -z "$MAGKEY" ] && [ -f "$ENVF" ]; then MAGKEY=$(sed -n 's/^MAGPIE_GATEWAY_K
 [ -n "$MAGKEY" ] && ok "MAGPIE_GATEWAY_KEY 已有（不打印）" || bad "缺 MAGPIE_GATEWAY_KEY：第一次装请 MAGPIE_GATEWAY_KEY=… bash install.sh --apply"
 curl -s -m 3 -o /dev/null -w '%{http_code}' http://127.0.0.1:3425/v1/models -H "Authorization: Bearer ${MAGKEY}" | grep -q 200 && ok "Magpie 127.0.0.1:3425 通" || warn "Magpie 127.0.0.1:3425 不通或 key 不对"
 
+RUNTIME_REPO=${MULTICA_DSH_RUNTIME_REPO:-https://github.com/multica-ai/dsh-multica-runtime}
+RTSRC=${MULTICA_DSH_RUNTIME_PATH:-$ROOT/src/dsh-multica-runtime}
+if [ -f "$RTSRC/package.json" ]; then ok "dsh-runtime 源码：$RTSRC"
+elif [ -n "${MULTICA_DSH_RUNTIME_PATH:-}" ]; then bad "MULTICA_DSH_RUNTIME_PATH=$RTSRC 里没有 package.json"
+else info "dsh-runtime 源码还没有，--apply 会 git clone $RUNTIME_REPO → $RTSRC"; command -v git >/dev/null || bad "没有 git"; fi
+
 echo "== 3. 现状"
 [ -x "$DSHPKG/node_modules/.bin/dsh" ] && ok "隔离 dsh 已装：$("$NODE" "$DSHPKG/node_modules/@deepseek-ai/dsh/lib/bin.js" --version 2>/dev/null | head -1)" || info "隔离 dsh 未装（--apply 会装）"
 launchctl print "gui/$(id -u)/$LABEL" >/dev/null 2>&1 && ok "LaunchAgent $LABEL 在跑" || info "LaunchAgent 未加载"
@@ -63,10 +73,23 @@ if [ $APPLY = 0 ]; then echo; [ $HARD = 0 ] && echo "检查完毕，可以 --app
 echo "== 4. 安装"
 mkdir -p "$DSHPKG" "$BIN" "$DSHHOME/profiles/multica" "$LOGS"
 ln -sf "$NODE" "$BIN/node"; ok "$BIN/node → $NODE（避开带空格的路径）"
-cp "$KIT/package.json" "$KIT/patch-dsh-boot.mjs" "$DSHPKG/"
-( cd "$DSHPKG" && PATH="$BIN:$PATH" "$NPM" install --no-audit --no-fund >"$LOGS/npm-install.log" 2>&1 ) \
-  && ok "npm install 完成（日志 logs/npm-install.log）" || { bad "npm install 失败，看 $LOGS/npm-install.log"; exit 1; }
-PATH="$BIN:$PATH" "$NODE" "$DSHPKG/patch-dsh-boot.mjs" "$DSHPKG/node_modules/@deepseek-ai/dsh-app-boot/lib/index.js" || exit 1
+export PATH="$BIN:$PATH"   # 之后 npm 的 #!/usr/bin/env node 也落到 Node 22
+info "npm: $NPM（运行在 $(node -v)）"
+# 4a. dsh-runtime：不在 npm 上 → 源码构建后打成 tarball（不用 file: 目录引用，免得源码目录被删就坏）
+mkdir -p "$ROOT/vendor" "$(dirname "$RTSRC")"
+if [ ! -f "$RTSRC/package.json" ]; then
+  git clone --depth 1 "$RUNTIME_REPO" "$RTSRC" >"$LOGS/runtime-build.log" 2>&1 && ok "已 clone dsh-runtime" || { bad "clone 失败，看 $LOGS/runtime-build.log"; exit 1; }
+fi
+( cd "$RTSRC" && { [ -d node_modules ] || { [ -f package-lock.json ] && "$NPM" ci --no-audit --no-fund || "$NPM" install --no-audit --no-fund; }; } \
+    && "$NPM" run build --if-present && rm -f "$ROOT"/vendor/*dsh-runtime*.tgz && "$NPM" pack --pack-destination "$ROOT/vendor" ) >>"$LOGS/runtime-build.log" 2>&1 \
+  || { bad "dsh-runtime 构建/打包失败，看 $LOGS/runtime-build.log"; exit 1; }
+RTTGZ=$(ls -t "$ROOT"/vendor/*dsh-runtime*.tgz 2>/dev/null | head -1)
+[ -n "$RTTGZ" ] && ok "dsh-runtime tarball：$RTTGZ" || { bad "没找到 npm pack 产物"; exit 1; }
+cp "$KIT/patch-dsh-boot.mjs" "$DSHPKG/"
+cp "$KIT/package.json" "$DSHPKG/package.json"
+( cd "$DSHPKG" && "$NPM" install --no-audit --no-fund >"$LOGS/npm-install.log" 2>&1 ) \
+  && ok "npm install 完成（日志 logs/npm-install.log）" || { bad "npm install 失败，看 $LOGS/npm-install.log"; tail -5 "$LOGS/npm-install.log"; exit 1; }
+"$NODE" "$DSHPKG/patch-dsh-boot.mjs" "$DSHPKG/node_modules/@deepseek-ai/dsh-app-boot/lib/index.js" || exit 1
 HMRV=$("$NODE" -p 'require(process.argv[1]).version' "$DSHPKG/node_modules/@deepseek-ai/cordis-plugin-hmr/package.json" 2>/dev/null)
 [ "$HMRV" = "1.0.17" ] && ok "cordis-plugin-hmr = 1.0.17" || { bad "cordis-plugin-hmr = ${HMRV:-?}，不是 1.0.17"; exit 1; }
 grep -q registerConfig "$DSHPKG/node_modules/@deepseek-ai/cordis-plugin-hmr/lib/index.js" && ok "registerConfig 在" || { bad "registerConfig 不在"; exit 1; }
@@ -76,6 +99,10 @@ if [ $FROMTMP = 1 ] && [ -d "$HOME/tmp/dsh-home-multica" ]; then
       [ -e "$DSHHOME/$f" ] || { mkdir -p "$DSHHOME/$(dirname "$f")"; cp -p "$f" "$DSHHOME/$f"; echo "  · 拷 $f"; }; done )
   ok "旧 DSH_HOME 文件已拷（旧目录保留）"
 fi
+# 4b. 把 profile 包装进隔离 DSH_HOME（先装包，再放用户补丁层，免得被覆盖）
+( export DSH_HOME="$DSHHOME" MAGPIE_GATEWAY_KEY="$MAGKEY"
+  node "$DSHPKG/node_modules/@deepseek-ai/dsh/lib/bin.js" plugin --profile multica add "$RTTGZ" ) >"$LOGS/profile-add.log" 2>&1 \
+  && ok "dsh profile multica 已装：$(basename "$RTTGZ")" || { bad "dsh plugin --profile multica add 失败，看 $LOGS/profile-add.log"; tail -5 "$LOGS/profile-add.log"; exit 1; }
 cp "$KIT/cordis.patch.yml" "$DSHHOME/profiles/multica/cordis.patch.yml"; ok "用户补丁层 → dsh-home/profiles/multica/cordis.patch.yml"
 
 cat > "$BIN/dsh" <<W
@@ -84,6 +111,8 @@ cat > "$BIN/dsh" <<W
 exec "$BIN/node" "$DSHPKG/node_modules/@deepseek-ai/dsh/lib/bin.js" "\$@"
 W
 chmod +x "$BIN/dsh"; "$BIN/dsh" --version >/dev/null 2>&1 && ok "wrapper $BIN/dsh 能跑" || warn "wrapper 跑 --version 没成功，看一下"
+if DSH_HOME="$DSHHOME" MAGPIE_GATEWAY_KEY="$MAGKEY" "$BIN/dsh" --profile multica --probe >"$LOGS/probe.log" 2>&1; then ok "dsh --profile multica --probe 通过（daemon 靠它注册 DSH）"
+else bad "dsh --profile multica --probe 失败，看 $LOGS/probe.log"; tail -8 "$LOGS/probe.log"; exit 1; fi
 
 umask 077
 cat > "$ENVF" <<E

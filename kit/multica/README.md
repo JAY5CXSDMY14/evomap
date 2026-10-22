@@ -14,7 +14,8 @@
 ```bash
 bash kit/multica/install.sh                          # 只检查
 MAGPIE_GATEWAY_KEY=… bash kit/multica/install.sh --apply   # 第一次；之后不用再带 key（存在 env 文件里）
-bash kit/multica/install.sh --apply --from-tmp       # Air：顺便把旧 ~/tmp/dsh-home-multica 的登录凭据拷过来（旧目录不删）
+bash kit/multica/install.sh --apply --from-tmp       # Air：顺便把旧 ~/tmp/dsh-home-multica 里 profiles/ 以外的文件拷过来；同名不覆盖，旧目录不删
+MULTICA_DSH_RUNTIME_PATH=~/某处/dsh-multica-runtime bash kit/multica/install.sh --apply   # 已有构建好的 runtime 源码就用它，省得重新 clone
 multica daemon stop   # 停掉手动起的
 launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.evoloop.multica-daemon.plist
 multica runtime list  # 应看到 claude / codex / dsh / pi 都 online
@@ -24,6 +25,7 @@ multica runtime list  # 应看到 claude / codex / dsh / pi 都 online
 | 路径 | 作用 |
 |---|---|
 | `dsh/` | 隔离的 `@deepseek-ai/dsh@0.1.0-rc.6`；`overrides` 把 `cordis-plugin-hmr` 钉在 1.0.17；postinstall 自动给 `dsh-app-boot` 打 hmr 轮询补丁 |
+| `src/dsh-multica-runtime/`、`vendor/*.tgz` | Multica 的 dsh profile 包还没上 npm（multica#6936）：脚本 clone、build、npm pack，再 `dsh plugin --profile multica add` 装进 dsh-home，最后跑 `--probe` 验证 |
 | `bin/node` | 指向 Node 22+ 的软链（避开带空格的路径） |
 | `bin/dsh` | wrapper：用 Node 22 绝对路径跑隔离 dsh（daemon 会重置 PATH） |
 | `dsh-home/profiles/multica/cordis.patch.yml` | 用户补丁层：重新打开 hmr；模型走 Magpie（分组列表在 kit 里改） |
