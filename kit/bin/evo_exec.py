@@ -313,6 +313,7 @@ MULTICA_AGENTS = {"build": "施工-DSH", "verify": "验收-Claude", "decide": "�
 RUN_ACTIVE = ("queued", "dispatched", "running", "waiting_local_directory", "pending", "claimed", "started")
 RUN_OK = ("completed", "succeeded", "success", "done", "finished")
 ROLE_NAMES = {"build": "施工", "verify": "验收", "decide": "决策"}
+REPOLL_SECONDS = 300
 
 BUILD_TAIL = """
 
@@ -425,7 +426,8 @@ class MulticaExecutor(Executor):
 
     def create(self, kind, title, spec):
         pid = self.ensure_project()
-        j = self.cli("issue", "create", "--title", title[:200], "--project", pid, "--description-stdin", stdin=spec)
+        # --allow-duplicate：evo 自己保证一件一个 issue；崩溃重来时宁可多一个，也不要被「已有同名 issue」卡死
+        j = self.cli("issue", "create", "--title", title[:200], "--project", pid, "--allow-duplicate", "--description-stdin", stdin=spec)
         iss = j.get("issue") if isinstance(j.get("issue"), dict) else j
         ident = iss.get("identifier") or iss.get("id")
         if not ident:
@@ -649,10 +651,10 @@ class MulticaExecutor(Executor):
         msgs, batch = [], []
         for d in open_d:
             x = acts.get(d["issue"])
-            if x and d.get("seen") == x.get("last_activity_at") and d.get("polled"):
-                continue             # 没动静：不细看
+            if x and d.get("seen") == x.get("last_activity_at") and d.get("polled") and time.time() - d.get("polled_at", 0) < REPOLL_SECONDS:
+                continue             # 没动静：不细看（run 失败可能不留评论、不改活动时间，所以每 5 分钟至少细看一次）
             p = self.poll(d["issue"], d.get("runs_before") or (), d.get("agent_id"), d.get("comments_before") or ())
-            d["polled"] = True; d["seen"] = (x or {}).get("last_activity_at") or p.get("last_activity")
+            d["polled"] = True; d["polled_at"] = time.time(); d["seen"] = (x or {}).get("last_activity_at") or p.get("last_activity")
             run = p.get("run") or {}
             rs = str(run.get("status") or "").lower()
             tail = "\n".join(str(v) for v in (run.get("error"), p.get("report")) if v)
