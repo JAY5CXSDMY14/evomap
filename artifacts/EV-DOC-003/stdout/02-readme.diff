@@ -1,0 +1,12 @@
+diff --git a/README.md b/README.md
+index b777e01..7eed7e0 100644
+--- a/README.md
++++ b/README.md
+@@ -156,3 +156,7 @@ Readest 在 magpie 基础上加了人工审批台、只处理自己的 PR、事
+ - magpie 的子系统文档与语义变更审查来自社区成员 Junjie Zhou（PR #889）
+ 
+ evoloop 本身也用 evoloop 维护：见本仓库根目录的 [LESSONS.md](LESSONS.md)。
++
++## Multica 执行端
++
++新项目默认用 Multica 派工：任务落成 Multica issue，派给施工 / 验收 / 决策三个 agent，进度和验收结论也都在 issue 上。evo 不搬过去，只继续管排期、闸门和上限（返工次数、派工次数、单件时长）。为什么换、怎么部署、还踩过哪些坑，见 [docs/multica.md](docs/multica.md)。

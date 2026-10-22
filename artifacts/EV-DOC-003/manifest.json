@@ -1,0 +1,56 @@
+{
+  "task_id": "EV-DOC-003",
+  "issue": "EVO-13",
+  "issue_id": "01a1632e-3a5e-70f1-8ce9-2fb6c755e3d4",
+  "model": "group/free-ds",
+  "started_at": "2026-10-22T10:35:36Z",
+  "finished_at": "2026-10-22T10:52:00Z",
+  "branch": "agent/dsh/evo-13",
+  "commit": "46f73df",
+  "files_changed": [
+    "README.md"
+  ],
+  "commands": [
+    {
+      "cmd": "git rev-parse HEAD origin/main && git ls-remote origin main",
+      "exit_code": 0,
+      "stdout": "stdout/00-baseline.txt",
+      "note": "记录本分支基线（891c55f，实际工作区 HEAD ddb1d60）与真实远端 main（52011da）的差距。本分支基线早于 docs/multica.md 的提交，所以新链接在本分支上指向的文件还不存在；已确认它在真实 main 上存在（真实克隆 HEAD = 52011da，cat-file 退出码 0）。"
+    },
+    {
+      "cmd": "python3 artifacts/EV-DOC-003/check_links.py --upstream-clone /Users/zhuyuechen/Projects/evomap",
+      "exit_code": 0,
+      "stdout": "stdout/01-links.txt",
+      "note": "README 相对链接自检：11 条相对链接里 10 条 OK，docs/multica.md 记 UPSTREAM（本分支基线里没有、远端 main 52011da 上有，合并后生效）。另核：新增小节存在、在文件末尾、含「排期 / 闸门 / 上限」与 docs/multica.md 指向。结论 PASS。"
+    },
+    {
+      "cmd": "python3 artifacts/EV-DOC-003/check_links.py --upstream-clone \"$PWD\"",
+      "exit_code": 1,
+      "stdout": "stdout/03-negative.txt",
+      "note": "反证：把本分支这个落后基线当 upstream-clone，脚本必须判 stale 并报 MISS，否则 UPSTREAM 判定就是白给。实测退出码 1、报「该克隆 HEAD ddb1d607 不等于远端 main 52011dae」，符合预期。"
+    },
+    {
+      "cmd": "cd /Users/zhuyuechen/Projects/evomap && grep -n \"新建的项目写 multica\\|默认 multica\" docs/multica-backend.md; grep -n agents; grep -n verdict; sed -n '7p'; grep -n '2 次返工、12 次派工、6 小时' docs/multica*.md; grep -n '^## ' docs/multica.md",
+      "exit_code": 0,
+      "stdout": "stdout/04-facts.txt",
+      "note": "新增小节的每条断言都在真实 main 的文档里找到出处，没有写未实现的能力：默认 multica = multica-backend.md:80；三个 agent = :49 与 :77；验收结论看评论 verdict = :89；「排队、闸门、返工上限还是 evo 管」= :7；三个上限 = multica.md:39 与 multica-backend.md:37；「为什么换 / 部署 / 踩坑」= multica.md 第 1、2、3、7 节。"
+    },
+    {
+      "cmd": "git diff -- README.md",
+      "exit_code": 0,
+      "stdout": "stdout/02-readme.diff",
+      "note": "改动原文：只在文件末尾追加 1 个二级标题 + 1 段（3 句话），共 +4 行，未改动任何既有内容。"
+    },
+    {
+      "cmd": "git show --stat --oneline HEAD && git show --name-only --format=\"\" HEAD",
+      "exit_code": 0,
+      "stdout": "stdout/05-commit.txt",
+      "note": "确认提交 46f73df 只有 README.md 一个文件（1 file changed, 4 insertions），scope 外零改动。"
+    },
+    {
+      "cmd": "evo suite -- env ... python3.12 -m pytest kit/tests -q",
+      "result": "not_run",
+      "note": "任务书明确「只改文档，不跑全量测试」，本次只动 README.md，不参与任何测试路径。"
+    }
+  ]
+}

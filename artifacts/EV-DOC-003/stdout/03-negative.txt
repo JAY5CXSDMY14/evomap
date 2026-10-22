@@ -1,0 +1,18 @@
+### 反证：拿本分支这个落后基线当 upstream-clone（HEAD 891c55f ≠ 远端 main 52011da），必须判 stale 并报 MISS
+相对链接数: 11
+  OK       docs/loop-topology.html
+  OK       docs/loop-topology.md
+  OK       kit/
+  OK       docs/kit.html
+  OK       docs/contract-review.html
+  OK       docs/autopilot-explainer.html
+  OK       docs/loop.md
+  OK       docs/adoption.md
+  OK       docs/readest-case.md
+  OK       LESSONS.md
+  MISS     docs/multica.md（该克隆 HEAD ddb1d607 不等于远端 main 52011dae，不能拿它作证）
+新增小节存在: True
+新增小节在文件末尾: True
+内容含 排期/闸门/上限 与 docs/multica.md 指向: True
+结论: FAIL
+EXIT=1

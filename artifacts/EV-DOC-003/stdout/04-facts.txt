@@ -1,0 +1,29 @@
+### 每条断言在真实 main（52011da）上的出处
+
+1) 新项目默认 multica：
+49:4. 配置：项目里写 `executor: multica|orca`（默认 multica）；还有 `multica.project`、`multica.agents.{build,verify,decide}`。
+80:- 没写 `executor` 的老项目一律按 orca 跑（不会因为升级突然换执行端）；`evo new / import` 新建的项目写 `multica`（`--executor orca` 可改；全局配置写了 `executor` 就按全局）。
+
+2) 三个 agent（build/verify/decide）：
+49:4. 配置：项目里写 `executor: multica|orca`（默认 multica）；还有 `multica.project`、`multica.agents.{build,verify,decide}`。
+77:"multica": {"project": "EV", "agents": {"build": "施工-DSH", "verify": "验收-Claude", "decide": "决策-Claude"},
+
+3) 进度与验收结论都在 issue 上：
+89:5. **验收结论看评论里的 verdict。** run 成功只说明 agent 跑完了，结论要看最后一条评论的 ```json {"verdict": "pass"|"fail"}```；没写 json 就认「验收通过 / 不通过」这类字样，什么都没写按不通过处理（会用掉一次返工）。
+
+4) evo 只排期/闸门/上限：
+**Multica 只负责「派人干活、看到干到哪」，Orca 的执行器角色由它接替。排队、闸门、返工上限、找老板、上线，这些还是 evo 管。**
+
+5) 上限 2 次返工 / 12 次派工 / 6 小时：
+docs/multica-backend.md:37:                               fail → 返工：round+1，再派施工-DSH（受 2 次决策返工 / 12 次派工 / 6 小时上限约束）
+docs/multica.md:39:- **evo = 大脑（以后瘦身）**：施工完交给验收，验收模型和施工不同。还管三道老板关（做不做 / 看效果 / 上线）和决策岗兜底。上限是 2 次返工、12 次派工、6 小时。预设和 Ponytail 规则也由 evo 注入。只通过 `multica` CLI 和 API 对接，不 fork Multica。
+
+6) 为什么换 / 部署 / 踩坑 在 docs/multica.md 的章节：
+5:## 1. 为什么换成 Multica
+14:## 2. 部署现状（mini）
+30:## 3. 已踩的坑
+36:## 4. 角色分工（目标）
+42:## 5. 实测清单（B 段，Air）
+50:## 6. 实测通过后 evo 要改的（暂不动代码）
+59:## 7. Air 实测踩过的坑（都已在 kit/multica 固化）
+75:## 8. mini 接 TB 时的步骤（预案，未执行）

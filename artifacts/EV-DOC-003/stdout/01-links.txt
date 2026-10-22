@@ -1,0 +1,17 @@
+相对链接数: 11
+  OK       docs/loop-topology.html
+  OK       docs/loop-topology.md
+  OK       kit/
+  OK       docs/kit.html
+  OK       docs/contract-review.html
+  OK       docs/autopilot-explainer.html
+  OK       docs/loop.md
+  OK       docs/adoption.md
+  OK       docs/readest-case.md
+  OK       LESSONS.md
+  UPSTREAM docs/multica.md（本分支基线里没有；在远端 main 52011dae 上存在，合并到 main 后生效）
+新增小节存在: True
+新增小节在文件末尾: True
+内容含 排期/闸门/上限 与 docs/multica.md 指向: True
+结论: PASS
+EXIT=0

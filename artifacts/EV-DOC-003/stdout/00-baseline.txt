@@ -1,0 +1,15 @@
+### 本分支基线 vs 真实远端 main（说明 docs/multica.md 为何在本分支上不存在）
+
+$ git rev-parse HEAD origin/main
+ddb1d60772e132f4328557c73d06fb00f171183c
+891c55fa0108048bda98411605ad512e6141622b
+
+$ git ls-remote origin main
+52011dae026edd0e3268a3fb9e59c5712bc0ee89	refs/heads/main
+
+### 真实远端 main 上 docs/multica.md 是否存在
+$ git -C /Users/zhuyuechen/Projects/evomap cat-file -e main:docs/multica.md
+存在（退出码 0）
+
+$ git -C /Users/zhuyuechen/Projects/evomap rev-parse HEAD
+52011dae026edd0e3268a3fb9e59c5712bc0ee89
