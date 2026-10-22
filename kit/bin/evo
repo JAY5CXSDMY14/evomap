@@ -871,7 +871,8 @@ def notify(kind, title, body="", item=None, gate=None, **data):
 
 
 # ---------- 第十七轮 L-06 / L-07：所有外部命令有超时；git 网络操作和 gh 带项目代理 ----------
-TIMEOUT_DEFAULTS = {"test": 30, "git_net": 3, "git": 1, "gh": 1, "push": 5, "deploy": 20, "tick": 45, "orca": 2}   # 分钟
+TIMEOUT_DEFAULTS = {"test": 30, "git_net": 3, "git": 1, "gh": 1, "push": 5, "deploy": 20, "tick": 45, "orca": 2,
+                    "multica": 1}   # 分钟；第二十轮：每条 multica CLI 调用的超时
 
 
 def tmo(kind):
@@ -1948,29 +1949,41 @@ def _find_key(o, key):
     return None
 
 
-def orca_up(s):
-    """Air 试跑 10-21：Orca 退出后 evo 一直显示「施工中」、什么都不说。每轮先看一眼 orca status：
-    不通就记一次、推一次（orca_down），这一轮不派工、不判卡住；恢复后记一行，下一轮的「工人不在了」走 C7 自动重启一次。"""
+def exec_up(s):
+    """Air 试跑 10-21：Orca 退出后 evo 一直显示「施工中」、什么都不说。每轮先看一眼执行端（第二十轮起叫 exec_up，原 orca_up）：
+    不通就记一次、推一次（Orca：orca_down；Multica：exec_down），这一轮不派工、不判卡住；恢复后记一行，接着跑。
+    Orca：下一轮的「工人不在了」走 C7 自动重启一次。Multica：daemon 回来后 run 会自己接着跑，evo 照常轮询。"""
     up, why = EX.health()
+    if "orca_down" in s:                                 # 第二十轮：老状态里的 orca_down 改名 exec_down
+        s["exec_down"] = s.pop("orca_down")
     if up:
-        if s.get("orca_down"):
-            mins = int((time.time() - s["orca_down"]) / 60)
-            log(s, f"Orca 恢复（停了约 {mins} 分钟）：工人进程不在的件会自动重启一次")
-            s.pop("orca_down", None); save(s)
+        if s.get("exec_down"):
+            mins = int((time.time() - s["exec_down"]) / 60)
+            log(s, f"Orca 恢复（停了约 {mins} 分钟）：工人进程不在的件会自动重启一次" if EX.name == "orca"
+                else f"{EX.label} 执行端恢复（停了约 {mins} 分钟），接着跑")
+            s.pop("exec_down", None); save(s)
         return True
-    if not s.get("orca_down"):
-        s["orca_down"] = time.time()
-        log(s, f"Orca 不通（{why}）：先不派工、不判卡住。打开 Orca 后自动接着跑")
-        notify("orca_down", "Orca 没开", f"{why}。打开 Orca（open -a Orca）后自动接着跑；正在施工的件会在原工作区重启一次。")
+    if not s.get("exec_down"):
+        s["exec_down"] = time.time()
+        if EX.name == "orca":
+            log(s, f"Orca 不通（{why}）：先不派工、不判卡住。打开 Orca 后自动接着跑")
+            notify("orca_down", "Orca 没开", f"{why}。打开 Orca（open -a Orca）后自动接着跑；正在施工的件会在原工作区重启一次。")
+        else:
+            log(s, f"{EX.label} 执行端掉线（{why}）：先不派工、不判卡住。恢复后自动接着跑")
+            notify("exec_down", f"{EX.label} 执行端掉线", f"{why}。看看 multica daemon status / multica auth status；"
+                   "恢复后自动接着跑，已经派出去的 issue 不会重派。")
         save(s)
     return False
+
+
+orca_up = exec_up          # 旧名（功能包 / 老脚本可能还在叫）
 
 
 # ---------- 接棒一轮 ----------
 def cmd_tick(a=None):
     lease_check(loop=True)
     s = load(); guard_git(s)
-    if not orca_up(s):
+    if not exec_up(s):
         return
     c = coord(s); T = tasks(s)
     by_task = {}
@@ -3435,8 +3448,11 @@ def cmd_status(a):
         print(f"■ 暂停：{s['_ro']['paused']}（处理好后 evo -p {CODE} resume）")
     if s["_ro"]["tick_running"]:
         print(f"■ 正在接棒一轮（已 {s['_ro']['tick_running'].get('minutes') or 0} 分钟），下面是上次存盘时的状态")
-    if s.get("orca_down"):
-        print(f"■ Orca 没开（从 {TM.local(s['orca_down']).strftime('%H:%M')} 起）：先不派工。打开 Orca 后自动接着跑")
+    down = s.get("exec_down") or s.get("orca_down")
+    if down and EX.name == "orca":
+        print(f"■ Orca 没开（从 {TM.local(down).strftime('%H:%M')} 起）：先不派工。打开 Orca 后自动接着跑")
+    elif down:
+        print(f"■ {EX.label} 执行端掉线（从 {TM.local(down).strftime('%H:%M')} 起）：先不派工，恢复后自动接着跑")
     print("■ 等你点头" + ("（Orca 闸门这次没读到）" if stale else ""))
     for g in pend + confirm_gates_doc(s):
         print(f"  {g['id']}  {g.get('question')}")
@@ -3497,7 +3513,7 @@ def status_doc(s, pend):
     doc = {
         "schema_version": STATUS_SCHEMA_VERSION, "project": CODE, "name": CFG.get("name", CODE), "generated_at": TM.iso(),
         "last_tick": read_heartbeats().get(CODE),
-        "orca_down_since": TM.iso(s["orca_down"]) if s.get("orca_down") else None,
+        "orca_down_since": TM.iso(s.get("exec_down") or s["orca_down"]) if (s.get("exec_down") or s.get("orca_down")) else None,   # 合约字段名不变：执行端掉线的时间（第二十轮起 Multica 也算）
         "count": cnt,
         "stuck": sum(1 for it in s["items"].values() if it.get("stalled") or it["state"] in ("escalated", "asking")),
         "goal": CFG.get("goal") or None,

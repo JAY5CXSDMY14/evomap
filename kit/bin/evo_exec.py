@@ -306,6 +306,462 @@ class OrcaExecutor(Executor):
         return "ok" if '"ok":true' in (r.stdout or "").replace(" ", "") else "fail"
 
 
+# ======================================================================================
+# Multica：一件 = 一个 issue；派工 = issue assign（不再往已有终端 --inject，10-22 决策岗超时的根因就此绕开）
+# ======================================================================================
+MULTICA_AGENTS = {"build": "施工-DSH", "verify": "验收-Claude", "decide": "决策-Claude"}
+RUN_ACTIVE = ("queued", "dispatched", "running", "waiting_local_directory", "pending", "claimed", "started")
+RUN_OK = ("completed", "succeeded", "success", "done", "finished")
+ROLE_NAMES = {"build": "施工", "verify": "验收", "decide": "决策"}
+
+BUILD_TAIL = """
+
+---
+【交卷方式（Multica）】做完把改动提交到本 issue 的工作分支（不要推送、不要合并到 main）。
+最后一条评论里放施工报告：一个 ```json 块，格式同 templates/report.schema.json
+（status / summary / changes / tests / unfinished / risks / manual_checks）。
+这里不用 orca orchestration send；evo 读你最后的评论。卡住要人回答时把 issue 状态改成 blocked，并在评论里写清问题。"""
+VERIFY_TAIL = """
+
+---
+【交卷方式（Multica）】你是验收，只读不改。最后一条评论里放 ```json {{"verdict": "pass" 或 "fail", "reasons": ["…"]}}。
+施工分支：{branch}；evo 的验收副本（只读）：{wt}"""
+DECIDE_TAIL = """
+
+---
+【交卷方式（Multica）】只做技术决定，不改任何文件。决定写在最后一条评论的 ```json 块里（{"decisions": [...]}，格式见上面岗位规则）。"""
+
+
+def _arr(j, *keys):
+    """multica 的 list 输出有时是顶层数组，有时包一层 {issues: [...]}。"""
+    if isinstance(j, list):
+        return j
+    if isinstance(j, dict):
+        for k in keys:
+            if isinstance(j.get(k), list):
+                return j[k]
+    return []
+
+
+class MulticaExecutor(Executor):
+    name = "multica"
+    label = "Multica"
+    worker_noun = "Multica issue"
+
+    def __init__(self, k, mcfg, code=None):
+        super().__init__(k)
+        mcfg = mcfg or {}
+        self.cmd = shlex.split(str(mcfg.get("cmd") or "multica"))
+        self.project = str(mcfg.get("project") or code or "")
+        self.agents = {**MULTICA_AGENTS, **{r: a for r, a in (mcfg.get("agents") or {}).items() if a}}
+        self.app_url = str(mcfg.get("app_url") or "").rstrip("/")
+        self.issue_url = str(mcfg.get("issue_url") or "{app_url}/issues/{identifier}")
+
+    # ---------- CLI ----------
+    def cli(self, *args, ok=True, stdin=None, out=True):
+        """跑一条 multica 命令，要 JSON。超时 limits.timeouts.multica（分钟）。ok=False 时失败返回 None。"""
+        k = self.k
+        cmd = self.cmd + [str(a) for a in args] + (["--output", "json"] if out else [])
+        r = k.run_cmd(cmd, timeout=k.tmo("multica"), extra_env=False, input=stdin)
+        what = " ".join(str(a) for a in args[:2])
+        if r.returncode:
+            why = {124: "超时", 127: "跑不起来（没装 multica？）", 2: "连不上服务端", 3: "登录失效（multica login --token）",
+                   4: "找不到"}.get(r.returncode, f"退出码 {r.returncode}")
+            if ok:
+                raise ExecError(f"multica {what} {why}：{(r.stderr or r.stdout).strip()[-200:]}")
+            return None
+        try:
+            return json.loads(r.stdout) if (r.stdout or "").strip() else {}
+        except ValueError:
+            if ok:
+                raise ExecError(f"multica {what} 输出无法解析: {r.stdout[:200]}")
+            return None
+
+    # ---------- evo 自己的账本（任务 / 闸门 / 派工），和 Orca 自己的状态一样不进 state.json ----------
+    def _lp(self):
+        return os.path.join(self.k.STATE_DIR, "exec-multica.json")
+
+    def _load(self):
+        try:
+            return json.load(open(self._lp(), encoding="utf-8"))
+        except (OSError, ValueError, TypeError):
+            return {"n": 0, "tasks": {}, "gates": {}, "dispatches": {}, "issues": {}, "agent_ids": {}, "project_id": None}
+
+    def _save(self, L):
+        os.makedirs(os.path.dirname(self._lp()), exist_ok=True)
+        tmp = self._lp() + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(L, f, ensure_ascii=False, indent=1)
+        os.replace(tmp, self._lp())
+
+    def _nid(self, L, p):
+        L["n"] = L.get("n", 0) + 1
+        return f"{p}_{L['n']}"
+
+    # ---------- 七个动作 ----------
+    def ensure_project(self, s=None):
+        L = self._load()
+        if L.get("project_id"):
+            return L["project_id"]
+        if not self.project:
+            raise ExecError("没配 multica.project：项目配置里写 \"multica\": {\"project\": \"<Multica 里的项目名>\"}")
+        for p in _arr(self.cli("project", "list"), "projects", "items"):
+            if self.project in (p.get("id"), p.get("title"), p.get("name")):
+                L["project_id"] = p.get("id"); self._save(L)
+                return L["project_id"]
+        raise ExecError(f"Multica 里没有项目「{self.project}」：先在 Multica 建好并绑定本地目录（--type local_directory），"
+                        f"或改项目配置 multica.project")
+
+    def agent_id(self, role, L=None, refresh=False):
+        L = L or self._load()
+        name = self.agents.get(role)
+        if name in L.get("agent_ids", {}) and not refresh:
+            return L["agent_ids"][name]
+        j = self.cli("agent", "list", ok=False)
+        ids = {a.get("name"): a.get("id") for a in _arr(j, "agents", "items") if isinstance(a, dict)}
+        if ids:
+            L["agent_ids"] = ids; self._save(L)
+        return ids.get(name)
+
+    def create(self, kind, title, spec):
+        pid = self.ensure_project()
+        j = self.cli("issue", "create", "--title", title[:200], "--project", pid, "--description-stdin", stdin=spec)
+        iss = j.get("issue") if isinstance(j.get("issue"), dict) else j
+        ident = iss.get("identifier") or iss.get("id")
+        if not ident:
+            raise ExecError(f"multica issue create 没返回 issue 号：{json.dumps(j, ensure_ascii=False)[:200]}")
+        return ident
+
+    def assign(self, task, role, start=True):
+        self.cli("issue", "assign", task, "--to", self.agents[role], *([] if start else ["--no-start"]))
+
+    def comment(self, task, text):
+        self.cli("issue", "comment", "add", task, "--content-stdin", stdin=text)
+
+    def close(self, task, ok=True):
+        if task:
+            self.cli("issue", "status", task, "done" if ok else "cancelled", "--no-start", ok=False)
+
+    def runs(self, task):
+        return [r for r in _arr(self.cli("issue", "runs", task, ok=False), "runs", "items") if isinstance(r, dict)]
+
+    def comments(self, task):
+        return [c for c in _arr(self.cli("issue", "comment", "list", task, "--full", ok=False), "comments", "items") if isinstance(c, dict)]
+
+    def poll(self, task, since_runs=(), agent_id=None, since_comments=()):
+        """→ {state, report, branch, last_activity, run, work_dir}。只看 since_runs 之后、这个 agent 的 run。"""
+        iss = self.cli("issue", "get", task, ok=False) or {}
+        runs = [r for r in self.runs(task) if r.get("id") not in since_runs and (not agent_id or r.get("agent_id") in (None, agent_id))]
+        runs.sort(key=lambda r: str(r.get("created_at") or ""))
+        run = runs[-1] if runs else None
+        out = {"state": iss.get("status"), "assignee": iss.get("assignee_id"), "last_activity": iss.get("last_activity_at"),
+               "run": run, "branch": (run or {}).get("branch_name"), "work_dir": (run or {}).get("work_dir"), "report": None}
+        if run and str(run.get("status") or "").lower() not in RUN_ACTIVE:
+            cs = self.comments(task)
+            mine = [c for c in cs if c.get("source_task_id") == run.get("id")]
+            if not mine:
+                mine = [c for c in cs if c.get("id") not in since_comments and c.get("author_type") == "agent"
+                        and (not agent_id or c.get("author_id") == agent_id)]
+            out["report"] = "\n\n".join(str(c.get("content") or "") for c in mine)
+        return out
+
+    def health(self):
+        k = self.k
+        r = k.run_cmd(self.cmd + ["daemon", "status", "--output", "json"], timeout=k.tmo("multica"), extra_env=False)
+        if r.returncode == 127:
+            return False, "没装 multica 命令"
+        if r.returncode == 124:
+            return False, "multica daemon status 超时"
+        try:
+            j = json.loads(r.stdout or "{}")
+        except ValueError:
+            j = {}
+        st = str(_find_key(j, "status") or _find_key(j, "state") or "").lower()
+        running = _find_key(j, "running")
+        if r.returncode or running is False or st in ("stopped", "not_running", "offline", "dead", "exited"):
+            return False, "multica daemon 没在运行"
+        a = k.run_cmd(self.cmd + ["agent", "list", "--output", "json"], timeout=k.tmo("multica"), extra_env=False)
+        if a.returncode:
+            return False, {2: "Multica 服务端连不上", 3: "Multica 登录失效（multica login --token）", 124: "multica agent list 超时"}.get(
+                a.returncode, f"multica agent list 失败（{a.returncode}）")
+        return True, ""
+
+    # ---------- 编排原语：任务 / 闸门在 evo 自己的账本里，语义同 Orca ----------
+    def compat(self, *args, ok=True):
+        sub = args[1] if len(args) > 1 and args[0] == "orchestration" else None
+        o, i = {}, 2
+        while i < len(args):
+            if str(args[i]).startswith("--") and i + 1 < len(args) and not str(args[i + 1]).startswith("--"):
+                o[args[i][2:]] = args[i + 1]; i += 2
+            else:
+                i += 1
+        c = o.get("from") or o.get("terminal") or "multica"
+        if sub == "task-create":
+            tid = self.task_create(c, o["task-title"], o.get("spec", ""), json.loads(o.get("deps") or "[]"))
+            return {"task": {"id": tid}}, {"ok": True}
+        if sub == "task-update":
+            self.task_update(c, o["id"], o["status"], o.get("result"))
+            return {}, {"ok": True}
+        if sub == "task-list":
+            return {"tasks": list(self.task_list(c).values())}, {"ok": True}
+        if sub == "gate-create":
+            gid = self.gate_create(c, o["task"], o["question"], json.loads(o.get("options") or "[]"))
+            return {"gate": {"id": gid}}, {"ok": True}
+        if sub == "gate-list":
+            return {"gates": self.gate_list(c) or []}, {"ok": True}
+        if sub == "gate-resolve":
+            okr, err = self.gate_resolve(c, o["id"], o["resolution"])
+            if ok and not okr:
+                raise ExecError(f"闸门 gate-resolve 失败: {err}")
+            return {}, {"ok": okr, "error": err}
+        raise ExecError(f"Multica 后端不支持 orca {' '.join(map(str, args[:2]))}")
+
+    def coord(self, s):
+        self.ensure_project(s)
+        s["coord"] = f"multica:{self.project}"
+        return s["coord"]
+
+    def _status(self, L, t):
+        if t["status"] in ("dispatched", "completed", "failed"):
+            return t["status"]
+        if any(g["task"] == t["id"] and g["status"] == "pending" for g in L["gates"].values()):
+            return "blocked"
+        return "ready" if all(L["tasks"].get(d, {}).get("status") == "completed" for d in t["deps"]) else "pending"
+
+    def task_list(self, c):
+        L = self._load()
+        return {t["id"]: {"id": t["id"], "title": t["title"], "status": self._status(L, t), "deps": json.dumps(t["deps"])}
+                for t in L["tasks"].values()}
+
+    def task_create(self, c, title, spec, deps=None):
+        L = self._load()
+        tid = self._nid(L, "mt")
+        L["tasks"][tid] = {"id": tid, "title": title, "spec": spec, "deps": list(deps or []), "status": "pending"}
+        self._save(L)
+        return tid
+
+    def task_update(self, c, tid, status, result=None, ok=False):
+        L = self._load()
+        t = L["tasks"].get(tid)
+        if not t:
+            if ok:
+                raise ExecError(f"没有任务 {tid}")
+            return
+        t["status"] = status
+        if result is not None:
+            t["result"] = result
+        self._save(L)
+        if status == "failed" and t.get("role") == "decide" and t.get("issue"):
+            self.close(t["issue"], ok=False)            # 决策岗超时：这一批的 issue 作废，下一批另开
+
+    def gate_create(self, c, task, question, options):
+        L = self._load()
+        gid = self._nid(L, "mg")
+        L["gates"][gid] = {"id": gid, "task": task, "question": question, "options": list(options), "status": "pending", "resolution": None}
+        self._save(L)
+        return gid
+
+    def gate_list(self, c):
+        return list(self._load()["gates"].values())
+
+    def gate_resolve(self, c, gid, resolution):
+        L = self._load()
+        g = L["gates"].get(gid)
+        if not g or g["status"] != "pending":
+            return False, {"code": "gate_not_pending"}
+        g["status"] = "resolved"; g["resolution"] = resolution
+        self._save(L)
+        return True, None
+
+    def worktree_create(self, repo, name):
+        return None              # Multica 自己开工作区；evo 的验收 / 合并副本在交卷时从施工分支取（on_delivery）
+
+    def worktree_rm(self, path):
+        k = self.k
+        own = os.path.join(k.STATE_DIR, "worktrees")
+        if path and os.path.abspath(path).startswith(os.path.abspath(own) + os.sep):
+            k.run_cmd(["git", "-C", k.CFG["repo"], "worktree", "remove", "--force", path], timeout=k.tmo("git"))
+
+    def terminal_alive(self, h):
+        return True, None
+
+    def terminal_close(self, h):
+        return None              # issue 留着：返工 / 验收还派到同一个 issue 上；合并或不做时由 close() 收尾
+
+    def terminal_read(self, h):
+        return self._load().get("issues", {}).get(h, {}).get("tail", "")
+
+    def launch(self, c, path, title, rc, model, tid, role=None, key=None, it=None):
+        """派工 = issue assign。施工第一次建 issue；返工 / 验收在同一个 issue 上追加评论再 assign；决策批次每批一个新 issue。"""
+        L = self._load()
+        role = role or ("verify" if title.endswith("-verify") else "decide" if title.endswith("-decide") else "build")
+        t = L["tasks"].get(tid) or {"spec": ""}
+        spec = t.get("spec", "")
+        ex = (it or {}).get("exec") or {}
+        issue = ex.get("issue") if role != "decide" and ex.get("backend") == "multica" else None
+        aid = self.agent_id(role, L)
+        if not issue:
+            ttl = (t.get("title") or title) if role == "decide" else f"{key} {(it or {}).get('title', '')}".strip()
+            issue = self.create(role, ttl, spec + (DECIDE_TAIL if role == "decide" else BUILD_TAIL if role == "build" else ""))
+            before_runs, before_comments = [], []
+            if role == "verify":       # 少见：验收时还没有 issue（老状态迁过来）
+                self.comment(issue, VERIFY_TAIL.format(branch=ex.get("branch") or "?", wt=(it or {}).get("worktree") or "?"))
+            self.assign(issue, role)
+        else:
+            before_runs = [r.get("id") for r in self.runs(issue)]
+            body = spec + (VERIFY_TAIL.format(branch=ex.get("branch") or "?", wt=(it or {}).get("worktree") or "?")
+                           if role == "verify" else BUILD_TAIL)
+            self.assign(issue, role, start=False)       # 先换人（不起 run），再留言：留言本身会叫醒被指派的 agent
+            self.comment(issue, f"【evo · {ROLE_NAMES.get(role, role)}：{title}】\n\n" + body)
+            before_comments = [x.get("id") for x in self.comments(issue)]
+            if not [r for r in self.runs(issue) if r.get("id") not in before_runs]:
+                self.cli("issue", "rerun", issue, ok=False)   # 留言没叫醒（工作区设置不同）：显式重跑一次
+        did = self._nid(L, "md")
+        L = {**self._load(), "n": L["n"]}
+        L["dispatches"][did] = {"id": did, "task": tid, "issue": issue, "role": role, "agent": self.agents.get(role), "agent_id": aid,
+                                "at": time.time(), "runs_before": before_runs, "comments_before": before_comments, "done": False}
+        if tid in L["tasks"]:
+            L["tasks"][tid].update(status="dispatched", issue=issue, role=role)
+        self._save(L)
+        if it is not None:
+            it["exec"] = {**ex, "backend": "multica", "issue": issue, "agent": self.agents.get(role)}
+        print(f"派给 Multica：{issue} → {self.agents.get(role)}（{title}）")
+        return issue, did
+
+    def inbox(self, c, s=None):
+        """收回报：每个没交卷的派工看一眼它的 issue。先用一次 issue list（只取几个字段）筛出有动静的，再细看 run 和评论。"""
+        try:
+            pid = self.ensure_project()
+        except SystemExit:
+            pid = None
+        L = self._load()
+        open_d = [d for d in L["dispatches"].values() if not d.get("done")]
+        if not open_d:
+            return [], None, {}
+        acts = {}
+        try:
+            j = None if not pid else self.cli("issue", "list", "--project", pid, "--limit", "100",
+                         "--fields", "id,identifier,status,assignee_id,last_activity_at", ok=False)
+            for x in _arr(j, "issues", "items"):
+                acts[x.get("identifier")] = x; acts[x.get("id")] = x
+        except SystemExit:
+            pass
+        msgs, batch = [], []
+        for d in open_d:
+            x = acts.get(d["issue"])
+            if x and d.get("seen") == x.get("last_activity_at") and d.get("polled"):
+                continue             # 没动静：不细看
+            p = self.poll(d["issue"], d.get("runs_before") or (), d.get("agent_id"), d.get("comments_before") or ())
+            d["polled"] = True; d["seen"] = (x or {}).get("last_activity_at") or p.get("last_activity")
+            run = p.get("run") or {}
+            rs = str(run.get("status") or "").lower()
+            tail = "\n".join(str(v) for v in (run.get("error"), p.get("report")) if v)
+            L.setdefault("issues", {})[d["issue"]] = {"tail": tail[-4000:], "state": p.get("state")}
+            gone = p.get("state") == "cancelled" or (p.get("assignee") and d.get("agent_id") and p["assignee"] != d["agent_id"])
+            d["gone"] = bool(gone and not run)
+            if p.get("state") == "blocked" and d["role"] != "decide":
+                typ, outcome = "question", None
+            elif not run or rs in RUN_ACTIVE:
+                continue
+            else:
+                typ, outcome = "worker_done", "succeeded" if rs in RUN_OK else "failed"
+            body = p.get("report") or (run.get("error") or "")
+            if d["role"] == "verify" and typ == "worker_done" and outcome == "succeeded":
+                outcome = "succeeded" if verdict(body) else "failed"
+            d["outcome"] = outcome
+            msgs.append({"id": f"mx:{d['id']}", "type": typ, "task_id": d["task"], "subject": f"{d['role']} {outcome}" if outcome else None,
+                         "body": body, "payload": {"outcome": outcome, "taskId": d["task"]},
+                         "exec": {"issue": d["issue"], "branch": p.get("branch"), "work_dir": p.get("work_dir"), "run": run.get("id")}})
+            batch.append(d["id"])
+        if batch:
+            L["pending_ack"] = sorted(set(L.get("pending_ack") or []) | set(batch))
+        self._save(L)
+        return msgs, ("mx-ack" if batch else None), {"messages": msgs}
+
+    def inbox_ack(self, c, did):
+        """evo 处理完这批回报：派工标交卷，任务标完成 / 失败（同 Orca 的 worker_done 语义），决策批次的 issue 收尾。"""
+        L = self._load()
+        for x in L.pop("pending_ack", None) or []:
+            d = L["dispatches"].get(x)
+            if not d or d.get("done"):
+                continue
+            d["done"] = True
+            t = L["tasks"].get(d["task"])
+            if t and t["status"] == "dispatched" and d.get("outcome"):      # 提问（blocked）不改任务状态，同 Orca 的 question
+                t["status"] = "completed" if d["outcome"] == "succeeded" else "failed"
+            if d["role"] == "decide":
+                self.close(d["issue"], ok=True)
+        self._save(L)
+
+    def worker_gone(self, did):
+        return bool(self._load()["dispatches"].get(did, {}).get("gone"))
+
+    def repo_add(self, path, timeout):
+        return "skip"
+
+    def on_delivery(self, s, k, it, role, m):
+        """施工交卷：把施工分支取进 evo 自己的克隆（分支 evo/<件号>，工作区 state/worktrees/<件号>），验收和合并都在这份上做。"""
+        ex = m.get("exec") or {}
+        e = it.setdefault("exec", {"backend": "multica", "issue": None, "agent": None, "branch": None})
+        e.update({x: ex[x] for x in ("issue", "branch") if ex.get(x)})
+        if role != "build" or m.get("type") != "worker_done" or (m.get("payload") or {}).get("outcome") != "succeeded":
+            return
+        K = self.k; repo = K.CFG["repo"]; wd, br = ex.get("work_dir"), ex.get("branch")
+        if wd and os.path.isdir(wd):
+            dirty = K.run_cmd(["git", "-C", wd, "status", "--porcelain", "--untracked-files=no"], timeout=K.tmo("git")).stdout.strip()
+            if dirty:                  # 和 Orca 时代一样：说交付了但还有没提交的改动 → 当施工失败，按返工走
+                m["payload"]["outcome"] = "failed"
+                m["body"] = (m.get("body") or "") + "\n施工说交付了，但工作区还有没提交的改动：" + dirty[:120]
+                return
+        mine = f"evo/{k.lower()}"
+        src = None                     # 先取进一个不是分支的引用（分支 evo/<件号> 可能正签出在 evo 的验收副本里，git 不让直接写）
+        if wd and br and os.path.isdir(wd):
+            ref = f"refs/evo/fetch/{k.lower()}"
+            if K.run_cmd(["git", "-C", repo, "fetch", "-q", wd, f"+{br}:{ref}"], timeout=K.tmo("git_net")).returncode == 0:
+                src = ref
+        if not src and br and K.run_cmd(["git", "-C", repo, "rev-parse", "--verify", "-q", br], timeout=K.tmo("git")).returncode == 0:
+            src = br                   # 工作目录不在了，但分支就在 evo 的克隆里（项目绑定的就是这份克隆）
+        if not src:
+            m["payload"]["outcome"] = "failed"
+            m["body"] = (m.get("body") or "") + f"\n找不到施工分支（{br or '没报分支'}，工作目录 {wd or '?'}）：evo 取不到改动"
+            return
+        wt = os.path.join(K.STATE_DIR, "worktrees", k.lower())
+        if os.path.isdir(wt):
+            r = K.run_cmd(["git", "-C", wt, "checkout", "-q", "-f", "-B", mine, src], timeout=K.tmo("git"))
+        else:
+            os.makedirs(os.path.dirname(wt), exist_ok=True)
+            K.run_cmd(["git", "-C", repo, "branch", "-f", mine, src], timeout=K.tmo("git"))
+            r = K.run_cmd(["git", "-C", repo, "worktree", "add", "-q", wt, mine], timeout=K.tmo("git"))
+        if r.returncode:
+            m["payload"]["outcome"] = "failed"
+            m["body"] = (m.get("body") or "") + f"\nevo 开验收副本失败：{r.stderr.strip()[-200:]}"
+            return
+        it["worktree"] = wt
+
+    def link(self, h):
+        if not (h and self.app_url):
+            return None
+        return self.issue_url.format(app_url=self.app_url, identifier=h, project=self.project)
+
+
+def verdict(body):
+    """验收结论：```json {"verdict": "pass"|"fail"}``` 优先；没有就认「验收通过 / 不通过」字样；都没有算不通过。"""
+    for raw in reversed(re.findall(r"```(?:json)?\s*(\{.*?\})\s*```", body or "", re.S)):
+        try:
+            j = json.loads(raw)
+        except ValueError:
+            continue
+        v = str(j.get("verdict") or j.get("result") or j.get("outcome") or "").lower()
+        if v in ("pass", "passed", "ok", "succeeded", "通过"):
+            return True
+        if v in ("fail", "failed", "reject", "不通过", "打回"):
+            return False
+    t = body or ""
+    if re.search(r"验收不通过|不通过|打回|\bFAIL", t):
+        return False
+    return bool(re.search(r"验收通过|\bPASS", t))
+
+
 def _find_key(o, key):
     if isinstance(o, dict):
         if key in o:
@@ -322,6 +778,14 @@ def _find_key(o, key):
     return None
 
 
+def backend_of(cfg):
+    """项目用哪个执行端：配置 executor（multica | orca）；没写 = orca（老项目保持原样，新项目 evo new / import 时写 multica）。"""
+    v = str((cfg or {}).get("executor") or "orca").strip().lower()
+    return v if v in ("orca", "multica") else "orca"
+
+
 def make(k, cfg):
     """按项目配置选执行端。"""
+    if backend_of(cfg) == "multica":
+        return MulticaExecutor(k, cfg.get("multica") or {}, cfg.get("code"))
     return OrcaExecutor(k, shlex.split(cfg.get("orca", "orca")))

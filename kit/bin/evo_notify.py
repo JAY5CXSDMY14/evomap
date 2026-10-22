@@ -35,6 +35,8 @@ KIND_NAMES = {"gate_waiting": "等你点头", "stalled": "卡住", "state_corrup
               "rate_limited": "额度暂停", "usage_abnormal": "用量异常", "deploy_failed": "上线失败"}
 KIND_NAMES.update({"orca_down": "Orca 没开"})
 PUSH_KINDS.add("orca_down")
+KIND_NAMES.update({"exec_down": "执行端掉线"})       # 第二十轮：Multica daemon / 服务端不通
+PUSH_KINDS.add("exec_down")
 KIND_NAMES.update({"model_blocked": "岗位停了", "magpie_down": "magpie 不通", "fallback_on": "切到备用"})     # 第十四轮
 # 第十七轮：一轮超时、主线本身红、拉 issue 连续失败（含 gh 登录失效）、决策岗连续卡住
 PUSH_KINDS |= {"tick_timeout", "main_red", "intake_down", "decider_stuck"}
