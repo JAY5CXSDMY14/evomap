@@ -149,7 +149,7 @@ def main():
             iss["last_activity_at"] = iss["created_at"]
             s["issues"][iid] = iss
             print(json.dumps(iss, ensure_ascii=False)); return
-        iss = find(s, pos[0]) if sub != "list" else None
+        iss = find(s, o["issue"] if sub == "cancel-task" else pos[0]) if sub != "list" else None
         if sub == "get":
             print(json.dumps(iss, ensure_ascii=False)); return
         if sub == "list":
@@ -162,6 +162,10 @@ def main():
             iss["assignee_id"] = a["id"]; iss["assignee_type"] = "agent"; iss["last_activity_at"] = tick(s)
             if "no-start" not in flags:
                 run_after = start_run(s, iss)
+        elif sub == "cancel-task":
+            for r in s["runs"]:
+                if r["id"] == pos[0] and r["status"] == "running":
+                    r["status"] = "cancelled"; r["completed_at"] = tick(s)
         elif sub == "rerun":
             run_after = start_run(s, iss)
         elif sub == "status":

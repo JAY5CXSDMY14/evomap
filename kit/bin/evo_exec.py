@@ -632,7 +632,12 @@ class MulticaExecutor(Executor):
                 self.comment(issue, VERIFY_TAIL.format(branch=ex.get("branch") or "?", wt=(it or {}).get("worktree") or "?"))
             self.assign(issue, role)
         else:
-            before_runs = [r.get("id") for r in self.runs(issue)]
+            old_runs = self.runs(issue)
+            for r in old_runs:      # 10-22 Air：返工时旧 run 还在跑，新 run 只能排在它后面，旧 run 交的卷也没人收。先停掉旧的
+                if str(r.get("status") or "").lower() in RUN_ACTIVE and r.get("id"):
+                    self.cli("issue", "cancel-task", r["id"], "--issue", issue, ok=False)
+                    print(f"停掉 {issue} 上还在跑的旧 run {str(r['id'])[:8]}（换人 / 返工前）")
+            before_runs = [r.get("id") for r in old_runs]
             body = spec + (VERIFY_TAIL.format(branch=ex.get("branch") or "?", wt=(it or {}).get("worktree") or "?")
                            if role == "verify" else BUILD_TAIL)
             self.assign(issue, role, start=False)       # 先换人（不起 run），再留言：留言本身会叫醒被指派的 agent
@@ -731,7 +736,10 @@ class MulticaExecutor(Executor):
         sig = json.dumps([run.get("usage"), run.get("attempt"), run.get("status"), (x or {}).get("last_activity_at"),
                           _newest_mtime(run.get("work_dir"))], sort_keys=True, default=str)
         if d.get("hb_sig") != sig:
-            d["hb_sig"] = sig; d["alive_at"] = time.time()
+            d["hb_sig"] = sig
+        # 10-22 Air 第二次：dsh 用 job_output 干等 28 分钟的 pytest，期间指纹一点不变，又被判卡住。
+        # Multica 的 run 只要还是活跃状态就算活着（agent 真死了 daemon 会把 run 标 failed）；兜圈子交给 run_max_minutes。
+        d["alive_at"] = time.time()
 
     def repo_add(self, path, timeout):
         return "skip"

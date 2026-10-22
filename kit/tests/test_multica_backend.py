@@ -221,29 +221,57 @@ def test_owner_drop_before_switch_is_not_reseeded(loop):
     assert it["exec"]["legacy"]["from"] == "orca"
 
 
-def test_long_run_with_activity_is_not_stalled_and_run_cap(loop):
-    """10-22 Air：dsh 跑 19 分钟、97 次工具调用，evo 误判「15 分钟没有任何回报」。run 还在动就不算卡住；跑超上限才算。"""
+def test_active_run_is_never_idle_stalled_only_run_cap(loop):
+    """10-22 Air：dsh 用 job_output 干等 28 分钟 pytest，期间什么都不变，被判「15 分钟没有任何回报」两次。
+    Multica run 还活跃就算活着；只有跑超 run_max_minutes 才算卡住。"""
     import time
-    loop.write_global({"limits": {"builders_total": 2, "stall_minutes": 0.03, "run_max_minutes": 999}})
+    loop.write_global({"limits": {"builders_total": 2, "stall_minutes": 0.01, "run_max_minutes": 999}})
     loop.env["EVO_MULTICA_REPOLL"] = "0"
     loop.multica_project("MB")
     loop.plan(build=["silent"])
     loop.add("MB")
     loop.tick("MB")
-    wd = [r for r in loop.multica_state()["runs"] if r["status"] == "running"][0]["work_dir"]
-    for i in range(2):
-        time.sleep(2.2)
-        open(os.path.join(wd, f"progress-{i}.txt"), "w").write(str(i))     # 工人还在改文件
+    for _ in range(2):
+        time.sleep(1.2)
         loop.tick("MB")
         assert not loop.item("MB").get("stalled"), loop.state("MB")["log"][-3:]
-    time.sleep(2.2)
-    loop.tick("MB")                                                          # 这回真没动静了
-    assert loop.item("MB").get("stalled")
-    open(os.path.join(wd, "progress-x.txt"), "w").write("x")
-    loop.tick("MB")
-    assert not loop.item("MB").get("stalled")                                # 又动了：取消卡住
-    assert any("又有动静了" in l for l in loop.state("MB")["log"])
     loop.write_global({"limits": {"builders_total": 2, "stall_minutes": 999, "run_max_minutes": 0.01}})
+    time.sleep(1)
     loop.tick("MB")
     assert loop.item("MB").get("stalled") is True
     assert any("还没交卷" in l for l in loop.state("MB")["log"])
+
+
+def test_decider_retry_on_live_worker_keeps_waiting(loop):
+    """决策岗对「卡住」说 retry：工人还在跑就清标记接着等，不重派（以前会返工，旧 run 交的卷没人收）。"""
+    import time
+    loop.write_global({"limits": {"builders_total": 2, "stall_minutes": 999, "run_max_minutes": 0.01, "decide_every_minutes": 0,
+                                  "no_live_path_minutes": 0}})
+    loop.env["EVO_MULTICA_REPOLL"] = "0"
+    loop.multica_project("MB")
+    loop.plan(build=["silent"], decide=[{"decisions": [{"item": K, "action": "retry", "note": "接着等"}]}])
+    loop.add("MB")
+    loop.tick("MB"); time.sleep(1)
+    loop.tick("MB")
+    assert loop.item("MB").get("stalled") is True
+    loop.write_global({"limits": {"builders_total": 2, "stall_minutes": 999, "run_max_minutes": 5, "decide_every_minutes": 0,
+                                  "no_live_path_minutes": 0}})
+    loop.run_until("MB", lambda st: any("接着等工人" in l for l in st["log"]), n=6)
+    it = loop.item("MB")
+    assert it["state"] == "building" and not it.get("stalled") and not it.get("no_live")
+    assert len(runs(loop, "build")) == 1                                       # 没重派
+
+
+def test_rework_cancels_old_active_run_first(loop):
+    """返工派到同一个 issue 前先 cancel-task 掉还在跑的旧 run，新 run 不用排队。"""
+    import time
+    loop.write_global({"limits": {"builders_total": 2, "stall_minutes": 999, "run_max_minutes": 0.01, "decide_every_minutes": 0,
+                                  "no_live_path_minutes": 0}})
+    loop.env["EVO_MULTICA_REPOLL"] = "0"
+    loop.multica_project("MB")
+    loop.plan(build=["silent", "ok"], decide=[{"decisions": [{"item": K, "action": "rework", "note": "换个做法"}]}])
+    loop.add("MB")
+    loop.tick("MB"); time.sleep(1)
+    loop.run_until("MB", lambda st: len([r for r in loop.multica_state()["runs"] if r["agent_id"] == "ag-build"]) >= 2, n=6)
+    b = runs(loop, "build")
+    assert b[0]["status"] == "cancelled" and any("cancel-task" in c for c in calls(loop))

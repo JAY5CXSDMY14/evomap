@@ -2375,7 +2375,7 @@ def check_stalls(s):
         gone = EX.worker_gone(d["id"])
         alive = EX.alive_at(d["id"])                       # 第二十轮补：Multica run 还在动（usage / 工作区改动）就不算没回报
         idle = (now - max(it.get("last_seen", 0), d["since"], alive)) / 60
-        ran = (now - d["since"]) / 60
+        ran = (now - d.get("cap_from", d["since"])) / 60   # 决策岗说「接着等」后从那一刻重新算上限
         if it.get("stalled") == "idle" and idle <= LIM["stall_minutes"]:
             it.pop("stalled", None); log(s, f"{k} 又有动静了，取消「疑似卡住」")
             s["decide_inbox"] = [x for x in s.get("decide_inbox", []) if not (x.get("todo") and x.get("item") == k
@@ -2525,6 +2525,12 @@ def decide_retry(s, k, it, note, d=None):
     it.pop("stalled", None)
     if it["state"] == "escalated" and it.get("resume"):
         it["state"] = it.pop("resume"); log(s, f"{k} 决策岗：从断点继续（{it['state']}）")
+    elif it["state"] in ("building", "verifying") and (it.get("no_live") or {}).get("reason") in (None, "stalled"):
+        it.pop("no_live", None); it.pop("no_live_since", None)   # 10-22 Air：工人其实还在干，「重试」= 清标记接着等，不重派
+        dd = (it.get("dispatch") or {}).get("build" if it["state"] == "building" else "verify")
+        if dd:
+            dd["cap_from"] = time.time()
+        log(s, f"{k} 决策岗：清掉卡住标记，接着等工人（{it['state']}）")
     elif it["state"] in ("escalated", "asking") or it.get("no_live"):
         decide_rework(s, k, it, note or "重试", d)        # 没有活路的件「继续」推不动：带说明重开施工
     else:
