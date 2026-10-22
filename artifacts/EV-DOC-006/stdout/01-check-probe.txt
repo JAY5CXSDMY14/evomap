@@ -1,35 +1,43 @@
-== 1) 正例：仓库里的 notes/r20-rework.md
-path   : /Users/zhuyuechen/multica_workspaces/evo-e396a795b356/evo-17-c34541096694/worktree/notes/r20-rework.md
-bytes  : 13
-hex    : e8bf94e5b7a5e68ea2e992880a
-lines  : ['返工探针']
-expect : 1 行，内容正好是「返工探针」
-PASS 文件有一行，内容正好是「返工探针」
+=== 1) 正例：python3 artifacts/EV-DOC-006/check_probe.py
+path   : /Users/zhuyuechen/multica_workspaces/evo-e396a795b356/evo-17-8a00daa45d2d/worktree/notes/r20-rework.md
+bytes  : 23
+hex    : e8bf94e5b7a5e68ea2e992880ae5b7b2e8bf94e5b7a50a
+lines  : ['返工探针', '已返工']
+expect : 第一行「返工探针」，末行「已返工」
+PASS 第一行是「返工探针」，末行是「已返工」
 exit=0
-
-== 2) 反证 a：内容是「别的」
+=== 2) 反证 a：wrong.md（内容不对）
 path   : artifacts/EV-DOC-006/tmp/wrong.md
 bytes  : 7
 hex    : e588abe79a840a
 lines  : ['别的']
-expect : 1 行，内容正好是「返工探针」
-FAIL 这一行不是「返工探针」，而是 '别的'
+expect : 第一行「返工探针」，末行「已返工」
+FAIL 只有 1 行，末行缺少「已返工」
+FAIL 第 0 行应是「返工探针」，实际是 '别的'
+FAIL 第 -1 行应是「已返工」，实际是 '别的'
 exit=1
-
-== 3) 反证 b：行尾多一个空格
+=== 3) 反证 b：only-first.md（缺末行『已返工』）
+path   : artifacts/EV-DOC-006/tmp/only-first.md
+bytes  : 13
+hex    : e8bf94e5b7a5e68ea2e992880a
+lines  : ['返工探针']
+expect : 第一行「返工探针」，末行「已返工」
+FAIL 只有 1 行，末行缺少「已返工」
+FAIL 第 -1 行应是「已返工」，实际是 '返工探针'
+exit=1
+=== 4) 反证 c：trailing-space.md（行尾多空格）
 path   : artifacts/EV-DOC-006/tmp/trailing-space.md
-bytes  : 14
-hex    : e8bf94e5b7a5e68ea2e99288200a
-lines  : ['返工探针 ']
-expect : 1 行，内容正好是「返工探针」
-FAIL 行首/行尾多了空白: '返工探针 '
+bytes  : 24
+hex    : e8bf94e5b7a5e68ea2e99288200ae5b7b2e8bf94e5b7a50a
+lines  : ['返工探针 ', '已返工']
+expect : 第一行「返工探针」，末行「已返工」
+FAIL 第 0 行行首/行尾多了空白: '返工探针 '
 exit=1
-
-== 4) 反证 c：两行（第一行对，第二行「已返工」）
-path   : artifacts/EV-DOC-006/tmp/two-lines.md
-bytes  : 23
-hex    : e8bf94e5b7a5e68ea2e992880ae5b7b2e8bf94e5b7a50a
-lines  : ['返工探针', '已返工']
-expect : 1 行，内容正好是「返工探针」
-FAIL 行数不是 1，而是 2
+=== 5) 反证 d：blank-line.md（中间空行）
+path   : artifacts/EV-DOC-006/tmp/blank-line.md
+bytes  : 24
+hex    : e8bf94e5b7a5e68ea2e992880a0ae5b7b2e8bf94e5b7a50a
+lines  : ['返工探针', '', '已返工']
+expect : 第一行「返工探针」，末行「已返工」
+FAIL 行数不是 2，而是 3（中间不允许多余行）
 exit=1

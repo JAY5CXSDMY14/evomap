@@ -1,29 +1,31 @@
 # EV-DOC-006 证据：跑过的命令原文（按顺序）
 # 任务：新建 notes/r20-rework.md，写一行『返工探针』。
+# 本轮为返工（第 2 次施工）：按验收原因在文件末尾加一行『已返工』，并把交卷 tests 改成 command + result。
 # 只改文档（notes/），按规则 12 不跑全量测试。
 
-# 0) 先确认本 issue 还没有任何评论（第一次验收一律 fail，返工后要加「已返工」）
+# 0) 读本 issue 的评论，确认验收已交过一次 verdict（本轮判据：已交过 fail 才按内容判）
 multica issue comment list 01a1647b-727b-7d64-b31f-1b9d6189be2e --roots-only --summary --compact --output json
-# -> []
+multica issue comment list 01a1647b-727b-7d64-b31f-1b9d6189be2e --thread 01a16482-74c8-7edd-a6ab-0a845b98fce6 --tail 30 --compact --output json
+# -> 触发评论带「返工原因：交卷格式不对（tests 每项要有 command 和 result）」，即上一版已被判 fail。
 
-# 1) 新建文件：一行「返工探针」，带行尾换行
-printf '返工探针\n' > notes/r20-rework.md
-xxd notes/r20-rework.md
-wc -c < notes/r20-rework.md
+# 1) 返工改动：末尾加一行「已返工」
+printf '返工探针\n已返工\n' > notes/r20-rework.md
+od -c notes/r20-rework.md
 wc -l < notes/r20-rework.md
 
-# 2) 自检：文件必须存在、恰好一行、内容正好是「返工探针」
-python3 artifacts/EV-DOC-006/check_probe.py
-# 反证：自检脚本对错内容必须判 fail，否则 PASS 就是白给
+# 2) 自检：第一行「返工探针」、末行「已返工」；反证证明 PASS 不是白给
 mkdir -p artifacts/EV-DOC-006/tmp
 printf '别的\n' > artifacts/EV-DOC-006/tmp/wrong.md
-printf '返工探针 \n' > artifacts/EV-DOC-006/tmp/trailing-space.md
-printf '返工探针\n已返工\n' > artifacts/EV-DOC-006/tmp/two-lines.md
+printf '返工探针\n' > artifacts/EV-DOC-006/tmp/only-first.md
+printf '返工探针 \n已返工\n' > artifacts/EV-DOC-006/tmp/trailing-space.md
+printf '返工探针\n\n已返工\n' > artifacts/EV-DOC-006/tmp/blank-line.md
+python3 artifacts/EV-DOC-006/check_probe.py
 python3 artifacts/EV-DOC-006/check_probe.py artifacts/EV-DOC-006/tmp/wrong.md
+python3 artifacts/EV-DOC-006/check_probe.py artifacts/EV-DOC-006/tmp/only-first.md
 python3 artifacts/EV-DOC-006/check_probe.py artifacts/EV-DOC-006/tmp/trailing-space.md
-python3 artifacts/EV-DOC-006/check_probe.py artifacts/EV-DOC-006/tmp/two-lines.md
+python3 artifacts/EV-DOC-006/check_probe.py artifacts/EV-DOC-006/tmp/blank-line.md
 rm -rf artifacts/EV-DOC-006/tmp
 
-# 3) 确认改动范围：只新增 notes/r20-rework.md（scope 外零改动）
+# 3) 确认改动范围：只改 notes/r20-rework.md（scope 外零改动）
 git status --short
 git show --stat --oneline HEAD

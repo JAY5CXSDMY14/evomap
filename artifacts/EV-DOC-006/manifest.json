@@ -4,9 +4,9 @@
   "issue_id": "01a1647b-727b-7d64-b31f-1b9d6189be2e",
   "model": "group/free-ds",
   "started_at": "2026-10-22T16:40:00Z",
-  "finished_at": "2026-10-22T16:41:05Z",
+  "finished_at": "2026-10-22T16:52:00Z",
   "branch": "agent/dsh/evo-17",
-  "commit": "0339fba",
+  "commit": "f6049de",
   "files_changed": [
     "notes/r20-rework.md"
   ],
@@ -15,48 +15,64 @@
       "cmd": "multica issue comment list 01a1647b-727b-7d64-b31f-1b9d6189be2e --roots-only --summary --compact --output json",
       "exit_code": 0,
       "stdout": null,
-      "note": "返回 []，本 issue 此前零评论，说明这次是第一次施工、验收也还没交过 verdict。这一步没有单独留 stdout 文件，结果见 commands.txt 第 0 段。"
+      "note": "两个根线程：上一轮 worker_done + 本轮触发评论（带返工原因）。本轮据此确认验收已交过一次 verdict。"
     },
     {
-      "cmd": "printf '返工探针\\n' > notes/r20-rework.md && xxd notes/r20-rework.md && wc -c < notes/r20-rework.md && wc -l < notes/r20-rework.md",
+      "cmd": "multica issue comment list 01a1647b-727b-7d64-b31f-1b9d6189be2e --thread 01a16482-74c8-7edd-a6ab-0a845b98fce6 --tail 30 --compact --output json",
       "exit_code": 0,
       "stdout": null,
-      "note": "按任务书写一行「返工探针」：13 字节 = e8bf94e5b7a5e68ea2e992880a，1 行，无 BOM。结果见 commands.txt 第 1 段。"
+      "note": "读触发线程全文，拿到返工原因：tests 每项要有 command 和 result。"
+    },
+    {
+      "cmd": "printf '返工探针\\n已返工\\n' > notes/r20-rework.md && od -c notes/r20-rework.md && wc -l < notes/r20-rework.md",
+      "exit_code": 0,
+      "stdout": null,
+      "note": "返工改动：两行，23 字节 = e8bf94e5b7a5e68ea2e992880a + 0a + e5b7b2e8bf94e5b7a50a。od 输出见 commands.txt 第 1 段。"
     },
     {
       "cmd": "python3 artifacts/EV-DOC-006/check_probe.py",
       "exit_code": 0,
       "stdout": "stdout/01-check-probe.txt",
-      "note": "正例：文件存在、恰好一行、内容正好「返工探针」，PASS。"
+      "note": "正例 PASS：第一行「返工探针」，末行「已返工」。"
     },
     {
       "cmd": "python3 artifacts/EV-DOC-006/check_probe.py artifacts/EV-DOC-006/tmp/wrong.md",
       "exit_code": 1,
       "stdout": "stdout/01-check-probe.txt",
-      "note": "反证 a：内容是「别的」必须 fail（报「这一行不是「返工探针」」），证明 PASS 不是白给。临时文件跑完已删。"
+      "note": "反证 a：内容为「别的」必须 fail。临时文件跑完已删。"
+    },
+    {
+      "cmd": "python3 artifacts/EV-DOC-006/check_probe.py artifacts/EV-DOC-006/tmp/only-first.md",
+      "exit_code": 1,
+      "stdout": "stdout/01-check-probe.txt",
+      "note": "反证 b：只有第一行、缺「已返工」必须 fail（上一版正是这个形态）。"
     },
     {
       "cmd": "python3 artifacts/EV-DOC-006/check_probe.py artifacts/EV-DOC-006/tmp/trailing-space.md",
       "exit_code": 1,
       "stdout": "stdout/01-check-probe.txt",
-      "note": "反证 b：行尾多一个空格必须 fail（报「行首/行尾多了空白」）。"
+      "note": "反证 c：行尾多一个空格必须 fail。"
     },
     {
-      "cmd": "python3 artifacts/EV-DOC-006/check_probe.py artifacts/EV-DOC-006/tmp/two-lines.md",
+      "cmd": "python3 artifacts/EV-DOC-006/check_probe.py artifacts/EV-DOC-006/tmp/blank-line.md",
       "exit_code": 1,
       "stdout": "stdout/01-check-probe.txt",
-      "note": "反证 c：第一行对、第二行「已返工」时行数为 2 必须 fail。这条正是本轮返工后要改的形态，届时自检脚本要跟着放宽为「第一行『返工探针』、末行『已返工』」。"
+      "note": "反证 d：两行之间多一个空行必须 fail。"
     },
     {
-      "cmd": "git show --stat --oneline HEAD && git status --short",
+      "cmd": "git show --stat --oneline HEAD && git status --short && git log --oneline -3",
       "exit_code": 0,
       "stdout": "stdout/02-commit.txt",
-      "note": "确认只有 notes/r20-rework.md 一处改动，scope（notes/）外零改动；未跟踪的 .dsh/ .multica/ AGENTS.md 是运行时自带的，未提交。"
+      "note": "确认本轮提交只改 notes/r20-rework.md（1 insertion），scope（notes/）外零改动。"
     }
   ],
   "scope_check": {
-    "scope": ["notes/"],
+    "scope": [
+      "notes/"
+    ],
     "changed_outside_scope": [],
     "note": "artifacts/EV-DOC-006/ 是契约 §5 规定的证据目录，按 kit.md 的例外处理。"
-  }
+  },
+  "round": 2,
+  "note_rework": "返工轮：按验收原因在 notes/r20-rework.md 末尾加一行「已返工」，check_probe.py 放宽为「首行返工探针、末行已返工」，交卷 tests 改为 command + result。"
 }
