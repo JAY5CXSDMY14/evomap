@@ -71,3 +71,4 @@
 - ~/tmp 里的旧文件保留，等新位置跑通、老板确认后再删。
 - 验收 agent「验收-Claude」：模型优先 group/check，没有就用 group/free-qwen；如果 claude 不认这个分组名，就把模型留空，走 Magpie 接入页的默认 GLM-flash。
 - 已推送 3e52bf5：kit/multica（install.sh、package.json、patch-dsh-boot.mjs、cordis.patch.yml、open-multica.sh、README），新增测试 test_multica_kit.py；docs/multica 补了第 7、8 节（踩坑清单、mini 预案）。第二轮 Pi 指令已交给老板，汇报文件约定为 ~/tmp/MULTICA-HANDOFF-2.md。
+- 13:15 Air 第二轮修了两处：一是 dsh profile 包不在 npm 上，改成源码构建 + npm pack，再用 `dsh plugin --profile multica add <tgz>` 装（60438f0）；二是 daemon 必须加 `--foreground`，否则 launchd 管不到（3510671）。Pi 实测：daemon 正常跑，4 个 runtime 都在线；profile 用的是 vendor 里的 tarball，不再依赖 ~/tmp。
