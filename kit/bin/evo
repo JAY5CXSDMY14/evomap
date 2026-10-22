@@ -1847,7 +1847,7 @@ def check_gates(s, gates):
 # ---------- 决策岗：交决策岗 / 有提问 / 外部来报 → 至多每 30 分钟叫醒一次，一批处理 ----------
 def decider_wake(s, T):
     rc = (CFG.get("roles") or {}).get("decide") or {}
-    if not rc.get("cmd"):
+    if not rc.get("cmd") and EX.name != "multica":     # Multica：决策岗是固定 agent（multica.agents.decide），不用本机命令
         return
     d = s.setdefault("decide", {})
     if d.get("task") and not d.get("done"):
@@ -2135,6 +2135,9 @@ def handle_msg(s, m, by_task):
         tl(k, "msg_stale", type=typ, role=role, state=it["state"], task=tid)
         return log(s, f"{k} 收到一条过时的回报（{typ}，{role}，这件现在{NAMES.get(it['state'], it['state'])}），丢掉")
     it["last_seen"] = time.time(); it.pop("stalled", None)
+    if role in ("build", "verify") and m.get("exec"):
+        EX.on_delivery(s, k, it, role, m)                # 第二十轮 Multica：施工分支取进 evo 的克隆、记 issue / 分支
+        outcome = (m.get("payload") or {}).get("outcome") or m.get("outcome")
     if role in ("build", "verify") and tid == it[role] and it["state"] in ("building", "verifying"):
         text = f"{m.get('subject') or ''}\n{m.get('body') or ''}"
         rl = None
@@ -2267,6 +2270,11 @@ def role_ready(s, k, it, role):
             it["waiting"] = "window"; log(s, f"{k} 等窗口（{it['window']}）")
         return False
     paused = rl_paused(role)
+    if EX.name == "multica":                           # 第二十轮：模型绑在 Multica agent 上，evo 不选路线；额度暂停照旧
+        if paused:
+            it["waiting"] = "rate_limit"; return False
+        it.pop("waiting", None); it.pop("model_block", None)
+        return True
     rt, code, why, okm = team_route(role, it)          # 第十四轮：主模型 / 备用 / 停（模型下线、撞模型、magpie 不通）
     if rt is None:
         if paused or code == "rate_limited":
@@ -2343,6 +2351,7 @@ def merge_one(s, c, k, it):
         it["merged_sha"] = git(CFG["repo"], "rev-parse", "HEAD")
         tl(k, "merge", sha=it["merged_sha"], verified=it.get("verified_sha"), premerge_log=(it.get("premerge") or {}).get("log"))
         cleanup(it)
+        EX.close((it.get("exec") or {}).get("issue"), ok=True)     # Multica：issue 标 done（Orca 没这一步）
     elif kind == "main_red":
         sha = (s.get("main_red") or {}).get("sha")
         if it.get("waiting") != "main_red":
@@ -2429,6 +2438,7 @@ def drop_item(s, k, it, why):
     it["state"] = "dropped"; it.pop("resume", None)
     EX.task_update(coord(s), it["merge"], "completed", "dropped")
     cleanup(it)
+    EX.close((it.get("exec") or {}).get("issue"), ok=False)        # Multica：issue 标 cancelled
     tl(k, "drop", why=why[:500])
     log(s, f"{k} 不做：{why[:80]}")
 
@@ -2671,7 +2681,7 @@ def live_path(s, k, it, T, pend):
     if st in ("escalated", "asking"):
         if any(a.get("key") == k and g in pend for g, a in (s.get("owner_asks") or {}).items()):
             return None                                 # 决策岗转老板，老板还没答
-        if not ((CFG.get("roles") or {}).get("decide") or {}).get("cmd"):
+        if not ((CFG.get("roles") or {}).get("decide") or {}).get("cmd") and EX.name != "multica":
             return ("no_decider", "交决策岗了，但没配置决策岗命令：只能你手动处理（evo retry / 改配置）")
         dec = s.get("decide") or {}
         if dec.get("task") and not dec.get("done") and k in (dec.get("items") or []):
