@@ -30,7 +30,7 @@ multica runtime list  # 应看到 claude / codex / dsh / pi 都 online
 | `bin/dsh` | wrapper：用 Node 22 绝对路径跑隔离 dsh（daemon 会重置 PATH） |
 | `dsh-home/profiles/multica/cordis.patch.yml` | 用户补丁层：重新打开 hmr；模型走 Magpie（分组列表在 kit 里改） |
 | `env` | daemon 的环境变量（600 权限，含 Magpie key，不进 git） |
-| `start-daemon.sh` | 读 env 后 `multica daemon start` |
+| `start-daemon.sh` | 读 env 后 `multica daemon start --foreground`（必须前台，launchd 才管得到） |
 | `logs/` | npm 安装日志、daemon 输出 |
 | `~/Library/LaunchAgents/com.evoloop.multica-daemon.plist` | 开机自启，异常退出 30 秒后重启 |
 

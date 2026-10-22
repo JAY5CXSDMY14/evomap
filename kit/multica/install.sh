@@ -128,12 +128,12 @@ chmod 600 "$ENVF"; ok "环境变量 → $ENVF（600）"
 umask 022
 cat > "$START" <<'S'
 #!/bin/bash
-# 由 install.sh 生成：读 env 后前台跑 multica daemon（launchd 管它）。
+# 由 install.sh 生成：读 env 后用 --foreground 前台跑 multica daemon（不加的话它会自己转后台、launchd 管不到；Air 实测 10-22）。
 D=$(cd "$(dirname "$0")" && pwd)
 set -a; . "$D/env"; set +a
 [ -z "${MULTICA_CLAUDE_PATH:-}" ] && unset MULTICA_CLAUDE_PATH
 [ -z "${MULTICA_CODEX_PATH:-}" ] && unset MULTICA_CODEX_PATH
-exec multica daemon start "$@"
+exec multica daemon start --foreground "$@"
 S
 sed -i '' "s#^exec multica#exec $MULTICA#" "$START" 2>/dev/null || sed -i "s#^exec multica#exec $MULTICA#" "$START"
 chmod +x "$START"; ok "启动脚本 → $START"
@@ -154,6 +154,7 @@ cat > "$PLIST" <<P
 P
 ok "LaunchAgent → $PLIST（环境变量在 env 文件里，不进 plist）"
 echo
-echo "装好了。接管前先停掉手动起的 daemon：multica daemon stop（或 kill 旧 pid），再："
+launchctl bootout "gui/$(id -u)/$LABEL" 2>/dev/null && info "已先卸掉旧的 $LABEL（要重新 bootstrap）"
+echo "装好了。接管前先停掉不归 launchd 管的 daemon：multica daemon stop（还在就 kill 那个 pid），确认 multica daemon status 不是 running，再："
 echo "  launchctl bootstrap gui/\$(id -u) $PLIST"
 echo "看日志：tail -f $LOGS/daemon.*.log ；查状态：multica daemon status ；multica runtime list"
