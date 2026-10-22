@@ -143,6 +143,7 @@ def cmd_models(a):
     sys.exit(1 if warns else 0)
 
 
+ACCOUNT_RE = re.compile(r"[a-z0-9][a-z0-9._-]{0,63}")
 TEAM_FIELDS = ("tool", "via", "cmd", "models", "thinking", "duty", "fallback", "account")
 
 
@@ -438,11 +439,13 @@ def cmd_team(a):
             ms = "/".join(c["models"]) or "工具默认模型"
             print(f"■ {c['name']}  {c['tool']} · {ms}" + (f" · 思考 {c['thinking']}" if c.get("thinking") else "")
                   + f"  【{c['status']['label']}{'，' + c['status']['until'] + ' 恢复' if c['status'].get('until') else ''}】"
-                  + (f"  {c['badge']}" if c.get("badge") else ""))
+                  + (f"  {c['badge']}" if c.get("badge") else "")
+                  + (f"  账号 {c['account']}" if c.get("account") and c["account"] != c["tool"] else ""))
             if c.get("duty"):
                 print(f"    职责：{c['duty']}")
             if c.get("fallback"):
-                f = c["fallback"]; print(f"    备用：{f['tool']} · {'/'.join(f['models']) or '工具默认模型'}")
+                f = c["fallback"]; print(f"    备用：{f['tool']} · {'/'.join(f['models']) or '工具默认模型'}"
+                                         + (f" · 账号 {f['account']}" if f.get("account") and f["account"] != f["tool"] else ""))
             for w in c["warnings"]:
                 print(f"    ! {w}")
             print(f"    {c['recommendation']['text']}")
@@ -489,6 +492,14 @@ def cmd_team(a):
     for v in (a.tool, a.fallback_tool):
         if v and not re.fullmatch(r"[a-z][a-z0-9_-]{0,31}", v):
             sys.exit("工具名只能是小写字母数字（例如 claude、codex、dsh、pi）")
+    for v in (a.account, a.fallback_account):            # 第二十一轮补：额度账号名（auto = 去掉，回到按工具 / 命令推）
+        if v and not ACCOUNT_RE.fullmatch(v):
+            sys.exit("账号名只能是小写字母数字和 . _ -（例如 claude-pro、magpie），auto = 去掉显式账号")
+    if a.role_cmd is not None:
+        if not a.role_cmd.strip() or len(a.role_cmd) > 500 or "\n" in a.role_cmd or "\r" in a.role_cmd:
+            sys.exit("命令写一行，500 字以内")
+        if not TEAM.cmd_tool(a.role_cmd):
+            sys.exit("命令里找不到要跑的程序（开头的 env / KEY=VAL 之后要有程序名）")
     if a.thinking and a.thinking not in TEAM.THINKING:
         sys.exit("思考档位只能是 " + " / ".join(TEAM.THINKING))
     if a.duty and len(a.duty) > 80:
@@ -504,6 +515,13 @@ def cmd_team(a):
             r["tool"] = a.tool
             r["cmd"] = (tools.get(a.tool) or {}).get("cmd") or TEAM.TOOL_CMDS.get(a.tool) or a.tool
             r.setdefault("via", "cli")
+        if a.role_cmd is not None:
+            r["cmd"] = a.role_cmd.strip()
+        if a.account:
+            if a.account == "auto":
+                r.pop("account", None)
+            else:
+                r["account"] = a.account
         if a.via:
             r["via"] = a.via
         if model:
@@ -525,6 +543,12 @@ def cmd_team(a):
                 fb["models"] = [a.fallback_model]
                 if a.fallback_model.startswith("group/"):
                     fb.setdefault("via", "magpie")
+        if a.fallback_account and not a.no_fallback:
+            fb = r.setdefault("fallback", {})
+            if a.fallback_account == "auto":
+                fb.pop("account", None)
+            else:
+                fb["account"] = a.fallback_account
     # 先在副本上改，过安全栏，再落盘
     trial_cfg = K._read_json(path)
     tmp_rs = (trial_cfg.setdefault("overrides", {}).setdefault("roles", {}) if project else trial_cfg.setdefault("roles", {}))
@@ -538,13 +562,15 @@ def cmd_team(a):
             probs.append("备用：" + p[1])
     if probs:
         sys.exit("没改：" + "；".join(probs))
-    if not (a.tool or a.via or model or a.thinking or a.duty or a.no_fallback or a.fallback_model or a.fallback_tool):
-        sys.exit("要改什么？--model / --thinking / --tool / --duty / --fallback-model / --fallback-tool / --no-fallback")
+    if not (a.tool or a.via or model or a.thinking or a.duty or a.no_fallback or a.fallback_model or a.fallback_tool
+            or a.account or a.role_cmd is not None or a.fallback_account):
+        sys.exit("要改什么？--model / --thinking / --tool / --account / --cmd / --duty / --fallback-model / --fallback-tool / --fallback-account / --no-fallback")
     _team_write(path, project, role, apply)
     rc = (after.get("roles") or {}).get(role) or {}
     where = f"{project} 本项目专用" if project else "全局"
     print(f"{TEAM.ROLE_NAMES[role]}（{where}）：{TEAM.tool_of(rc)} · {'/'.join(rc.get('models') or []) or '工具默认模型'}"
           + (f" · 思考 {rc['thinking']}" if rc.get("thinking") else "")
+          + f" · 额度账号 {TEAM.account_of(rc)}"
           + (f"（试用 {a.items} 件后给你对比）" if act == "trial" else "") + "。下一次派工生效，正在跑的不打断。")
 
 
@@ -607,6 +633,7 @@ def _setup_team(x):
     x.add_argument("model", nargs="?"); x.add_argument("--json", action="store_true"); x.add_argument("--refresh", action="store_true")
     x.add_argument("--model", dest="set_model"); x.add_argument("--thinking"); x.add_argument("--tool"); x.add_argument("--via", choices=["magpie", "cli"])
     x.add_argument("--duty"); x.add_argument("--fallback-model"); x.add_argument("--fallback-tool"); x.add_argument("--no-fallback", action="store_true")
+    x.add_argument("--account"); x.add_argument("--fallback-account"); x.add_argument("--cmd", dest="role_cmd")     # 第二十一轮补：额度账号、整条命令
     x.add_argument("--project"); x.add_argument("--items", type=int, default=5); x.add_argument("--apply", action="store_true")
 
 

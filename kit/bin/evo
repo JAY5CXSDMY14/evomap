@@ -31,7 +31,7 @@
   evo models [--json]            核对施工/验收模型：在不在 magpie /v1/models 里、两边有没有重叠
   evo -p AB models set build <模型> | clear build   单项目覆盖模型（面板「施工模型 / 验收模型」下拉框同此）
   evo [-p AB] team [--json] [--refresh]   岗位卡片：工具·模型·思考档位·职责·备用·状态灯·本周用量·每个模型的成绩和建议
-  evo team set <岗位> [--model M] [--thinking high] [--tool codex] [--fallback-model M] [--project AB]   换模型（下一次派工生效）
+  evo team set <岗位> [--model M] [--thinking high] [--tool codex] [--account claude-pro] [--cmd '…'] [--fallback-model M] [--fallback-account magpie] [--project AB]   换模型 / 账号（下一次派工生效）
   evo team clear <岗位> --project AB | trial <岗位> <模型> --project AB [--items 5] | init [--apply] | dismiss <模型>
   evo -p AB log <件号> [--json|--diff]   这件的时间线（派工、交卷、闸门、返工、合并、推送、上线……）
   evo -p AB feedback --item <件号> "原话"  对某件补反馈：它等你的看效果/做不做闸门作废，改完重开
@@ -1532,14 +1532,11 @@ def _rl_io(fn):
 
 
 def role_account(role):
-    """同一个订阅账号的岗位一起暂停：roles.<岗位>.account 可显式写；默认取命令的第一个词（claude、codex、dsh……）。"""
+    """同一个订阅账号的岗位一起暂停：roles.<岗位>.account 显式写 → tool → 命令里真正跑的程序（claude、codex、dsh……）。
+    第二十一轮补：跳过 `env` / `KEY=VAL` 前缀；规则统一在 evo_roles.account_of。"""
     rc = (CFG.get("roles") or GCFG.get("roles") or {}).get(role) or {}
-    if rc.get("account") or rc.get("tool"):              # 第十四轮：卡片写了 tool 就按工具算账号
-        return rc.get("account") or rc["tool"]
-    try:
-        return os.path.basename(shlex.split(rc.get("cmd") or "")[0])
-    except (IndexError, ValueError):
-        return role
+    a = R.account_of(rc)
+    return role if a == "?" else a
 
 
 def rl_paused(role):

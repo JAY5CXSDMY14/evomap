@@ -240,6 +240,7 @@ CI：kit-tests run 39561803019（提交 ed7832b）全套绿；两个待定项锁
 - **架构文档标成现状**：docs/loop-topology.md、kit.md、multica-backend.md、architecture.md 开头加一行「现状说明，不是约束；Claude 审查后可提议修改」。对应的 .html 是 answer-me-with-html 生成的（带 CSP 哈希），这轮没重新生成。
 - **规则体检（只有设计）**：借 OpenAI 2026-10-16《Maintaining software with the GPT-6 family》的做法——错题本挑一条嫌疑规则 → 同一提交开两个干净工作区、同一模型重放原任务（规则原样 / 只改这一条）→ 换模型的验收对比质量、返工、工具调用、token、耗时 → 决策岗出 propose 卡片给老板。见 docs/role-file-references.md 末节。这轮不实现。
 - **冷启动审查提示词**：docs/claude-cold-audit-prompt.md，老板在 Mac 上全新克隆后贴给 Claude Code（fable / opus 档）：只读代码和测试，不先读 docs / notes / roles / README 各轮，产出「从零怎么设计」「现有代码最偏离的 10 处」「该保留的」「propose 格式的提议」「哪里手写了现成工具早就做好的东西」，另加死代码扫描（拿不准的动态引用标「待核实」不删）和可选的规则体检方案；写到 `~/tmp/CLAUDE-AUDIT-1.md`。附订阅后 Claude Code 的设置步骤（用 `CLAUDE_CONFIG_DIR` 另开一份干净配置，绕开 magpie 对 `~/.claude/settings.json` 的接管）。
+- **补：额度账号分开算**（`kit/tests/test_round21_accounts.py` 7 个，全套 348 个：345 过、3 跳过）：账号 = 显式 `account` → 显式 `tool` → 命令里真正跑的程序（跳过 `env`、env 的选项和 `KEY=VAL`，`env … claude` 不再算成 `env`）。Pro 决策岗写 `account: claude-pro`、magpie 岗位写 `magpie`，额度暂停各停各的，决策岗有备用就切备用。`evo team set` 新增 `--account` / `--fallback-account`（`auto` = 去掉）/ `--cmd`，命令见 docs/claude-pro-native-setup.md 3.6。老配置不写这些字段时行为不变。
 
 ## 只能在 Mac mini 上验的
 - 第二十一轮：真 Claude（Pro 订阅）当决策岗时能否稳定交 decisions JSON、会不会用 propose；Multica 的「决策-Claude」agent 怎么指到 Pro 那份配置（见 docs/claude-cold-audit-prompt.md 末节）。

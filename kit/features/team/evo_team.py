@@ -22,7 +22,7 @@ STATUS_LABELS = {"ok": "可用", "fallback": "用备用中", "not_installed": "�
 
 
 # 第十八轮：岗位卡片的基础（命令模板、tool_of、via_of、render_cmd、fallback_rc、account_of）派工也要用，搬进内核库 kit/bin/evo_roles.py
-from evo_roles import TOOL_CMDS, tool_of, via_of, render_cmd, fallback_rc, account_of  # noqa: F401
+from evo_roles import TOOL_CMDS, tool_of, cmd_tool, via_of, render_cmd, fallback_rc, account_of  # noqa: F401
 
 
 # ---------- 小工具 ----------

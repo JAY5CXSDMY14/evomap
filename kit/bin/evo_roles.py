@@ -41,14 +41,36 @@ def launch_failed(tail):
     return None
 
 
+_ENV_ARG_OPTS = {"-u", "--unset", "-C", "--chdir", "-S", "--split-string"}   # env 这几个选项后面跟一个参数
+_ENV_KV = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*=")
+
+
+def cmd_tool(cmd):
+    """命令真正跑的那个程序名。第二十一轮补：跳过开头的 `env`（连同它的 -u NAME / -i 等选项）和 `KEY=VAL`，
+    所以 `env -u ANTHROPIC_BASE_URL CLAUDE_CONFIG_DIR=~/.claude-pro claude …` 算 claude，不算 env。"""
+    try:
+        words = shlex.split(cmd or "")
+    except ValueError:
+        return ""
+    i, in_env = 0, False
+    while i < len(words):
+        w = words[i]
+        if _ENV_KV.match(w):
+            i += 1
+        elif os.path.basename(w) == "env" and not in_env:
+            in_env = True; i += 1
+        elif in_env and w.startswith("-"):
+            i += 2 if (w in _ENV_ARG_OPTS) else 1
+        else:
+            return os.path.basename(w)
+    return ""
+
+
 def tool_of(rc):
     rc = rc or {}
     if rc.get("tool"):
         return rc["tool"]
-    try:
-        return os.path.basename(shlex.split(rc.get("cmd") or "")[0])
-    except (IndexError, ValueError):
-        return ""
+    return cmd_tool(rc.get("cmd"))
 
 
 def via_of(rc):
@@ -92,8 +114,9 @@ def fallback_rc(rc, tools=None):
 
 
 def account_of(rc):
-    """订阅账号：显式 account → 工具名 tool → 命令第一个词。同一账号额度一起满。"""
+    """订阅账号：显式 account → 工具名 tool → 命令里真正跑的程序（跳过 env / KEY=VAL）。同一账号额度一起满、一起暂停。
+    第二十一轮补：原生 Pro 的决策岗写 account: claude-pro、走 magpie 的 claude 岗位写 account: magpie，两边各停各的。"""
     rc = rc or {}
-    return rc.get("account") or rc.get("tool") or tool_of({"cmd": rc.get("cmd")}) or "?"
+    return rc.get("account") or rc.get("tool") or cmd_tool(rc.get("cmd")) or "?"
 
 

@@ -161,24 +161,40 @@ CLAUDE_CONFIG_DIR="$HOME/.claude-pro" claude auth status
 
 ### 3.6 evo / Multica 的决策岗怎么调原生 claude
 
-**evo 直跑（不经 Multica）**：决策岗卡片示意（字段名按现有 `team` 卡片：`cmd` / `tool` / `account` / `fallback`）
+**evo 直跑（不经 Multica）**：不用手改配置文件，用 `evo team set`（第二十一轮补起支持 `--account` / `--cmd` / `--fallback-account`）：
+
+```bash
+# 1. 决策岗指到 Pro：整条命令 + 额度账号 claude-pro
+evo team set decide --tool claude --account claude-pro \
+  --cmd 'env -u ANTHROPIC_BASE_URL -u ANTHROPIC_API_KEY -u ANTHROPIC_AUTH_TOKEN CLAUDE_CONFIG_DIR=$HOME/.claude-pro DISABLE_AUTOUPDATER=1 claude -p --output-format stream-json --verbose --permission-mode dontAsk --permission-prompts none'
+# 2. 备用走 magpie：--fallback-tool claude 让备用用普通 claude 命令（读 ~/.claude，也就是 magpie），不继承上面那条 Pro 命令
+evo team set decide --fallback-tool claude --fallback-model <magpie 里给决策岗的备用模型> --fallback-account magpie
+# 3. 走 magpie 的 claude 验收岗也标成 magpie（可选，但建议：和决策岗备用同账号，magpie 满了一起算）
+evo team set verify --account magpie
+# 4. 看一眼：决策卡片应显示「账号 claude-pro」，备用「账号 magpie」
+evo team
+```
+
+只想给某个项目用 Pro：每条加 `--project <代号>`。想撤回显式账号：`--account auto`。
+
+写进配置后的样子（`config.json` 的 `roles.decide`，这里用 YAML 示意）：
 
 ```yaml
 roles:
-  decider:
+  decide:
     cmd: >-
       env -u ANTHROPIC_BASE_URL -u ANTHROPIC_API_KEY -u ANTHROPIC_AUTH_TOKEN
       CLAUDE_CONFIG_DIR=${HOME}/.claude-pro DISABLE_AUTOUPDATER=1
       claude -p --output-format stream-json --verbose
       --permission-mode dontAsk --permission-prompts none
-    tool: claude          # 必须显式写：否则命令第一个词是 env，工具名会被算成 env
-    account: claude-pro   # 必须显式写：否则和走 magpie 的 claude 岗位算成同一个账号，一起暂停
+    tool: claude          # 可不写：第二十一轮补起 evo 跳过 env / KEY=VAL，自己认出 claude
+    account: claude-pro   # 必须写：否则和走 magpie 的 claude 岗位都算账号 claude，一起暂停
     native_claude: true   # 第 4 节新增字段
     fallback:
-      cmd: claude -p --output-format stream-json --verbose   # 走 ~/.claude，也就是 magpie
+      cmd: claude --model {model}   # --fallback-tool claude 写进来的普通命令：走 ~/.claude，也就是 magpie
       tool: claude
       account: magpie
-      model: <magpie 里给决策岗的备用模型>
+      models: [<magpie 里给决策岗的备用模型>]
 ```
 
 **经 Multica**：
@@ -199,9 +215,10 @@ evo 派工时若看到这个标记：
 3. 拒绝 `--bare`（发现就报错，不派工）；
 4. 不再需要用户在 `cmd` 里手写 `env -u …`，`tool`/`account` 自动取 `claude` / `claude-pro`。
 
-这样也顺手修掉两个现有的小坑（在 `kit/bin/evo` 和 `kit/bin/evo_roles.py` 里看到的）：
-- `role_account()` / `tool_of()` 默认取命令第一个词——用 `env …` 包一层就会变成 `env`；
-- 走 magpie 的 claude 岗位和走 Pro 的 claude 岗位默认都叫 `claude`，会被当成同一账号一起暂停。
+这样也顺手修掉两个现有的小坑（在 `kit/bin/evo` 和 `kit/bin/evo_roles.py` 里看到的）——**✅ 已修（第二十一轮补，测试 `kit/tests/test_round21_accounts.py`）**：
+- ~~`role_account()` / `tool_of()` 默认取命令第一个词——用 `env …` 包一层就会变成 `env`~~ → 现在跳过开头的 `env`（含 `-u NAME`、`-i` 等选项）和 `KEY=VAL`，取真正跑的程序；
+- ~~走 magpie 的 claude 岗位和走 Pro 的 claude 岗位默认都叫 `claude`，会被当成同一账号一起暂停~~ → 账号规则：显式 `account` → 显式 `tool` → 命令里的程序名；Pro 岗位写 `account: claude-pro` 就单独暂停，决策岗有备用时 Pro 满了切备用（第十四轮的备用机制），重置前不再碰 Pro。`evo team set` 有 `--account` / `--cmd` / `--fallback-account`，不用手改配置（见 3.6）。
+- 4.1 其余几条（`native_claude` 标记、自动清环境变量、拒绝 `--bare`）还没做。
 
 ### 4.2 `claude_trust()` 要跟着配置目录走
 

@@ -107,3 +107,10 @@
 - docs/claude-cold-audit-prompt.md（冷启动审查 + 死代码扫描 + 规则体检可选步）。
 - 5eb4124 docs/agent-practices-2026、docs/claude-pro-native-setup：原生 claude CLI + 自己的 Pro 可以；Pro 绝不经 magpie；地区按人所在地算 → 建议 claude_pro.enabled 开关；~/.claude-pro 独立配置。
 - 待老板：修 Pro 决策岗与 magpie claude 验收岗共用额度账户名（限流时一起暂停）的 bug。
+
+## 2026-10-23 04:50 第二十一轮补：额度账号分开算
+- 修 Pro 决策岗与 magpie claude 验收岗共用账号名 `claude`（限流时一起暂停）的 bug；`env … claude` 不再被算成工具/账号 `env`。
+- 账号规则统一在 evo_roles.account_of：显式 account → 显式 tool → 命令里真正跑的程序（跳过 env、env 选项、KEY=VAL）。rl_pause / 备用切换 / evo team / status 都走这条。
+- 我定的：备用的账号不继承主卡的 account（fallback_rc 原本就不继承），Pro 决策岗的备用要写 `--fallback-tool claude`，否则备用会沿用主卡那条带 CLAUDE_CONFIG_DIR 的 Pro 命令。
+- evo team set 加 --account / --fallback-account（auto = 去掉）/ --cmd；面板 POST /api/team 不收 --cmd（不让网页写任意命令），合约不动。
+- native_claude 标记、自动清环境变量、拒绝 --bare、auth status 健康检查（docs/claude-pro-native-setup.md 4.1 其余、4.2、4.4、4.5）还没做。
