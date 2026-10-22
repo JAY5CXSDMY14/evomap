@@ -220,7 +220,20 @@ CI：kit-tests run 39561803019（提交 ed7832b）全套绿；两个待定项锁
 - **两个待定项按推荐默认**：①推送渠道 Telegram / 邮件关掉不受「在用」保护（维持现状；webhook 配了算在用）——改法见 docs/architecture.md「在用」保护；②远端租约默认开，全局 `"lease_remote": false` 关，项目里写的优先——见 docs/multi-machine.md 第 7 节。
 - 111ca61 的唯一失败：`new` / `import` 现在写 `owner_host`，老测试的项目配置白名单没认它（ed7832b 修）。
 
+## 第二十轮：Multica 执行端（均有自动测试，`kit/tests/test_multica_backend.py` 14 个，全套 323 个；设计和实现说明见 docs/multica-backend.md）
+本地全套 320 过、3 跳过（Linux 沙箱，`-n 2`，6.5 分钟）；CI：kit-tests run 39740216052（提交 81d00a6）全绿。
+- **Executor 接口**（`kit/bin/evo_exec.py`）：evo 里原来散着的约 40 处 `orca(...)` 全部收进 `OrcaExecutor`，Orca 的行为一点没变（这一步单独提交，老测试全过）；功能包 item-caps、github 改成调 `K.EX`，旧的 `K.orca(...)` 还留着兼容。
+- **MulticaExecutor**：只调 `multica … --output json`，每条命令都有超时（`limits.timeouts.multica`，默认 1 分钟）。一件对应一个 issue：施工第一次 `issue create`（正文是任务书加交卷方式）再 `issue assign`；返工、验收都在同一个 issue 上，先 `assign --no-start` 换人，再留言写任务书，留言没叫醒 agent 就 `issue rerun`。决策批次每批建一个新 issue，派给决策 agent。**所有派工都是 `issue assign`**，10-22 决策岗 5 次超时的根因 `dispatch --inject` 在这条路上不存在了。
+- **收回报**：每轮先用一次 `issue list --fields …` 找出有动静的 issue，再读 `issue runs`（run 结束了没有、分支、工作目录）和 `issue comment list --full`（这个 run 的评论）。run 结束就合成 worker_done，返工上限、决策岗、额度暂停、提问这些逻辑照旧。验收结论看评论里 ```json 的 `verdict`。
+- **合并照旧**：施工交卷后，evo 把 run 的分支 fetch 进自己的克隆，开出 `state/worktrees/<件号>`（分支 `evo/<件号>`）。验收指纹、看效果闸门、合并前测试、推送都在这份副本上做；闸门留在 evo 面板，Multica 的 in_review 只表示「施工做完了」。
+- **配置**：项目键 `executor`（multica | orca）和 `multica.{project, agents.{build,verify,decide}, app_url, issue_url, cmd}`。agents 默认是 施工-DSH / 验收-Claude / 决策-Claude。`evo new / import` 默认写 multica（`--executor orca` 可改）。**没写 `executor` 的老项目照旧走 orca**（我这样定，是怕一升级就换了执行端；设计稿说的「默认 multica」只对新项目生效）。
+- **执行端掉线**：`orca_up` 改名 `exec_up`（旧名保留）。Multica 每轮先跑 `daemon status --output json` 和 `agent list`：daemon 停了、服务端连不上、登录失效时推一次「执行端掉线」，这一轮不派工，恢复后接着跑。status JSON 里的 `orca_down_since` 字段名不变。
+- **state.json schema 2**：每件加 `exec {backend, issue, agent, branch}`。老状态读进来时自动迁移，Orca 的任务号、派工、终端记进 `exec.legacy`。项目从 orca 换到 multica 后，第一次 tick 会把没做完的件在新执行端重建任务和闸门（时间线 `exec_reseed`）。
+- **面板 / App**：每件下面显示「Multica issue EVO-x」，配了 `multica.app_url` 就能点开网页。`status --json` 只新增了 `items[].exec`，合约不升版。App 只改了两句提示文案。
+- **测试**：新增假 multica CLI（`tests/fakes/multica`，输出格式照 Air 实测），假工人 `worker.py` 两种执行端都能跑。覆盖：派工到 in_review、验收通过 / 不通过、返工上限、留言叫醒时不重复派、决策批次、决策返工上限、daemon 和服务端掉线、额度、提问、schema 迁移、老项目留在 orca、新项目默认 multica、issue 链接。
+
 ## 只能在 Mac mini 上验的
+- 第二十轮（Air，EV）：照 docs/multica-backend.md 第 6 节走一遍：README 小任务跑通、故意验收不过返工一次、决策-Claude 被叫醒并执行 json、停掉 daemon 后推一次再恢复、Multica 网页上的状态和面板一致。顺带确认：成员留言会不会叫醒 agent，返工是不是复用同一条分支，`issue_url` 模板对不对。
 - 第十八轮：真机 `install.sh --apply` 后 `current` 软链、launchd 常驻跑 current、看门狗 `com.evoloop.guard` 每分钟一次；真 `evo self-upgrade` 等一轮结束再切、观察期内杀掉常驻后看门狗 10 分钟内切回；两台真 Mac（Air + mini）同一项目的远端租约互斥、GitHub 接受推 `refs/evo/owner/*`；mini 的 magpie 分组前缀 `model_prefix` 派工是否认得。
 - 第十七轮：真 Orca 的 `gate-list` 会不会列出已结掉的闸门、结果字段是不是 `resolution`（evo 也认 `result`）；手机端点「打回」后 evo 照办、点「通过 / 上线」后 Telegram 收到「确认…？」并能点按钮确认（试运行，老板体验后再调）。
 - 第十七轮：TB `relocate` 后 `~/.evoloop/repos/TB` 克隆、fetch 走 `git_env` 代理能通；Orca 认新目录（`orca repo add`）；老板在工作副本里 `git pull` 能看到 evo 推上去的提交。

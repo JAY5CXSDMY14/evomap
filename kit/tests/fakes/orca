@@ -65,6 +65,8 @@ def main():
     with St() as s:
         s["calls"].append(argv[:2])
         if cmd == ["status"] or argv[:1] == ["status"]:
+            if os.environ.get("FAKE_ORCA_DOWN") or os.path.exists(os.path.join(os.environ.get("FAKE_ORCA_DIR", ""), "down")):
+                out({"reachable": False, "runtime": {"state": "not_running"}})
             out({"reachable": True})
         if cmd == ["skills", "install"] or cmd == ["repo", "add"]:
             out({})

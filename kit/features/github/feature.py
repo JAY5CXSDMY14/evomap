@@ -189,10 +189,10 @@ def pull_reports(s, trusted):
             red = K.red_lines(iss.get("title", "") + "\n" + (iss.get("body") or ""))
             if red and not ok:
                 c = K.coord(s)
-                t, _ = K.orca("orchestration", "task-create", "--from", c, "--task-title", f"外部请求 #{n}", "--spec", "等老板定（红线）")
-                g, _ = K.orca("orchestration", "gate-create", "--from", c, "--task", t["task"]["id"],
-                            "--question", f"外部请求碰红线（{'、'.join(red)}）#{n}：{rep['title'][:40]}", "--options", json.dumps(["同意交决策岗", "拒绝"]))
-                s.setdefault("ext_gates", {})[g["gate"]["id"]] = {"task": t["task"]["id"], "report": rep, "red": red, "key": f"#{n}"}
+                tid = K.EX.task_create(c, f"外部请求 #{n}", "等老板定（红线）")
+                g = {"gate": {"id": K.EX.gate_create(c, tid, f"外部请求碰红线（{'、'.join(red)}）#{n}：{rep['title'][:40]}",
+                                                     ["同意交决策岗", "拒绝"])}}
+                s.setdefault("ext_gates", {})[g["gate"]["id"]] = {"task": tid, "report": rep, "red": red, "key": f"#{n}"}
                 K.log(s, f"外部来报 #{n} 碰红线（{'、'.join(red)}），等老板定")
                 K.notify("redline_request", "外部请求碰红线，等你定", f"#{n} {rep['title']}", gate=g["gate"]["id"], issue=n, red=red)
             else:

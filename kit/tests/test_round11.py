@@ -337,3 +337,15 @@ def test_notify_macos_off_by_default_inside_app_bundle(loop):
     assert bundle_macos(loop, KIT) == ["False", "True"]               # 包外：照旧默认开
     g["notify"]["macos"] = True; json.dump(g, open(p, "w"))
     assert bundle_macos(loop, app_kit) == ["True", "True"]            # 显式写了就听配置的
+
+
+def test_project_models_check_ignores_global_problems(loop):
+    # Air 试跑 10-21：全局模板里的模型在 magpie 里不存在，但项目已覆盖 → evo -p 项目 models 不该 exit 1
+    set_models(loop, ["group/nope"], ["claude"])
+    loop.project("AW")
+    loop.http_responses({"/v1/models": [MAGPIE]})
+    loop.ok("-p", "AW", "models", "set", "build", "glm")
+    loop.http_responses({"/v1/models": [MAGPIE, MAGPIE]})
+    r = loop.evo("-p", "AW", "models")
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert "（全局，不影响 AW）" in r.stdout and "✓ AW 实际用的" in r.stdout

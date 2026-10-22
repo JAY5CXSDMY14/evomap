@@ -46,7 +46,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         AppState.shared.start()
         UIProbe.start()
         DemoRunner.start()
-        if !UserDefaults.standard.bool(forKey: "setupDone") { WindowManager.shared.showSetup() }
+        // 10-22 Air：向导没走完、但已经有项目（终端 evo import 过）就不再每次弹向导，直接记成设置过
+        let hasProjects = ((try? FileManager.default.contentsOfDirectory(atPath: EvoEnv.evoRoot.appendingPathComponent("projects").path)) ?? [])
+            .contains { !$0.hasPrefix(".") }
+        if !UserDefaults.standard.bool(forKey: "setupDone") {
+            if hasProjects { UserDefaults.standard.set(true, forKey: "setupDone") } else { WindowManager.shared.showSetup() }
+        }
         // 先拍好角色静态帧（截图兜底用）；Dock 图标用包里的 AppIcon.icns，只有开发时没包图标才用角色帧
         Task { @MainActor in
             await MateSnapshotCache.shared.prepare(MateAssets.character, [.standby], side: 240)

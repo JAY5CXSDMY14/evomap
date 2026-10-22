@@ -69,7 +69,7 @@ DEFAULTS = {
     # auto_ship_gate / ship_gate_at：第十八轮搬进功能包 deploy 的设置（config.json 写了仍以它为准）
     "relook_on_change": True,          # 看效果通过后又返工、改了老板看过的内容 → 合并前重开看效果闸门
     "audit_weekday": 6,                # 每周哪天夜审时提醒决策岗跑 ponytail-audit：0=周一 … 6=周日
-    "limits": {"builders_total": 2, "owner_queue_pause": 5, "rework_rounds": 2, "stall_minutes": 15,
+    "limits": {"builders_total": 2, "owner_queue_pause": 5, "rework_rounds": 2, "stall_minutes": 15, "run_max_minutes": 60,
                "usage_item_runs": 8, "usage_item_minutes": 180, "rate_limit_default_minutes": 60, "decide_every_minutes": 30,
                "heartbeat_stale_minutes": 10, "no_live_path_minutes": 30, "stale_hours": 6,
                # 第十七轮：决策岗卡住超时、推送失败退避（每件上限第十八轮搬进功能包 item-caps，默认值在它的 manifest）
@@ -87,7 +87,7 @@ DEFAULTS = {
     "lessons_file": "docs/LESSONS.md",
     "standards_file": "docs/code-standards.md",
 }
-PROJECT_KEYS = ("clone", "clone_path", "git_env", "orca_gate_sync", "code", "name", "repo", "main_branch", "github_repo", "trusted_authors", "trusted_labelers", "test_cmd", "push_cmd", "deploy_cmd",
+PROJECT_KEYS = ("executor", "multica", "clone", "clone_path", "git_env", "orca_gate_sync", "code", "name", "repo", "main_branch", "github_repo", "trusted_authors", "trusted_labelers", "test_cmd", "push_cmd", "deploy_cmd",
                 "policy_terms", "lessons_file", "standards_file", "digest_issue", "goal", "ui_preset", "ui_overrides", "ui_paths",
                 "arch_preset", "arch_overrides")
 # 旧环境变量名照认（先认新名，没有再认旧名）
@@ -231,6 +231,8 @@ class _Kernel:
 
 
 K = _Kernel()
+import evo_exec as EXMOD    # noqa: E402  第二十轮：派工后端（Orca / Multica），见 docs/multica-backend.md
+EX = EXMOD.make(K, CFG or global_config())
 BUS = BUSMOD.Bus(EVENTS_PATH, CODE if HAS_PROJECT else None)
 RT = RTMOD.Runtime(FEATURES_DIR, EVO_ROOT, K, BUS)
 NOTE.channel_list = lambda: [v for _, _, v in hook("notify.channel")]     # 推送渠道是功能包（Telegram / 邮件 / webhook）
@@ -328,10 +330,9 @@ def protected_delivery_check(s, k, it):
         if not it.get("ui"):
             it["ui"] = True
             c = coord(s)
-            g, _ = orca("orchestration", "gate-create", "--from", c, "--task", it["merge"],
-                        "--question", f"看效果（改到受保护路径，老板定）：{it['title']}", "--options", json.dumps(["通过", "打回"]))
-            it["gates"]["look"] = g["gate"]["id"]
-            tl(k, "gate_open", kind="look", gate=g["gate"]["id"], note="改到受保护路径：" + "、".join(hit))
+            gid = EX.gate_create(c, it["merge"], f"看效果（改到受保护路径，老板定）：{it['title']}", ["通过", "打回"])
+            it["gates"]["look"] = gid
+            tl(k, "gate_open", kind="look", gate=gid, note="改到受保护路径：" + "、".join(hit))
         log(s, f"{k} 改到受保护路径（{'、'.join(hit)}）：合并前要老板点头，决策岗不能批")
     return None
 
@@ -661,16 +662,8 @@ def cmd_claim(a):
 
 # ---------- 基础 ----------
 def orca(*args, ok=True):
-    r = run_cmd(ORCA + list(args) + ["--json"], timeout=tmo("orca"), extra_env=False)   # 第十七轮：超时 / 没装都转成 SystemExit，不让进程直接崩
-    if r.returncode in (124, 127):
-        raise SystemExit(f"orca {' '.join(args[:2])} {'超时' if r.returncode == 124 else '跑不起来'}：{r.stderr.strip()[-200:]}")
-    try:
-        j = json.loads(r.stdout)
-    except Exception:
-        raise SystemExit(f"orca {' '.join(args[:2])} 输出无法解析: {r.stdout[:200]} {r.stderr[:200]}")
-    if ok and not j.get("ok"):
-        raise SystemExit(f"orca {' '.join(args[:2])} 失败: {j.get('error')}")
-    return j.get("result") or {}, j
+    """第二十轮：旧的 orca(...) 只留给功能包兼容（K.orca），内核一律走执行端 EX（kit/bin/evo_exec.py）。"""
+    return EX.compat(*args, ok=ok)
 
 
 _LOCK = None
@@ -724,7 +717,11 @@ def load():
     ensure_clone()
     if os.path.exists(STATE):
         try:
-            return json.load(open(STATE, encoding="utf-8"))
+            s = migrate_state(json.load(open(STATE, encoding="utf-8")))
+            for k, it in (s.get("items") or {}).items():    # 老版本 drop 留下的残留标记，读的时候顺手清（下次保存落盘）
+                if isinstance(it, dict) and it.get("gates") is not None:
+                    tidy_closed(it, s, k)
+            return s
         except ValueError:
             # 读不出 ≠ 空：先把坏文件挪开留证，停下等人，绝不当作「没有任务」重新开始
             bad = STATE + time.strftime(".bad-%m%d%H%M%S")
@@ -733,10 +730,76 @@ def load():
             open(PAUSED, "w", encoding="utf-8").write(f"状态文件损坏，已挪到 {bad}")
             notify("state_corrupt", "接棒器状态文件损坏", f"已挪到 {bad}，接棒暂停，等人处理")
             sys.exit(f"状态文件读不出，已挪到 {bad}；接棒暂停")
-    return {"coord": None, "items": {}, "seq": 0, "log": []}
+    return {"coord": None, "items": {}, "seq": 0, "log": [], "schema_version": STATE_SCHEMA_VERSION}
 
 
-def make_clone(src, dst, mb):
+# ---------- 第二十轮：state.json 的 schema_version（没写 = 1）。人和 Pi 都不手改，evo 读的时候自动迁移 ----------
+STATE_SCHEMA_VERSION = 2
+
+
+def exec_blank(backend="orca"):
+    return {"backend": backend, "issue": None, "agent": None, "branch": None}
+
+
+def migrate_state(s):
+    """1 → 2：每件加 exec {backend, issue, agent, branch}；老件都是 Orca 派的，Orca 的任务号 / 派工 / 终端记进 exec.legacy。
+    只加字段，老字段原样留着（Orca 后端照旧用）。"""
+    if (s.get("schema_version") or 1) >= STATE_SCHEMA_VERSION:
+        return s
+    for it in (s.get("items") or {}).values():
+        if isinstance(it, dict) and "exec" not in it:
+            e = exec_blank("orca")
+            e["legacy"] = {"build": it.get("build"), "verify": it.get("verify"), "merge": it.get("merge"),
+                           "dispatch": {r: {"id": d.get("id"), "terminal": d.get("terminal")} for r, d in (it.get("dispatch") or {}).items()
+                                        if isinstance(d, dict)},
+                           "worktree": it.get("worktree")}
+            it["exec"] = e
+    if s.get("orca_down") and not s.get("exec_down"):
+        s["exec_down"] = s.pop("orca_down")
+    s["schema_version"] = STATE_SCHEMA_VERSION
+    return s
+
+
+RESEED_STATES = ("queued", "building", "built", "verifying", "verified", "escalated", "asking")
+
+
+def exec_reseed(s, c):
+    """项目从 Orca 换到 Multica（或反过来）后，没做完的件在新执行端里重建任务和闸门：
+    旧任务号 / 闸门号记进 exec.legacy，施工 / 验收中的件退回排队（在新执行端从头施工，轮次不清零）。返回重建了几件。"""
+    n = 0
+    for k, it in s["items"].items():
+        e = it.setdefault("exec", exec_blank("orca"))
+        if e.get("backend") == EX.name or it["state"] not in RESEED_STATES:
+            continue
+        leg = e.setdefault("legacy", {})
+        leg.update({"build": it.get("build"), "verify": it.get("verify"), "merge": it.get("merge"),
+                    "gates": dict(it.get("gates") or {}), "worktree": it.get("worktree"), "from": e.get("backend"),
+                    "state": it["state"], "at": TM.iso()})
+        if it["state"] in ("building", "verifying", "built", "verified"):
+            for role, d in (it.get("dispatch") or {}).items():
+                if not d.get("ended"):
+                    worker_end(s, it, role)
+            it["state"] = "queued"; it.pop("verified_sha", None); it.pop("verified_patch", None); it.pop("look_bound", None)
+        it["worktree"] = None; it["dispatch"] = {}; it.pop("stalled", None)
+        b = EX.task_create(c, f"{k} 施工", it.get("build_spec") or (spec_head("build", it) + role_prompt("build") + it["spec"]))
+        v = EX.task_create(c, f"{k} 验收", it.get("verify_spec") or (spec_head("verify", it) + role_prompt("verify") + it["spec"]), [b])
+        m = EX.task_create(c, f"{k} 合并", "由接棒器合并", [v])
+        it["build"], it["verify"], it["merge"] = b, v, m
+        gates = {}
+        if it["gates"].get("do") and not it.get("do_ok"):
+            gates["do"] = EX.gate_create(c, b, f"做不做：{it['title']}", ["做", "不做"])
+        if it.get("ui"):
+            gates["look"] = EX.gate_create(c, m, f"看效果：{it['title']}", ["通过", "打回"])
+            it.pop("look_ok", None); it.pop("look_patch", None)
+        it["gates"] = gates
+        it["exec"] = {**exec_blank(EX.name), "legacy": leg}
+        tl(k, "exec_reseed", frm=leg["from"], to=EX.name, state=leg["state"])
+        log(s, f"{k} 换执行端（{leg['from']} → {EX.name}）：任务和闸门在新执行端重建，从{NAMES.get(it['state'], it['state'])}接着走")
+        n += 1
+    return n
+
+
+def make_clone(src, dst, mb, register=True):
     """从老板的工作副本克隆一份给 evo 用（本地克隆，不走网络），origin 改成工作副本的 origin（GitHub），
     能拉到远端就把 main 对齐到 origin/main（老板本地没推的提交不带进来）。返回一句说明。"""
     if os.path.isdir(os.path.join(dst, ".git")):
@@ -755,7 +818,8 @@ def make_clone(src, dst, mb):
             note += f"，{mb} 对齐 origin/{mb}"
         else:
             note += f"；这次没拉到 origin（{(f.stderr or '').strip()[-80:]}），先用工作副本的 {mb}，下次推送前会再拉"
-    run_cmd(ORCA + ["repo", "add", "--path", dst, "--json"], timeout=tmo("orca"), extra_env=False)
+    if register:
+        EX.repo_add(dst, tmo("orca"))
     return note
 
 
@@ -773,7 +837,7 @@ def save(s):
     track_states(s)
     tmp = STATE + ".tmp"
     with open(tmp, "w", encoding="utf-8") as f:
-        json.dump({k: v for k, v in s.items() if k != "_ro"}, f, ensure_ascii=False, indent=1)
+        json.dump({**{k: v for k, v in s.items() if k != "_ro"}, "schema_version": STATE_SCHEMA_VERSION}, f, ensure_ascii=False, indent=1)
         f.flush(); os.fsync(f.fileno())                  # 第十七轮 L-29：断电后不会剩一个空文件
     os.replace(tmp, STATE)
 
@@ -878,7 +942,8 @@ def notify(kind, title, body="", item=None, gate=None, **data):
 
 
 # ---------- 第十七轮 L-06 / L-07：所有外部命令有超时；git 网络操作和 gh 带项目代理 ----------
-TIMEOUT_DEFAULTS = {"test": 30, "git_net": 3, "git": 1, "gh": 1, "push": 5, "deploy": 20, "tick": 45, "orca": 2}   # 分钟
+TIMEOUT_DEFAULTS = {"test": 30, "git_net": 3, "git": 1, "gh": 1, "push": 5, "deploy": 20, "tick": 45, "orca": 2,
+                    "multica": 1}   # 分钟；第二十轮：每条 multica CLI 调用的超时
 
 
 def tmo(kind):
@@ -945,20 +1010,12 @@ def gh_run(*args):
 
 
 def coord(s):
-    """统筹终端：接棒器自己在 Orca 里的身份。"""
-    if s["coord"]:
-        res, j = orca("terminal", "show", "--terminal", s["coord"], ok=False)
-        if j.get("ok"):
-            return s["coord"]
-    res, _ = orca("terminal", "create", "--worktree", f"path:{CFG['repo']}", "--title", "evo-coordinator")
-    s["coord"] = res["terminal"]["handle"]
-    orca("orchestration", "run-create", "--from", s["coord"], "--objective", "evo autopilot")
-    return s["coord"]
+    """统筹身份：接棒器自己在执行端里的身份（Orca：统筹终端；Multica：项目）。"""
+    return EX.coord(s)
 
 
 def tasks(s):
-    res, _ = orca("orchestration", "task-list", "--from", coord(s))
-    return {t["id"]: t for t in res.get("tasks", [])}
+    return EX.task_list(coord(s))
 
 
 def overlap(a, b):
@@ -1044,27 +1101,21 @@ def add_item(s, a):
         spec += f"老板闸门: 是（碰到受保护路径 {'、'.join(owner_only)}；决策岗不能批）\n"
     probe = {"ui": a.ui, "scope": scope}
     bspec, vspec = spec_head("build", probe) + role_prompt("build") + spec, spec_head("verify", probe) + role_prompt("verify") + spec
-    b, _ = orca("orchestration", "task-create", "--from", c, "--task-title", f"{key} 施工", "--spec", bspec,
-                *(["--deps", json.dumps(deps)] if deps else []))
-    v, _ = orca("orchestration", "task-create", "--from", c, "--task-title", f"{key} 验收", "--spec", vspec,
-                "--deps", json.dumps([b["task"]["id"]]))
-    m, _ = orca("orchestration", "task-create", "--from", c, "--task-title", f"{key} 合并", "--spec", "由接棒器合并",
-                "--deps", json.dumps([v["task"]["id"]]))
-    it = {"kind": kind, "parent": getattr(a, "parent", None), "title": a.title, "scope": scope, "ui": a.ui, "issue": a.issue, "build": b["task"]["id"],
-          "verify": v["task"]["id"], "merge": m["task"]["id"], "spec": spec, "after": deps, "state": "queued", "round": 0,
+    b = EX.task_create(c, f"{key} 施工", bspec, deps)
+    v = EX.task_create(c, f"{key} 验收", vspec, [b])
+    m = EX.task_create(c, f"{key} 合并", "由接棒器合并", [v])
+    it = {"kind": kind, "parent": getattr(a, "parent", None), "title": a.title, "scope": scope, "ui": a.ui, "issue": a.issue, "build": b,
+          "verify": v, "merge": m, "spec": spec, "after": deps, "state": "queued", "round": 0,
           "model_i": 0, "worktree": None, "gates": {}, "dispatch": {}, "window": win, "build_spec": bspec, "verify_spec": vspec,
-          "usage": {"runs": 0, "minutes": 0.0}}
+          "usage": {"runs": 0, "minutes": 0.0}, "exec": exec_blank(EX.name)}
     if owner_only:
         it["owner_only"] = owner_only
     if a.product:
-        g, _ = orca("orchestration", "gate-create", "--from", c, "--task", it["build"],
-                    "--question", f"做不做：{a.title}", "--options", json.dumps(["做", "不做"]))
-        it["gates"]["do"] = g["gate"]["id"]; notify("gate_created", "等你点头：做不做", a.title, item=key, gate=g["gate"]["id"])
+        gid = EX.gate_create(c, it["build"], f"做不做：{a.title}", ["做", "不做"])
+        it["gates"]["do"] = gid; notify("gate_created", "等你点头：做不做", a.title, item=key, gate=gid)
         it["gate_open_at"] = TM.now()
     if a.ui:
-        g, _ = orca("orchestration", "gate-create", "--from", c, "--task", it["merge"],
-                    "--question", f"看效果：{a.title}", "--options", json.dumps(["通过", "打回"]))
-        it["gates"]["look"] = g["gate"]["id"]
+        it["gates"]["look"] = EX.gate_create(c, it["merge"], f"看效果：{a.title}", ["通过", "打回"])
     s["items"][key] = it
     tl(key, "add", title=a.title, scope=scope, look=bool(a.ui), product=bool(a.product), parent=it["parent"], issue=a.issue)
     if it["gates"].get("do"):
@@ -1084,13 +1135,14 @@ def start_worker(s, key, it, role):
     mb = models[it["model_i"] % len(models)]
     model = mb if role == "build" else next((m for m in models if m != it.get("build_model")), models[0])
     if role == "build" and not it["worktree"]:
-        res, _ = orca("worktree", "create", "--repo", f"path:{CFG['repo']}", "--name", key.lower().replace("#", ""))
-        it["worktree"] = res["worktree"]["path"]
+        it["worktree"] = EX.worktree_create(CFG["repo"], key.lower().replace("#", ""))
     tid = it["build" if role == "build" else "verify"]
-    h, did = launch(c, it["worktree"], f"{key}-{role}", rc, model, tid)
+    h, did = launch(c, it["worktree"], f"{key}-{role}", rc, model, tid, role=role, key=key, it=it)
     it["dispatch"][role] = {"id": did, "terminal": h, "since": time.time(), "model": model, "fallback": fb, "tool": R.tool_of(rc)}
     if role == "build":
         it["build_model"] = model
+    if EX.name == "orca":                              # 第二十轮：Multica 的 exec 在 launch 里写（issue / agent）
+        it["exec"] = {**(it.get("exec") or {}), **exec_blank("orca"), "agent": R.tool_of(rc)}
     it["state"] = "building" if role == "build" else "verifying"
     usage_add(s, it, role, runs=1)
     tl(key, "dispatch", role=role, model=model, dispatch=did, round=it.get("round", 0), worktree=it["worktree"],
@@ -1098,23 +1150,26 @@ def start_worker(s, key, it, role):
     log(s, f"{key} 开始{'施工' if role == 'build' else '验收'}（{model}）")
 
 
-def launch(c, path, title, rc, model, tid):
-    """开终端、起工人命令、派工。返回 (终端句柄, 派工号)。"""
-    res, _ = orca("terminal", "create", "--worktree", f"path:{path}", "--title", title)
-    h = res["terminal"]["handle"]
-    cmd = R.render_cmd(rc["cmd"], model_alias(model), rc.get("thinking"))      # {model} / {thinking}；空值连参数一起去掉；第十八轮：按本机前缀改名
-    orca("terminal", "send", "--terminal", h, "--text", cmd, "--enter", ok=False)
-    time.sleep(rc.get("boot_seconds", 3))
-    d, j = orca("orchestration", "dispatch", "--from", c, "--task", tid, "--to", h, "--inject", ok=False)
-    if not j.get("ok"):
-        if (j.get("error") or {}).get("code") != "inject_rejected":
-            raise SystemExit(f"派工失败: {j.get('error')}")
-        # 不在 Orca 识别名单里的命令行（自定义包装）：普通派工，再把说明打进终端
-        d, _ = orca("orchestration", "dispatch", "--from", c, "--task", tid, "--to", h)
-        pre, _ = orca("orchestration", "dispatch-show", "--from", c, "--task", tid, "--preamble")
-        text = (pre.get("preamble") or "").replace("ctx_preview", d["dispatch"]["id"])
-        orca("terminal", "send", "--terminal", h, "--text", text, "--enter")
-    return h, d["dispatch"]["id"]
+def claude_trust(path):
+    """claude 第一次进一个文件夹会问「信任吗」，后台没人点会一直停着。工作区是 evo 自己建的，替它记成已信任。"""
+    p = os.path.expanduser("~/.claude.json")
+    try:
+        j = json.load(open(p)) if os.path.exists(p) else {}
+        pr = j.setdefault("projects", {}).setdefault(os.path.realpath(path), {})
+        if pr.get("hasTrustDialogAccepted"):
+            return
+        pr["hasTrustDialogAccepted"] = True
+        tmp = p + ".evo.tmp"
+        with open(tmp, "w") as f:
+            json.dump(j, f, ensure_ascii=False, indent=2)
+        os.replace(tmp, p)
+    except Exception as e:
+        print(f"没能替 claude 记下信任 {path}：{e}")
+
+
+def launch(c, path, title, rc, model, tid, role=None, key=None, it=None):
+    """开工（执行端负责：Orca 开终端 + 派工；Multica 建 / 复用 issue + assign）。返回 (工人句柄, 派工号)。"""
+    return EX.launch(c, path, title, rc, model, tid, role=role, key=key, it=it)
 
 
 def do_merge(s, key, it):
@@ -1302,9 +1357,9 @@ def run_suite(cmd, cwd, tag):
 def cleanup(it):
     """合并后收拾：关掉本件的终端，删掉本件工作区（分支已合入主线）。"""
     for d in it["dispatch"].values():
-        orca("terminal", "close", "--terminal", d["terminal"], ok=False)
+        EX.terminal_close(d["terminal"])
     if it.get("worktree"):
-        orca("worktree", "rm", "--worktree", f"path:{it['worktree']}", ok=False)
+        EX.worktree_rm(it["worktree"])
 
 
 def gh_comment(it, text):
@@ -1326,10 +1381,9 @@ def rework(s, k, it, why):
     c = coord(s)
     it["build_spec"] = spec_head("build", it) + role_prompt("build") + it["spec"] + f"\n返工原因：{why}\n提交信息里原样带上这句原因。"
     it["verify_spec"] = spec_head("verify", it) + role_prompt("verify") + it["spec"] + f"\n本轮返工原因：{why}"
-    nb, _ = orca("orchestration", "task-create", "--from", c, "--task-title", f"{k} 返工{it['round']}", "--spec", it["build_spec"])
-    nv, _ = orca("orchestration", "task-create", "--from", c, "--task-title", f"{k} 复验{it['round']}",
-                 "--spec", it["verify_spec"], "--deps", json.dumps([nb["task"]["id"]]))
-    it["build"], it["verify"] = nb["task"]["id"], nv["task"]["id"]
+    nb = EX.task_create(c, f"{k} 返工{it['round']}", it["build_spec"])
+    nv = EX.task_create(c, f"{k} 复验{it['round']}", it["verify_spec"], [nb])
+    it["build"], it["verify"] = nb, nv
     it["model_i"] += 1   # 返工换一个施工模型，避免同一个模型反复犯同样的错
     it["state"] = "queued"; it.pop("verified_sha", None); it.pop("look_bound", None)
     it["rev"] = it.get("rev", 0) + 1
@@ -1541,14 +1595,8 @@ def rl_pause(role, line, key, fallback=False):
 
 
 def terminal_tail(h):
-    """读工人终端最近的输出（orca terminal read）；读不到返回空串。"""
-    r, j = orca("terminal", "read", "--terminal", h, ok=False)
-    if not j.get("ok"):
-        return ""
-    t = r.get("text") or r.get("output") or r.get("content") or ""
-    if not t and isinstance(r.get("lines"), list):
-        t = "\n".join(x if isinstance(x, str) else (x.get("text") or "") for x in r["lines"])
-    return t if isinstance(t, str) else ""
+    """读工人最近的输出（Orca：terminal read；Multica：这次 run 的报错 + 最新评论）；读不到返回空串。"""
+    return EX.terminal_read(h)
 
 
 def rl_evidence(text, terminal=None):
@@ -1571,20 +1619,19 @@ def requeue_rate_limited(s, k, it, role, line):
     worker_end(s, it, role)
     c = coord(s); d = it["dispatch"].get(role) or {}
     if d.get("terminal"):
-        orca("terminal", "close", "--terminal", d["terminal"], ok=False)
+        EX.terminal_close(d["terminal"])
     old = it["build" if role == "build" else "verify"]
-    orca("orchestration", "task-update", "--from", c, "--id", old, "--status", "failed", "--result", "rate limited, requeued", ok=False)
+    EX.task_update(c, old, "failed", "rate limited, requeued")
     note = "\n（上一次因订阅额度用完中断；工作区里已有的改动接着做，不要从头来）"
     if role == "build":
-        nb, _ = orca("orchestration", "task-create", "--from", c, "--task-title", f"{k} 施工（额度恢复后续做）",
-                     "--spec", it.get("build_spec", spec_head("build", it) + role_prompt("build") + it["spec"]) + note)
-        nv, _ = orca("orchestration", "task-create", "--from", c, "--task-title", f"{k} 验收",
-                     "--spec", it.get("verify_spec", spec_head("verify", it) + role_prompt("verify") + it["spec"]), "--deps", json.dumps([nb["task"]["id"]]))
-        it["build"], it["verify"] = nb["task"]["id"], nv["task"]["id"]; it["state"] = "queued"
+        nb = EX.task_create(c, f"{k} 施工（额度恢复后续做）",
+                            it.get("build_spec", spec_head("build", it) + role_prompt("build") + it["spec"]) + note)
+        nv = EX.task_create(c, f"{k} 验收", it.get("verify_spec", spec_head("verify", it) + role_prompt("verify") + it["spec"]), [nb])
+        it["build"], it["verify"] = nb, nv; it["state"] = "queued"
     else:
-        nv, _ = orca("orchestration", "task-create", "--from", c, "--task-title", f"{k} 验收（额度恢复后重验）",
-                     "--spec", it.get("verify_spec", spec_head("verify", it) + role_prompt("verify") + it["spec"]), "--deps", json.dumps([it["build"]]))
-        it["verify"] = nv["task"]["id"]; it["state"] = "built"
+        nv = EX.task_create(c, f"{k} 验收（额度恢复后重验）",
+                            it.get("verify_spec", spec_head("verify", it) + role_prompt("verify") + it["spec"]), [it["build"]])
+        it["verify"] = nv; it["state"] = "built"
     it.pop("stalled", None); it.pop("rl_probe", None)
     it["rate_waits"] = it.get("rate_waits", 0) + 1
     log(s, f"{k} {'施工' if role == 'build' else '验收'}岗额度用完，暂停到 {TM.local(until).strftime('%m-%d %H:%M')}，原样重排（不扣轮次）")
@@ -1804,7 +1851,7 @@ def check_gates(s, gates):
 # ---------- 决策岗：交决策岗 / 有提问 / 外部来报 → 至多每 30 分钟叫醒一次，一批处理 ----------
 def decider_wake(s, T):
     rc = (CFG.get("roles") or {}).get("decide") or {}
-    if not rc.get("cmd"):
+    if not rc.get("cmd") and EX.name != "multica":     # Multica：决策岗是固定 agent（multica.agents.decide），不用本机命令
         return
     d = s.setdefault("decide", {})
     if d.get("task") and not d.get("done"):
@@ -1850,11 +1897,10 @@ def decider_wake(s, T):
     lines.append("\n每件的决定写在最后一条 worker_done 正文的 ```json 块里，格式见岗位规则第 12 条"
                  "（retry / rework / drop / split / ask_owner / answer），接棒器自动执行；外部来报在 issue 上补标签。")
     c = coord(s)
-    t, _ = orca("orchestration", "task-create", "--from", c, "--task-title", f"{CODE} 决策批次 {TM.local().strftime('%m-%d %H:%M')}",
-                "--spec", goal_head() + role_prompt("decide") + "\n".join(lines))
-    tid = t["task"]["id"]
+    tid = EX.task_create(c, f"{CODE} 决策批次 {TM.local().strftime('%m-%d %H:%M')}",
+                         goal_head() + role_prompt("decide") + "\n".join(lines))
     models = rc.get("models") or [None]
-    h, did = launch(c, CFG["repo"], f"{CODE}-decide", rc, models[0], tid)
+    h, did = launch(c, CFG["repo"], f"{CODE}-decide", rc, models[0], tid, role="decide")
     s["decide"] = {"task": tid, "dispatch": did, "terminal": h, "last": TM.now(), "since": time.time(), "done": False, "fallback": dfb,
                    "items": list(wait), "issues": [e["issue"] for e in inbox if e.get("issue")], "inbox": inbox[:50]}
     seen.update(wait); s["decide_inbox"] = []
@@ -1871,17 +1917,15 @@ def decider_stuck(s, d):
     gone = False
     if d.get("dispatch"):
         try:
-            r, _ = orca("orchestration", "worker-show", "--dispatch", d["dispatch"], ok=False)
-            obs = (r.get("observation") or {}).get("status")
-            gone = bool((r.get("terminal") or {}).get("orphaned") or (obs and obs != "live"))
+            gone = EX.worker_gone(d["dispatch"])
         except SystemExit:
             gone = False
     if not gone and not (mins and age >= mins):
         return False
     why = "决策岗工人进程不在了" if gone else f"决策岗 {int(age)} 分钟没交决定"
     if d.get("terminal"):
-        orca("terminal", "close", "--terminal", d["terminal"], ok=False)
-    orca("orchestration", "task-update", "--from", coord(s), "--id", d["task"], "--status", "failed", "--result", "decider timeout", ok=False)
+        EX.terminal_close(d["terminal"])
+    EX.task_update(coord(s), d["task"], "failed", "decider timeout")
     if not d.get("ended"):
         d["ended"] = time.time(); usage_add(s, None, "decide", minutes=(d["ended"] - d.get("since", d["ended"])) / 60)
     n = s["decide_timeouts"] = s.get("decide_timeouts", 0) + 1
@@ -1962,19 +2006,71 @@ def checkpoint(s, name):
     crash_point(name)
 
 
+def _find_key(o, key):
+    if isinstance(o, dict):
+        if key in o:
+            return o[key]
+        for v in o.values():
+            r = _find_key(v, key)
+            if r is not None:
+                return r
+    elif isinstance(o, list):
+        for v in o:
+            r = _find_key(v, key)
+            if r is not None:
+                return r
+    return None
+
+
+def exec_up(s):
+    """Air 试跑 10-21：Orca 退出后 evo 一直显示「施工中」、什么都不说。每轮先看一眼执行端（第二十轮起叫 exec_up，原 orca_up）：
+    不通就记一次、推一次（Orca：orca_down；Multica：exec_down），这一轮不派工、不判卡住；恢复后记一行，接着跑。
+    Orca：下一轮的「工人不在了」走 C7 自动重启一次。Multica：daemon 回来后 run 会自己接着跑，evo 照常轮询。"""
+    up, why = EX.health()
+    if "orca_down" in s:                                 # 第二十轮：老状态里的 orca_down 改名 exec_down
+        s["exec_down"] = s.pop("orca_down")
+    if up:
+        if s.get("exec_down"):
+            mins = int((time.time() - s["exec_down"]) / 60)
+            log(s, f"Orca 恢复（停了约 {mins} 分钟）：工人进程不在的件会自动重启一次" if EX.name == "orca"
+                else f"{EX.label} 执行端恢复（停了约 {mins} 分钟），接着跑")
+            s.pop("exec_down", None); save(s)
+        return True
+    if not s.get("exec_down"):
+        s["exec_down"] = time.time()
+        if EX.name == "orca":
+            log(s, f"Orca 不通（{why}）：先不派工、不判卡住。打开 Orca 后自动接着跑")
+            notify("orca_down", "Orca 没开", f"{why}。打开 Orca（open -a Orca）后自动接着跑；正在施工的件会在原工作区重启一次。")
+        else:
+            log(s, f"{EX.label} 执行端掉线（{why}）：先不派工、不判卡住。恢复后自动接着跑")
+            notify("exec_down", f"{EX.label} 执行端掉线", f"{why}。看看 multica daemon status / multica auth status；"
+                   "恢复后自动接着跑，已经派出去的 issue 不会重派。")
+        save(s)
+    return False
+
+
+orca_up = exec_up          # 旧名（功能包 / 老脚本可能还在叫）
+
+
 # ---------- 接棒一轮 ----------
 def cmd_tick(a=None):
     lease_check(loop=True)
-    s = load(); guard_git(s); c = coord(s); T = tasks(s)
+    s = load(); guard_git(s)
+    if not exec_up(s):
+        return
+    c = coord(s)
+    if exec_reseed(s, c):
+        checkpoint(s, "reseed")
+    T = tasks(s)
     by_task = {}
     for k, it in s["items"].items():
         for r in ("build", "verify", "merge"):
             by_task[it[r]] = (k, r)
 
     # 1) 收回报：处理过的消息号记下，重投的跳过；每条处理完立刻存盘
-    res, _ = orca("orchestration", "check", "--terminal", c, "--types", "worker_done,escalation,question,heartbeat", ok=False)
+    msgs, did, res = EX.inbox(c, s)
     seen = s.setdefault("msg_seen", [])
-    for m in res.get("messages") or []:
+    for m in msgs:
         if not isinstance(m, dict):
             continue
         mid = msg_id(m) or synth_msg_id(s, m, by_task)
@@ -1988,9 +2084,8 @@ def cmd_tick(a=None):
         if mid:
             seen.append(mid); del seen[:-MSG_SEEN_MAX]
         checkpoint(s, "msg")
-    did = res.get("deliveryId") or res.get("delivery_id") or (res.get("delivery") or {}).get("id")
     if did:
-        orca("orchestration", "check", "--terminal", c, "--ack", did, ok=False)
+        EX.inbox_ack(c, did)
     if env("EVO_DEBUG"):
         print("check keys:", list(res.keys()))
     T = tasks(s)
@@ -2001,16 +2096,16 @@ def cmd_tick(a=None):
     check_stalls(s)                # 3) 停滞
     check_usage(s)
     emit("tick.after_dispatch", live={"s": s}, record=False)     # 第十八轮：功能包的每轮检查（每件上限…）
-    gl, j = orca("orchestration", "gate-list", "--from", c, ok=False)
-    if j.get("ok"):
-        emit("tick.gates", live={"s": s, "gates": gl.get("gates", [])}, record=False)   # 第十八轮：Orca 端结的闸门（功能包 orca-gate-sync）
-        gl, j = orca("orchestration", "gate-list", "--from", c, ok=False)
-    if j.get("ok"):
-        pend = [g for g in gl.get("gates", []) if g.get("status") in (None, "pending")]
+    gates = EX.gate_list(c)
+    if gates is not None:
+        emit("tick.gates", live={"s": s, "gates": gates}, record=False)   # 第十八轮：Orca 端结的闸门（功能包 orca-gate-sync）
+        gates = EX.gate_list(c)
+    if gates is not None:
+        pend = [g for g in gates if g.get("status") in (None, "pending")]
         check_gates(s, pend)
         check_no_live(s, tasks(s), {g["id"] for g in pend})   # 读不到闸门就不判（免得误报）
     decider_wake(s, T)
-    emit("tick.before_save", live={"s": s, "gates": gl.get("gates", []) if j.get("ok") else None}, record=False)   # 自动收菜（功能包 deploy）…
+    emit("tick.before_save", live={"s": s, "gates": gates}, record=False)   # 自动收菜（功能包 deploy）…
     save(s)
     heartbeat()
     emit("tick", count={st: sum(1 for it in s["items"].values() if it["state"] == st)
@@ -2044,6 +2139,9 @@ def handle_msg(s, m, by_task):
         tl(k, "msg_stale", type=typ, role=role, state=it["state"], task=tid)
         return log(s, f"{k} 收到一条过时的回报（{typ}，{role}，这件现在{NAMES.get(it['state'], it['state'])}），丢掉")
     it["last_seen"] = time.time(); it.pop("stalled", None)
+    if role in ("build", "verify") and m.get("exec"):
+        EX.on_delivery(s, k, it, role, m)                # 第二十轮 Multica：施工分支取进 evo 的克隆、记 issue / 分支
+        outcome = (m.get("payload") or {}).get("outcome") or m.get("outcome")
     if role in ("build", "verify") and tid == it[role] and it["state"] in ("building", "verifying"):
         text = f"{m.get('subject') or ''}\n{m.get('body') or ''}"
         rl = None
@@ -2151,8 +2249,7 @@ def dispatch_all(s, c, T):
             # 返工后，合并任务还挂在旧的验收上：把旧验收标为已被复验取代
             for d in json.loads(T.get(it["merge"], {}).get("deps") or "[]"):
                 if d != it["verify"] and T.get(d, {}).get("status") not in ("completed", None):
-                    orca("orchestration", "task-update", "--from", c, "--id", d, "--status", "completed",
-                         "--result", "superseded by re-verify", ok=False)
+                    EX.task_update(c, d, "completed", "superseded by re-verify")
         elif it["state"] == "verified" and st("merge") == "ready":
             if not look_approved(it):
                 continue                   # 第十七轮 L-03：看效果闸门在 Orca 端被结掉 ≠ 老板通过；等老板在 evo 入口确认
@@ -2177,6 +2274,11 @@ def role_ready(s, k, it, role):
             it["waiting"] = "window"; log(s, f"{k} 等窗口（{it['window']}）")
         return False
     paused = rl_paused(role)
+    if EX.name == "multica":                           # 第二十轮：模型绑在 Multica agent 上，evo 不选路线；额度暂停照旧
+        if paused:
+            it["waiting"] = "rate_limit"; return False
+        it.pop("waiting", None); it.pop("model_block", None)
+        return True
     rt, code, why, okm = team_route(role, it)          # 第十四轮：主模型 / 备用 / 停（模型下线、撞模型、magpie 不通）
     if rt is None:
         if paused or code == "rate_limited":
@@ -2214,8 +2316,7 @@ def relook_needed(s, c, k, it):
         return False                       # 算不出指纹交给后面的合并检查去拦
     if now == lp:
         return False
-    g, _ = orca("orchestration", "gate-create", "--from", c, "--task", it["merge"],
-                "--question", f"看效果（改动后重看）：{it['title']}", "--options", json.dumps(["通过", "打回"]))
+    g = {"gate": {"id": EX.gate_create(c, it["merge"], f"看效果（改动后重看）：{it['title']}", ["通过", "打回"])}}
     it["gates"]["look"] = g["gate"]["id"]; it.pop("look_patch", None)
     it["look_bound"] = {"gate": g["gate"]["id"], "patch": now, "sha": git(it["worktree"], "rev-parse", "HEAD")}
     it["gate_open_at"] = TM.now()
@@ -2249,11 +2350,12 @@ def merge_one(s, c, k, it):
         return
     err, kind = do_merge(s, k, it)
     if not err:
-        orca("orchestration", "task-update", "--from", c, "--id", it["merge"], "--status", "completed")
+        EX.task_update(c, it["merge"], "completed", ok=True)
         it["state"] = "pushing"; log(s, f"{k} 已本地合并，等推送")
         it["merged_sha"] = git(CFG["repo"], "rev-parse", "HEAD")
         tl(k, "merge", sha=it["merged_sha"], verified=it.get("verified_sha"), premerge_log=(it.get("premerge") or {}).get("log"))
         cleanup(it)
+        EX.close((it.get("exec") or {}).get("issue"), ok=True)     # Multica：issue 标 done（Orca 没这一步）
     elif kind == "main_red":
         sha = (s.get("main_red") or {}).get("sha")
         if it.get("waiting") != "main_red":
@@ -2274,10 +2376,15 @@ def check_stalls(s):
         if it["state"] not in ("building", "verifying"):
             continue
         d = it["dispatch"]["build" if it["state"] == "building" else "verify"]
-        r, j = orca("orchestration", "worker-show", "--dispatch", d["id"], ok=False)
-        obs = (r.get("observation") or {}).get("status")
-        gone = (r.get("terminal") or {}).get("orphaned") or (obs and obs != "live")
-        idle = (now - max(it.get("last_seen", 0), d["since"])) / 60
+        gone = EX.worker_gone(d["id"])
+        alive = EX.alive_at(d["id"])                       # 第二十轮补：Multica run 还在动（usage / 工作区改动）就不算没回报
+        idle = (now - max(it.get("last_seen", 0), d["since"], alive)) / 60
+        ran = (now - d.get("cap_from", d["since"])) / 60   # 决策岗说「接着等」后从那一刻重新算上限
+        if it.get("stalled") == "idle" and idle <= LIM["stall_minutes"]:
+            it.pop("stalled", None); log(s, f"{k} 又有动静了，取消「疑似卡住」")
+            s["decide_inbox"] = [x for x in s.get("decide_inbox", []) if not (x.get("todo") and x.get("item") == k
+                                 and str(x.get("title", "")).endswith("疑似卡住"))]   # 还没送决策岗的就撤回
+            continue
         # 额度用完的工人常常不回报、停在提示上：安静够久就看一眼终端尾部，连续两次同一提示且输出没再变才算
         if idle >= LIM.get("rate_limit_idle_minutes", 3):
             tail = terminal_tail(d["terminal"])
@@ -2296,10 +2403,17 @@ def check_stalls(s):
                 restart_worker(s, k, it, role)
                 checkpoint(s, "restart")
                 continue
-        if (gone or idle > LIM["stall_minutes"]) and not it.get("stalled"):
-            it["stalled"] = True
-            why = "工人进程不在了" if gone else f"{int(idle)} 分钟没有任何回报"
+        cap = LIM.get("run_max_minutes", 60) if EX.name == "multica" else 0
+        over = bool(cap) and ran > cap
+        if (gone or idle > LIM["stall_minutes"] or over) and not it.get("stalled"):
+            it["stalled"] = "idle" if not gone and not over else True
+            why = ("工人进程不在了" if gone else f"跑了 {int(ran)} 分钟还没交卷（上限 {cap} 分钟，可能在兜圈子）" if over
+                   else f"{int(idle)} 分钟没有任何回报")
             log(s, f"{k} 疑似卡住：{why}"); notify("stalled", "疑似卡住", f"{it['title']}：{why}", item=k)
+            # Air 试跑 10-21：标了卡住之后 20 分钟没人管。技术问题交决策岗看一次（retry / rework / drop），不用等老板
+            s.setdefault("decide_inbox", []).append({"todo": True, "issue": None, "item": k, "title": f"{k} 疑似卡住",
+                "note": f"{why}（派工 {d.get('id')}，终端 {d.get('terminal')}，已自动重启 {d.get('restarts', 0)} 次）。"
+                        f"请判断：retry 重新派工 / rework 改说明再派 / drop 不做；判断不了再交老板"})
 
 
 def restart_worker(s, k, it, role):
@@ -2307,22 +2421,20 @@ def restart_worker(s, k, it, role):
     次数记在这次派工上（restarts）；重启出来的派工再死一次就走老路（标疑似卡住并推送）。"""
     c = coord(s); d = it["dispatch"][role]; rc = team_rc(role, bool(d.get("fallback")))
     worker_end(s, it, role)
-    orca("terminal", "close", "--terminal", d["terminal"], ok=False)
+    EX.terminal_close(d["terminal"])
     old = it["build" if role == "build" else "verify"]
-    orca("orchestration", "task-update", "--from", c, "--id", old, "--status", "failed", "--result", "worker gone, restarted", ok=False)
+    EX.task_update(c, old, "failed", "worker gone, restarted")
     note = "\n（上一个工人进程意外退出，接棒器已自动重启一次；工作区里已有的改动接着做，不要从头来）"
     if role == "build":
-        nb, _ = orca("orchestration", "task-create", "--from", c, "--task-title", f"{k} 施工（工人重启）",
-                     "--spec", it.get("build_spec", spec_head("build", it) + role_prompt("build") + it["spec"]) + note)
-        nv, _ = orca("orchestration", "task-create", "--from", c, "--task-title", f"{k} 验收",
-                     "--spec", it.get("verify_spec", spec_head("verify", it) + role_prompt("verify") + it["spec"]), "--deps", json.dumps([nb["task"]["id"]]))
-        it["build"], it["verify"] = nb["task"]["id"], nv["task"]["id"]; tid = it["build"]
+        nb = EX.task_create(c, f"{k} 施工（工人重启）", it.get("build_spec", spec_head("build", it) + role_prompt("build") + it["spec"]) + note)
+        nv = EX.task_create(c, f"{k} 验收", it.get("verify_spec", spec_head("verify", it) + role_prompt("verify") + it["spec"]), [nb])
+        it["build"], it["verify"] = nb, nv; tid = it["build"]
     else:
-        nv, _ = orca("orchestration", "task-create", "--from", c, "--task-title", f"{k} 验收（工人重启）",
-                     "--spec", it.get("verify_spec", spec_head("verify", it) + role_prompt("verify") + it["spec"]) + note, "--deps", json.dumps([it["build"]]))
-        it["verify"] = nv["task"]["id"]; tid = it["verify"]
+        nv = EX.task_create(c, f"{k} 验收（工人重启）",
+                            it.get("verify_spec", spec_head("verify", it) + role_prompt("verify") + it["spec"]) + note, [it["build"]])
+        it["verify"] = nv; tid = it["verify"]
     model = d.get("model")
-    h, did = launch(c, it["worktree"], f"{k}-{role}", rc, model, tid)
+    h, did = launch(c, it["worktree"], f"{k}-{role}", rc, model, tid, role=role, key=k, it=it)
     it["dispatch"][role] = {"id": did, "terminal": h, "since": time.time(), "model": model, "fallback": d.get("fallback"),
                             "restarts": d.get("restarts", 0) + 1, "restarted_from": d["id"]}
     it["restarts"] = it.get("restarts", 0) + 1
@@ -2335,12 +2447,46 @@ def restart_worker(s, k, it, role):
 
 
 # ---------- 不做、决策岗的决定 ----------
+def void_item_gates(s, k, it):
+    """10-22 Air：件不做了，它的看效果 / 做不做 / 上线闸门还挂在「等你处理」里（EV-DOC-002 的 mg_4）。一并作废。"""
+    for gid in {it["gates"].get("look"), it["gates"].get("do"), it.get("ship_gate")} - {None}:
+        EX.gate_resolve(coord(s), gid, "作废")
+        s.setdefault("superseded_gates", {})[gid] = {"item": k, "why": "这件已标为不做"}
+    tidy_closed(it, s, k)
+
+
+DONE_STATES = ("dropped", "merged", "shipped")
+
+
+def tidy_closed(it, s=None, k=None):
+    """10-22 Air：件已收尾（不做 / 合并 / 上线），身上的「疑似卡住」「没有活路」和看效果闸门号一并清掉，
+    status 不再显示 ⚠疑似卡住、stuck 不再多算。作废的闸门号留在 superseded_gates 里查得到。"""
+    if it.get("state") not in DONE_STATES:
+        return False
+    hit = False
+    for f in ("stalled", "no_live", "no_live_since", "resume"):
+        if f in it:
+            it.pop(f, None); hit = True
+    g = it.get("gates") or {}
+    if it["state"] == "dropped":
+        sup = s.setdefault("superseded_gates", {}) if s is not None else {}
+        for gk in ("look", "do"):
+            if g.get(gk):
+                sup.setdefault(g[gk], {"item": k, "why": "这件已标为不做"})   # 先记作废，状态页和 approve 靠它拦旧闸门
+                g[gk] = None; hit = True
+        if it.get("ship_gate"):
+            sup.setdefault(it["ship_gate"], {"item": k, "why": "这件已标为不做"})
+            it["ship_gate"] = None; hit = True
+    return hit
+
+
 def drop_item(s, k, it, why):
     """一件变成「不做」：标状态、收拾终端和工作区；合并任务标完成，排在它后面的件不再干等。"""
     it["state"] = "dropped"; it.pop("resume", None)
-    orca("orchestration", "task-update", "--from", coord(s), "--id", it["merge"], "--status", "completed",
-         "--result", "dropped", ok=False)
+    void_item_gates(s, k, it)
+    EX.task_update(coord(s), it["merge"], "completed", "dropped")
     cleanup(it)
+    EX.close((it.get("exec") or {}).get("issue"), ok=False)        # Multica：issue 标 cancelled
     tl(k, "drop", why=why[:500])
     log(s, f"{k} 不做：{why[:80]}")
 
@@ -2393,9 +2539,8 @@ def retire_worker(s, it):
     for role, d in (it.get("dispatch") or {}).items():
         if not d.get("ended"):
             worker_end(s, it, role)
-        orca("terminal", "close", "--terminal", d["terminal"], ok=False)
-    orca("orchestration", "task-update", "--from", coord(s), "--id", it["build"], "--status", "completed",
-         "--result", "superseded", ok=False)
+        EX.terminal_close(d["terminal"])
+    EX.task_update(coord(s), it["build"], "completed", "superseded")
 
 
 def decide_rework(s, k, it, note, d=None, force=False):
@@ -2418,6 +2563,12 @@ def decide_retry(s, k, it, note, d=None):
     it.pop("stalled", None)
     if it["state"] == "escalated" and it.get("resume"):
         it["state"] = it.pop("resume"); log(s, f"{k} 决策岗：从断点继续（{it['state']}）")
+    elif it["state"] in ("building", "verifying") and (it.get("no_live") or {}).get("reason") in (None, "stalled"):
+        it.pop("no_live", None); it.pop("no_live_since", None)   # 10-22 Air：工人其实还在干，「重试」= 清标记接着等，不重派
+        dd = (it.get("dispatch") or {}).get("build" if it["state"] == "building" else "verify")
+        if dd:
+            dd["cap_from"] = time.time()
+        log(s, f"{k} 决策岗：清掉卡住标记，接着等工人（{it['state']}）")
     elif it["state"] in ("escalated", "asking") or it.get("no_live"):
         decide_rework(s, k, it, note or "重试", d)        # 没有活路的件「继续」推不动：带说明重开施工
     else:
@@ -2450,11 +2601,9 @@ def decide_split(s, k, it, note, d):
 def decide_ask_owner(s, k, it, note, d=None):
     """转老板：建一个老板闸门（同意/不同意），立刻推送；老板定了再交回决策岗。"""
     c = coord(s)
-    t, _ = orca("orchestration", "task-create", "--from", c, "--task-title", f"{k} 决策岗转老板", "--spec", note or it["title"])
-    g, _ = orca("orchestration", "gate-create", "--from", c, "--task", t["task"]["id"],
-                "--question", f"{k} {it['title']}：{note or '决策岗请你定'}"[:200], "--options", json.dumps(["同意", "不同意"]))
-    gid = g["gate"]["id"]
-    s.setdefault("owner_asks", {})[gid] = {"key": k, "task": t["task"]["id"], "note": note}
+    tid = EX.task_create(c, f"{k} 决策岗转老板", note or it["title"])
+    gid = EX.gate_create(c, tid, f"{k} {it['title']}：{note or '决策岗请你定'}"[:200], ["同意", "不同意"])
+    s.setdefault("owner_asks", {})[gid] = {"key": k, "task": tid, "note": note}
     s.setdefault("gate_since", {})[gid] = TM.now(); s.setdefault("gate_pushed", []).append(gid)   # 已推过，5 分钟提醒不再重复
     log(s, f"{k} 决策岗转老板：{note[:60]}")
     notify("gate_waiting", f"决策岗请你定：{it['title']}", note, item=k, gate=gid, options=["同意", "不同意"])
@@ -2482,10 +2631,10 @@ DECIDE_DO = {"retry": decide_retry, "rework": decide_rework, "drop": decide_drop
 # ---------- 新反馈作废旧闸门（借 Paperclip「确认卡会过期」）----------
 def pending_gate_ids(s):
     """Orca 里还 pending 的闸门号；读不到返回 None（调用方别据此做决定）。"""
-    gl, j = orca("orchestration", "gate-list", "--from", coord(s), ok=False)
-    if not j.get("ok"):
+    gates = EX.gate_list(coord(s))
+    if gates is None:
         return None
-    return {g["id"] for g in gl.get("gates", []) if g.get("status") in (None, "pending")}
+    return {g["id"] for g in gates if g.get("status") in (None, "pending")}
 
 
 def open_owner_gate(it, pend):
@@ -2500,7 +2649,7 @@ def open_owner_gate(it, pend):
 
 def close_gate(s, k, it, gid, kind, why):
     """把旧闸门标作废：Orca 里结掉（结果「作废」），记进 superseded_gates，之后谁点它都不执行。"""
-    orca("orchestration", "gate-resolve", "--from", coord(s), "--id", gid, "--resolution", "作废（有新反馈）", ok=False)
+    EX.gate_resolve(coord(s), gid, "作废（有新反馈）")
     s.setdefault("superseded_gates", {})[gid] = {"item": k, "kind": kind, "at": TM.iso(), "why": why[:200]}
     s.setdefault("gate_since", {}).pop(gid, None)
     s["gate_pushed"] = [g for g in s.get("gate_pushed") or [] if g != gid]
@@ -2508,11 +2657,10 @@ def close_gate(s, k, it, gid, kind, why):
 
 
 def new_look_gate(s, k, it, label, note):
-    g, _ = orca("orchestration", "gate-create", "--from", coord(s), "--task", it["merge"],
-                "--question", f"看效果（{label}）：{it['title']}", "--options", json.dumps(["通过", "打回"]))
-    it["gates"]["look"] = g["gate"]["id"]
-    tl(k, "gate_open", kind="look", gate=g["gate"]["id"], note=note)
-    return g["gate"]["id"]
+    gid = EX.gate_create(coord(s), it["merge"], f"看效果（{label}）：{it['title']}", ["通过", "打回"])
+    it["gates"]["look"] = gid
+    tl(k, "gate_open", kind="look", gate=gid, note=note)
+    return gid
 
 
 def feedback_item(s, k, it, words, source):
@@ -2534,16 +2682,13 @@ def feedback_item(s, k, it, words, source):
         msg = f"{k} 看效果闸门 {gid} 已作废，带着你的话返工，改完验收通过再请你看"
     elif kind == "do":
         close_gate(s, k, it, gid, "do", words)
-        orca("orchestration", "task-update", "--from", c, "--id", it["build"], "--status", "completed", "--result", "superseded by feedback", ok=False)
+        EX.task_update(c, it["build"], "completed", "superseded by feedback")
         it["build_spec"] = spec_head("build", it) + role_prompt("build") + it["spec"]
         it["verify_spec"] = spec_head("verify", it) + role_prompt("verify") + it["spec"]
-        nb, _ = orca("orchestration", "task-create", "--from", c, "--task-title", f"{k} 施工", "--spec", it["build_spec"],
-                     *(["--deps", json.dumps(it["after"])] if it.get("after") else []))
-        nv, _ = orca("orchestration", "task-create", "--from", c, "--task-title", f"{k} 验收", "--spec", it["verify_spec"],
-                     "--deps", json.dumps([nb["task"]["id"]]))
-        it["build"], it["verify"] = nb["task"]["id"], nv["task"]["id"]
-        g, _ = orca("orchestration", "gate-create", "--from", c, "--task", it["build"],
-                    "--question", f"做不做（补充反馈后）：{it['title']}", "--options", json.dumps(["做", "不做"]))
+        nb = EX.task_create(c, f"{k} 施工", it["build_spec"], it.get("after"))
+        nv = EX.task_create(c, f"{k} 验收", it["verify_spec"], [nb])
+        it["build"], it["verify"] = nb, nv
+        g = {"gate": {"id": EX.gate_create(c, it["build"], f"做不做（补充反馈后）：{it['title']}", ["做", "不做"])}}
         it["gates"]["do"] = g["gate"]["id"]; it["gate_open_at"] = TM.now(); it["rev"] = it.get("rev", 0) + 1
         tl(k, "gate_open", kind="do", gate=g["gate"]["id"], note="上一个做不做闸门因新反馈作废")
         notify("gate_created", "等你点头：做不做（补充反馈后）", it["title"], item=k, gate=g["gate"]["id"])
@@ -2590,7 +2735,7 @@ def live_path(s, k, it, T, pend):
     if st in ("escalated", "asking"):
         if any(a.get("key") == k and g in pend for g, a in (s.get("owner_asks") or {}).items()):
             return None                                 # 决策岗转老板，老板还没答
-        if not ((CFG.get("roles") or {}).get("decide") or {}).get("cmd"):
+        if not ((CFG.get("roles") or {}).get("decide") or {}).get("cmd") and EX.name != "multica":
             return ("no_decider", "交决策岗了，但没配置决策岗命令：只能你手动处理（evo retry / 改配置）")
         dec = s.get("decide") or {}
         if dec.get("task") and not dec.get("done") and k in (dec.get("items") or []):
@@ -2743,9 +2888,13 @@ def read_state_ro(code=None):
     """只读状态文件（不抢锁、不管暂停）：面板和 evo log 用。"""
     p = os.path.join(HOME_DIR, code, "state", "state.json") if code else STATE
     try:
-        return json.load(open(p, encoding="utf-8"))
+        s = json.load(open(p, encoding="utf-8"))
     except (OSError, ValueError, TypeError):
         return {"items": {}}
+    for k, it in (s.get("items") or {}).items():        # 只在内存里清已收尾件的残留标记，不写盘
+        if isinstance(it, dict) and it.get("gates") is not None:
+            tidy_closed(it, s, k)
+    return s
 
 
 def item_diff(it, limit=1 << 20):
@@ -2793,6 +2942,27 @@ def cmd_retry(a):
     if it["state"] == "escalated" and it.get("resume"):
         it["state"] = it.pop("resume")
     log(s, f"{a.key} 继续（{it['state']}）"); save(s)
+
+
+def cmd_drop(a):
+    """第二十轮补：老板直接说「这件不做」。还在旧执行端（换执行端前）的件只记不做、不碰旧执行端，
+    下一轮也不会在新执行端重建；已在当前执行端的件照常收尾（Multica issue 标 cancelled）。"""
+    s = load(); it = s["items"].get(a.key)
+    if not it:
+        sys.exit(f"{CODE} 没有这件：{a.key}")
+    if it["state"] in ("dropped", "merged", "shipped"):
+        print(f"{a.key} 已经是{NAMES.get(it['state'], it['state'])}，不用再标"); return
+    why = a.why or "老板说不做"
+    e = it.get("exec") or {}
+    if e.get("backend", "orca") != EX.name:
+        it["state"] = "dropped"; it.pop("resume", None); it.pop("stalled", None)
+        void_item_gates(s, a.key, it)
+        e.setdefault("legacy", {}).update({"from": e.get("backend", "orca"), "dropped_at": TM.iso()})
+        it["exec"] = e
+        tl(a.key, "drop", why=why[:500]); log(s, f"{a.key} 不做（换执行端前，旧执行端的任务不再去动）：{why[:80]}")
+    else:
+        drop_item(s, a.key, it, why)
+    save(s); print(f"{a.key} 已标为不做")
 
 
 def cmd_resume(a):
@@ -2894,6 +3064,9 @@ def run_once_child(code):
     if r.returncode == 124:
         _emit_for(code or CODE, "tick_timeout", "接棒一轮超时", f"{code or CODE} 一轮超过 {int(tmo('tick') / 60)} 分钟，已杀掉；下一轮重来。"
                   "多半是测试、git 或某个工人命令卡住了")
+    if r.returncode == 0 and (r.stdout or "").strip():           # Air 试跑 10-21：子进程的「最近动静」以前被吞掉，autopilot.log 永远 0 字节
+        for line in r.stdout.strip().splitlines()[-40:]:
+            print(f"[{code or CODE}] {line}")
     return r.returncode, (r.stderr or r.stdout)[-300:]
 
 
@@ -2927,7 +3100,7 @@ def cmd_run(a):
 # ---------- 开新项目 / 导入旧项目 ----------
 
 
-def _setup_project(code, name, path, github, test_cmd, notes, goal=None, ui_preset=None, arch_preset=None, in_place=False):
+def _setup_project(code, name, path, github, test_cmd, notes, goal=None, ui_preset=None, arch_preset=None, in_place=False, executor=None):
     """只写项目自己的 config.json；岗位、模型、上限、提醒都在全局 ~/.evoloop/config.json。"""
     code = code.upper()
     if not re.fullmatch(r"[A-Z]{2,4}", code):
@@ -2941,6 +3114,12 @@ def _setup_project(code, name, path, github, test_cmd, notes, goal=None, ui_pres
             "trusted_authors": [github.split("/")[0]] if github else [], "test_cmd": test_cmd or "",
             "push_cmd": f"git push origin {mb}" if has_origin else "", "deploy_cmd": "", "policy_terms": "",
             "lessons_file": DEFAULTS["lessons_file"], "standards_file": DEFAULTS["standards_file"], "digest_issue": None}
+    # 第二十轮：新项目默认用 Multica 执行端（全局配置写了 executor 就按全局；--executor 优先）；老项目没写这个键 = orca
+    exk = EXMOD.backend_of({"executor": executor or GCFG.get("executor") or "multica"})
+    base["executor"] = exk
+    if exk == "multica":
+        base["multica"] = {"project": code, "agents": dict(EXMOD.MULTICA_AGENTS), "app_url": GCFG.get("multica_app_url", ""),
+                           "workspace": GCFG.get("multica_workspace") or os.environ.get("MULTICA_WORKSPACE_SLUG", "")}
     if goal:
         base["goal"] = goal
     if ui_preset and ui_preset != "none":
@@ -2955,15 +3134,23 @@ def _setup_project(code, name, path, github, test_cmd, notes, goal=None, ui_pres
     if has_origin and not in_place:      # 第十七轮 · 老板决定②：evo 只在自己的克隆里动手，不碰老板的工作副本
         base["clone"] = True
         work = clone_dir(code, base)
-        notes.append(make_clone(path, work, mb) + "。以后合并、推送只在这里；你的工作副本 evo 不碰，要看最新代码就在那边 git pull")
+        notes.append(make_clone(path, work, mb, register=exk == "orca") + "。以后合并、推送只在这里；你的工作副本 evo 不碰，要看最新代码就在那边 git pull")
     elif has_origin:
         notes.append("按 --in-place 直接在这个目录里合并（不建专用克隆）")
     d = os.path.join(HOME_DIR, code); os.makedirs(os.path.join(d, "state"), exist_ok=True)
     json.dump(base, open(os.path.join(d, "config.json"), "w", encoding="utf-8"), ensure_ascii=False, indent=2)
     if github and svc("github"):
         svc("github").ensure_labels(github)
-    r = subprocess.run(ORCA + ["repo", "add", "--path", os.path.abspath(work), "--json"], capture_output=True, text=True)
-    notes.append("已登记到 Orca（手机端能看到）" if '"ok":true' in r.stdout.replace(" ", "") else "Orca 登记没成功，装好 Orca 后重跑 orca repo add")
+    if exk == "multica":
+        ag = "、".join(base["multica"]["agents"].values())
+        notes.append(f"执行端：Multica。在 Multica 里建项目「{code}」并绑定本地目录 {os.path.abspath(work)}（--type local_directory），"
+                     f"三个 agent：{ag}（名字不同就改 config.json 的 multica.agents）；面板想点开 issue，再填 multica.app_url")
+    else:
+        ra = EX.repo_add(os.path.abspath(work), 30)
+        if ra == "missing":
+            notes.append(f"没装 Orca，先不登记；装好后跑：orca repo add --path {os.path.abspath(work)}")
+        else:
+            notes.append("已登记到 Orca（手机端能看到）" if ra == "ok" else "Orca 登记没成功，装好 Orca 后重跑 orca repo add")
     print(f"项目 {code}「{name}」就绪：{d}/config.json")
     for n in notes:
         print("  · " + n)
@@ -3018,7 +3205,8 @@ def cmd_new(a):
     if a.github and a.create:
         r = subprocess.run(["gh", "repo", "create", a.github, "--private", "--source", path, "--push"], capture_output=True, text=True)
         notes.append("GitHub 私有仓库已建并推送" if r.returncode == 0 else "GitHub 建仓没成功：" + r.stderr.strip()[:120])
-    _setup_project(a.code, a.name, path, a.github, a.test, notes, goal, _ui_arg(a), _arch_arg(a), getattr(a, "in_place", False))
+    _setup_project(a.code, a.name, path, a.github, a.test, notes, goal, _ui_arg(a), _arch_arg(a), getattr(a, "in_place", False),
+                   getattr(a, "executor", None))
 
 
 def cmd_import(a):
@@ -3056,7 +3244,8 @@ def cmd_import(a):
     if not os.path.exists(ai):     # 只放文件不提交（导入不动历史），要不要提交你定
         open(ai, "w", encoding="utf-8").write(open(os.path.join(KIT, "templates", "project", "AGENT_INTERFACE.md"), encoding="utf-8").read())
         notes.append("放了 AGENT_INTERFACE.md（外部 Agent 怎么读、怎么报；未提交，要用就自己提交）")
-    _setup_project(a.code, a.name, path, gh, t, notes, goal, _ui_arg(a), _arch_arg(a), getattr(a, "in_place", False))
+    _setup_project(a.code, a.name, path, gh, t, notes, goal, _ui_arg(a), _arch_arg(a), getattr(a, "in_place", False),
+                   getattr(a, "executor", None))
 
 
 def cmd_projects(a):
@@ -3409,12 +3598,12 @@ def gates_ro(s):
     if not s.get("coord"):
         return [], True
     try:
-        gl, j = orca("orchestration", "gate-list", "--from", s["coord"], ok=False)
+        gates = EX.gate_list(s["coord"])
     except SystemExit:
         return [], True
-    if not j.get("ok"):
+    if gates is None:
         return [], True
-    return [g for g in gl.get("gates", []) if g.get("status") in (None, "pending")], False
+    return [g for g in gates if g.get("status") in (None, "pending")], False
 
 
 def cmd_status(a):
@@ -3433,16 +3622,26 @@ def cmd_status(a):
         print(f"■ 暂停：{s['_ro']['paused']}（处理好后 evo -p {CODE} resume）")
     if s["_ro"]["tick_running"]:
         print(f"■ 正在接棒一轮（已 {s['_ro']['tick_running'].get('minutes') or 0} 分钟），下面是上次存盘时的状态")
+    down = s.get("exec_down") or s.get("orca_down")
+    if down and EX.name == "orca":
+        print(f"■ Orca 没开（从 {TM.local(down).strftime('%H:%M')} 起）：先不派工。打开 Orca 后自动接着跑")
+    elif down:
+        print(f"■ {EX.label} 执行端掉线（从 {TM.local(down).strftime('%H:%M')} 起）：先不派工，恢复后自动接着跑")
     print("■ 等你点头" + ("（Orca 闸门这次没读到）" if stale else ""))
+    early = {it["gates"].get("look") for it in s["items"].values() if it["gates"].get("look") and it["state"] != "verified"}
+    pend = [g for g in pend if g["id"] not in early]   # 10-22 Air：看效果闸门建件时就挂着，验收通过前不算「等你点头」
+    pend = [g for g in pend if g["id"] not in (s.get("superseded_gates") or {})]   # 作废 / 不做件的闸门不摆出来
     for g in pend + confirm_gates_doc(s):
         print(f"  {g['id']}  {g.get('question')}")
     if not pend and not confirm_gates_doc(s):
         print("  （没有）")
     print("■ 每件进度")
     for k, it in s["items"].items():
-        flag = " ⚠疑似卡住" if it.get("stalled") else ""
+        flag = " ⚠疑似卡住" if it.get("stalled") and it["state"] not in DONE_STATES else ""
         u = it.get("usage") or {}
-        print(f"  {k}  {state_name(it)}{flag}  {it['title']}  （派工 {u.get('runs', 0)} 次 · {int(item_minutes(it))} 分钟）")
+        ed = exec_doc(it) or {}
+        mx = f" · Multica issue {ed['issue']}" if ed.get("issue") and ed.get("backend") == "multica" else ""
+        print(f"  {k}  {state_name(it)}{flag}  {it['title']}  （派工 {u.get('runs', 0)} 次 · {int(item_minutes(it))} 分钟{mx}）")
     rl = {r: e for r, e in _rl_peek().items() if e["until"] > TM.now()}
     if rl:
         print("■ 额度暂停")
@@ -3466,6 +3665,15 @@ def state_name(it):
             "owner_budget": "等你定：继续还是不做", "main_red": "等主线修绿"}.get(w) or NAMES.get(it["state"], it["state"])
 
 
+def exec_doc(it):
+    """件在执行端里的样子：{backend, issue, url}；没有 exec 记录（老状态还没迁移）返回 None。"""
+    e = it.get("exec")
+    if not isinstance(e, dict):
+        return None
+    iss = e.get("issue")
+    return {"backend": e.get("backend"), "issue": iss, "url": EX.link(iss) if iss and e.get("backend") == EX.name else None}
+
+
 def status_doc(s, pend):
     """evo status --json 的稳定格式（schema_version 1，字段说明见 docs/agent-interface.md）。只加字段，不改不删；要改就升版本号。"""
     cnt = {}
@@ -3474,7 +3682,11 @@ def status_doc(s, pend):
     look = {it["gates"].get("look"): k for k, it in s["items"].items() if it["gates"].get("look")}
     owner = {gid: k for k, it in s["items"].items() for gid in (it["gates"].get("do"), it.get("ship_gate")) if gid}
     gates = []
+    dead = {gid for k, it in s["items"].items() if it["state"] == "dropped"
+            for gid in (it["gates"].get("look"), it["gates"].get("do"), it.get("ship_gate")) if gid}
     for g in pend:
+        if g["id"] in dead or g["id"] in (s.get("superseded_gates") or {}):
+            continue                                    # 不做的件 / 作废的闸门不再摆到老板面前
         opts = json.loads(g["options"]) if isinstance(g.get("options"), str) else g.get("options")
         gid = g["id"]
         kind = ("look" if gid in look else "do" if any(it["gates"].get("do") == gid for it in s["items"].values())
@@ -3493,8 +3705,10 @@ def status_doc(s, pend):
     doc = {
         "schema_version": STATUS_SCHEMA_VERSION, "project": CODE, "name": CFG.get("name", CODE), "generated_at": TM.iso(),
         "last_tick": read_heartbeats().get(CODE),
+        "orca_down_since": TM.iso(s.get("exec_down") or s["orca_down"]) if (s.get("exec_down") or s.get("orca_down")) else None,   # 合约字段名不变：执行端掉线的时间（第二十轮起 Multica 也算）
         "count": cnt,
-        "stuck": sum(1 for it in s["items"].values() if it.get("stalled") or it["state"] in ("escalated", "asking")),
+        "stuck": sum(1 for it in s["items"].values() if it["state"] not in DONE_STATES
+                     and (it.get("stalled") or it["state"] in ("escalated", "asking"))),
         "goal": CFG.get("goal") or None,
         "roles": roles_doc(s),
         "stale": stale_list(s),
@@ -3502,12 +3716,13 @@ def status_doc(s, pend):
         "gates": gates,
         "items": [{"key": k, "title": it["title"], "kind": it.get("kind"), "state": state_name(it), "raw": it["state"],
                    "waiting": waiting_reason(it), "window": it.get("window"),
-                   "stalled": bool(it.get("stalled")), "look": bool(it.get("ui")), "round": it.get("round", 0),
+                   "stalled": bool(it.get("stalled")) and it["state"] not in DONE_STATES, "look": bool(it.get("ui")), "round": it.get("round", 0),
                    "issue": it.get("issue"), "parent": it.get("parent"),
                    "manual_checks": (it.get("report") or {}).get("manual_checks") or [],
                    "state_since": TM.iso(it["state_since"]) if it.get("state_since") else None,
                    "no_live_path": bool(it.get("no_live")), "look_gate": it["gates"].get("look"),
-                   "usage": {"runs": (it.get("usage") or {}).get("runs", 0), "minutes": round(item_minutes(it), 1)}}
+                   "usage": {"runs": (it.get("usage") or {}).get("runs", 0), "minutes": round(item_minutes(it), 1)},
+                   "exec": exec_doc(it)}       # 第二十轮新增（只加字段）：执行端、Multica issue 号和网页链接
                   for k, it in s["items"].items()],
         "rate_limits": rl,
         "paused": (s.get("_ro") or {}).get("paused") if "_ro" in s else paused_reason(),
@@ -3594,7 +3809,7 @@ def apply_gate(s, gid, choice, why=None, source="evo"):
         tl(k1, "gate_reject" if bad else "gate_approve", kind=kind0, gate=gid, choice=choice, words=why, source=source)
     ext = (s.get("ext_gates") or {}).pop(gid, None)
     if ext:                                             # 外部来报里的红线请求：老板定
-        orca("orchestration", "task-update", "--from", coord(s), "--id", ext["task"], "--status", "completed", ok=False)
+        EX.task_update(coord(s), ext["task"], "completed")
         if choice.startswith("同意"):
             s.setdefault("decide_inbox", []).append({**ext["report"], "note": f"【老板已同意（红线：{'、'.join(ext['red'])}）】"
                                                      + (f"老板原话：{why}" if why else "")})
@@ -3609,7 +3824,7 @@ def apply_gate(s, gid, choice, why=None, source="evo"):
         svc("caps").answered(s, bud, choice, why)
     for k, it in s["items"].items():
         if gid == it["gates"].get("do") and choice == "不做":
-            orca("orchestration", "task-update", "--from", coord(s), "--id", it["build"], "--status", "failed", ok=False)
+            EX.task_update(coord(s), it["build"], "failed")
             drop_item(s, k, it, "老板选了不做")
         if gid == it["gates"].get("look") and choice == "通过":
             look_fingerprint(it); it["look_ok"] = gid
@@ -3619,10 +3834,9 @@ def apply_gate(s, gid, choice, why=None, source="evo"):
             it.pop("look_patch", None); it.pop("look_ok", None)
             it["round"] += 1
             rework(s, k, it, "老板看效果打回：" + (why or "（未说原因）"))
-            g, _ = orca("orchestration", "gate-create", "--from", coord(s), "--task", it["merge"],
-                        "--question", f"看效果（第 {it['round']} 轮）：{it['title']}", "--options", json.dumps(["通过", "打回"]))
-            it["gates"]["look"] = g["gate"]["id"]
-            tl(k, "gate_open", kind="look", gate=g["gate"]["id"], note="打回后重开，改完验收通过才轮到你")
+            gid2 = EX.gate_create(coord(s), it["merge"], f"看效果（第 {it['round']} 轮）：{it['title']}", ["通过", "打回"])
+            it["gates"]["look"] = gid2
+            tl(k, "gate_open", kind="look", gate=gid2, note="打回后重开，改完验收通过才轮到你")
     batch = [k for k, it in s["items"].items() if it.get("ship_gate") == gid]
     if batch:
         ship_resolved(s, batch, choice == "上线")
@@ -3637,17 +3851,19 @@ def cmd_approve(a):
     if sup:                                              # 作废的闸门：任何人、任何途径点了都不执行
         sys.exit(f"闸门 {a.gate} 已作废（{sup.get('item')} 有新反馈：{sup.get('why', '')[:60]}），这次不执行；请看新开的闸门")
     k0, kind0 = gate_kind(s, a.gate)
+    if k0 and s["items"].get(k0, {}).get("state") == "dropped":
+        sys.exit(f"闸门 {a.gate} 属于 {k0}，这件已标为不做，这次不执行")
     if kind0 == "look" and (s["items"][k0].get("look_bound") or {}).get("gate") not in (None, a.gate):
         sys.exit(f"闸门 {a.gate} 不是 {k0} 当前这一版的看效果闸门，这次不执行")
     conf = (s.get("confirm_gates") or {}).get(a.gate)
     if not conf:
-        _, j = orca("orchestration", "gate-resolve", "--from", coord(s), "--id", a.gate, "--resolution", a.choice, ok=False)
-        if not j.get("ok"):
+        okr, err = EX.gate_resolve(coord(s), a.gate, a.choice)
+        if not okr:
             # 第十七轮：闸门已在 Orca 端被结掉（手机端 / 工人），evo 还没来得及看到：老板从 evo 入口点的这次算数
-            gl, jj = orca("orchestration", "gate-list", "--from", coord(s), ok=False)
-            g = next((g for g in gl.get("gates", []) if g.get("id") == a.gate), None) if jj.get("ok") else None
+            gl = EX.gate_list(coord(s))
+            g = next((g for g in gl if g.get("id") == a.gate), None) if gl is not None else None
             if not g or g.get("status") in (None, "pending") or not kind0:
-                sys.exit(f"orca orchestration gate-resolve 失败: {j.get('error')}")
+                sys.exit(f"{EX.name} 闸门 gate-resolve 失败: {err}")
             seen = s.setdefault("gate_ext_seen", [])
             if a.gate not in seen:
                 seen.append(a.gate)
@@ -3668,7 +3884,7 @@ def confirm_gates_doc(s):
 
 def owner_answered(s, ask, choice, why):
     """老板答了决策岗转来的问题：把答复写进件的提问，清掉「已交过」标记，下一批决策岗会当新事看到。"""
-    orca("orchestration", "task-update", "--from", coord(s), "--id", ask["task"], "--status", "completed", ok=False)
+    EX.task_update(coord(s), ask["task"], "completed")
     k = ask["key"]; it = s["items"].get(k)
     if not it:
         return
@@ -3726,10 +3942,9 @@ def ship_batch(s):
             if not was:
                 log(s, "主线测试不绿，不建上线闸门")
             return False
-    t, _ = orca("orchestration", "task-create", "--from", c, "--task-title", "上线批次", "--spec", "上线：" + "、".join(ready))
-    g, _ = orca("orchestration", "gate-create", "--from", c, "--task", t["task"]["id"],
-                "--question", f"上线这 {len(ready)} 件？" + "、".join(s["items"][k]["title"] for k in ready),
-                "--options", json.dumps(["上线", "再等等"]))
+    tid = EX.task_create(c, "上线批次", "上线：" + "、".join(ready))
+    g = {"gate": {"id": EX.gate_create(c, tid, f"上线这 {len(ready)} 件？" + "、".join(s["items"][k]["title"] for k in ready),
+                                       ["上线", "再等等"])}}
     for k in ready:
         s["items"][k]["ship_gate"] = g["gate"]["id"]
     log(s, f"攒了 {len(ready)} 件待上线，闸门 {g['gate']['id']}")
@@ -3924,6 +4139,11 @@ def feature_off_stub(f, name):
 
 
 if __name__ == "__main__":
+    for _st in (sys.stdout, sys.stderr):          # Air 试跑 10-21：launchd 把输出写文件时是整块缓冲，autopilot.log 一直 0 字节
+        try:
+            _st.reconfigure(line_buffering=True)
+        except Exception:
+            pass
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sp = p.add_subparsers(dest="cmd", required=True)
     x = sp.add_parser("add"); x.add_argument("--title", required=True); x.add_argument("--scope", required=True)
@@ -3938,6 +4158,7 @@ if __name__ == "__main__":
         x.add_argument("--ui-preset", dest="ui_preset", help="UI 栈预设：web-react | swiftui | none（默认 none）")
         x.add_argument("--arch-preset", dest="arch_preset", help="后端/架构预设：python-fastapi | node-ts | swift-app | none（默认 none）")
         x.add_argument("--in-place", dest="in_place", action="store_true", help="不建专用克隆，直接在这个目录里合并（老做法）")
+        x.add_argument("--executor", choices=["multica", "orca"], help="执行端（第二十轮）：multica（新项目默认）| orca")
         if nm == "new":
             x.add_argument("--create", action="store_true", help="在 GitHub 建私有仓库并推送")
     x = sp.add_parser("projects"); x.add_argument("--json", action="store_true"); sp.add_parser("once")
@@ -3955,6 +4176,7 @@ if __name__ == "__main__":
     x = sp.add_parser("suite"); x.add_argument("command", nargs=argparse.REMAINDER)
     sp.add_parser("retro")
     x = sp.add_parser("retry"); x.add_argument("key"); sp.add_parser("resume")
+    x = sp.add_parser("drop", help="老板：这件不做（换执行端前的老件也能用）"); x.add_argument("key"); x.add_argument("why", nargs="?")
     x = sp.add_parser("selfcheck", help="第十八轮：自检（编译、功能包、features.yml、事件日志）"); x.add_argument("--json", action="store_true")
     x = sp.add_parser("self-upgrade", help="第十八轮：自升级到某个版本 / 提交（装旁边、等一轮结束、切软链、自检）")
     x.add_argument("ref"); x.add_argument("--source", help="evoloop 仓库目录（默认记在当前版本的 SOURCE 里）")
@@ -3992,6 +4214,6 @@ if __name__ == "__main__":
         sys.exit(f"有多个项目，请加 -p <代号>：{', '.join(list_projects()) or '（还没有项目）'}")
     if a.cmd in FEATURE_CMDS:
         sys.exit(FEATURE_CMDS[a.cmd][0](a) or 0)
-    {"panel": cmd_panel, "new": cmd_new, "import": cmd_import, "projects": cmd_projects, "once": cmd_once, "add": cmd_add, "tick": cmd_tick, "run": cmd_run, "status": cmd_status, "approve": cmd_approve, "ship": cmd_ship, "retry": cmd_retry, "resume": cmd_resume, "feedback": cmd_feedback, "suite": cmd_suite, "retro": cmd_retro,
+    {"panel": cmd_panel, "new": cmd_new, "import": cmd_import, "projects": cmd_projects, "once": cmd_once, "add": cmd_add, "tick": cmd_tick, "run": cmd_run, "status": cmd_status, "approve": cmd_approve, "ship": cmd_ship, "retry": cmd_retry, "drop": cmd_drop, "resume": cmd_resume, "feedback": cmd_feedback, "suite": cmd_suite, "retro": cmd_retro,
      "notify-test": cmd_notify_test, "watchdog": cmd_watchdog, "log": cmd_log,
      "goal": cmd_goal, "relocate": cmd_relocate, "claim": cmd_claim}[a.cmd](a)

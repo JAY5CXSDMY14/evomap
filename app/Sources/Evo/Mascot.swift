@@ -160,22 +160,43 @@ struct MouthShape: Shape {
     }
 }
 
-/// 菜单栏图标：单色小脸（template 图，系统按浅色/深色菜单栏自动上色）。
+/// 菜单栏图标：静态白色小调度球，两只竖椭圆眼睛镂空（10-22 老板：不要动效、不随心情变，白底眼睛镂空，参考调度球）。
+/// 做成 template 图：深色菜单栏是白球，浅色菜单栏系统自动染成黑球，眼睛始终是透明的洞。
 @MainActor
 enum MenuBarIcon {
-    private static var cache: [MascotMood: NSImage] = [:]
+    private static var cached: NSImage?
 
-    static func image(_ mood: MascotMood) -> NSImage {
-        if let i = cache[mood] { return i }
-        let pose = MascotPose.at(0.4, mood: mood, reduceMotion: true)
-        let view = MascotDrawing(pose: pose, size: 16, mono: true).frame(width: 18, height: 18)
-        let r = ImageRenderer(content: view)
+    static func image(_ mood: MascotMood = .idle) -> NSImage {
+        if let i = cached { return i }
+        let r = ImageRenderer(content: DispatchBallIcon().frame(width: 18, height: 18))
         r.scale = 2
-        let img = r.nsImage ?? NSImage(systemSymbolName: "circle", accessibilityDescription: nil)!
+        let img = r.nsImage ?? NSImage(systemSymbolName: "circle.fill", accessibilityDescription: nil)!
         img.isTemplate = true
         img.accessibilityDescription = "Evo"
-        cache[mood] = img
+        cached = img
         return img
+    }
+}
+
+/// 小调度球：实心圆 + 两只竖椭圆眼睛挖空（略偏左上，像应用图标里那颗球往左上看）。纯 SwiftUI 形状。
+struct DispatchBallIcon: View {
+    var body: some View {
+        GeometryReader { g in
+            let d = min(g.size.width, g.size.height) * 0.94
+            let u = d / 2
+            let c = CGPoint(x: g.size.width / 2, y: g.size.height / 2)
+            ZStack {
+                Circle().fill(Color.white).frame(width: d, height: d).position(c)
+                ForEach([CGPoint(x: -0.27, y: -0.10), CGPoint(x: 0.25, y: -0.10)], id: \.x) { e in
+                    Ellipse().fill(Color.black)
+                        .frame(width: u * 0.26, height: u * 0.54)
+                        .position(x: c.x + e.x * u, y: c.y + e.y * u)
+                        .blendMode(.destinationOut)
+                }
+            }
+            .compositingGroup()
+        }
+        .accessibilityHidden(true)
     }
 }
 

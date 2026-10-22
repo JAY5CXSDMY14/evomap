@@ -296,11 +296,11 @@ struct MateSheetStatic: View {
 struct MascotSheet: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("菜单栏小脸（单色 template，沿用原来的矢量小脸）").font(Theme.title(13)).foregroundStyle(Theme.textPrimary)
+            Text("菜单栏图标（静态白色调度球，眼睛镂空，template）").font(Theme.title(13)).foregroundStyle(Theme.textPrimary)
             HStack(spacing: 14) {
                 ForEach(MascotMood.allCases, id: \.self) { m in
                     HStack(spacing: 4) {
-                        Image(nsImage: MenuBarIcon.image(m)).renderingMode(.template)
+                        Image(nsImage: MenuBarIcon.image(m))
                             .foregroundStyle(Theme.textPrimary)
                         if m == .waiting { Text("2").font(.system(size: 13)).foregroundStyle(Theme.textPrimary) }
                     }

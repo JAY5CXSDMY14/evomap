@@ -5,7 +5,8 @@ from conftest import KIT, state_is, sh
 
 PROJECT_KEYS = {"code", "name", "repo", "main_branch", "github_repo", "trusted_authors", "test_cmd", "push_cmd", "deploy_cmd",
                 "policy_terms", "lessons_file", "standards_file", "digest_issue", "clone",     # 第十七轮：有远端时 import 默认 clone: true
-                "owner_host"}                # 第十八轮：多机器，new/import 写下归属机器（租约）
+                "owner_host",                # 第十八轮：多机器，new/import 写下归属机器（租约）
+                "executor", "multica"}       # 第二十轮：执行端（新项目默认 multica；测试全局配的是 orca）
 
 
 def test_two_projects_share_global_builder_cap(loop):
@@ -175,3 +176,32 @@ def test_install_check_only_changes_nothing_then_apply_is_idempotent(loop):
     r = subprocess.run(["bash", inst, "--apply", "--link"], env=loop.env, capture_output=True, text=True)
     assert r.returncode == 0 and "不覆盖" in r.stdout
     assert json.load(open(g)) == {"nightly_at": "22:00"}
+
+
+def test_new_without_orca_installed_does_not_crash(loop):
+    # Air 试跑 10-21：没装 Orca 时 import 末尾直接抛 FileNotFoundError；现在应正常收尾并说明怎么补登记
+    loop.write_global({"orca": "orca-not-installed-xyz"})
+    path = os.path.join(loop.tmp, "noorca")
+    r = loop.evo("new", "NO", "--name", "无 Orca", "--path", path)
+    assert r.returncode == 0, r.stderr
+    assert "Traceback" not in r.stderr and "没装 Orca" in r.stdout
+    assert os.path.exists(loop.cfg_path("NO"))
+
+
+def test_orca_down_pauses_tick_and_shows_in_status(loop):
+    # Air 试跑 10-21：Orca 退出后 evo 一直显示「施工中」不吭声
+    loop.project("OD")
+    open(os.path.join(loop.orca_dir, "down"), "w").close()
+    loop.add("OD")
+    loop.tick("OD")
+    assert loop.item("OD")["state"] == "queued"                     # Orca 不通：不派工
+    r = loop.evo("-p", "OD", "status")
+    assert "Orca 没开" in r.stdout, r.stdout
+    assert json.loads(loop.evo("-p", "OD", "status", "--json").stdout)["orca_down_since"]
+    assert "Orca 没开" in loop.notifications()
+    loop.tick("OD")
+    assert loop.notifications().count("Orca 没开") == 1               # 只记一次
+    os.remove(os.path.join(loop.orca_dir, "down"))
+    loop.tick("OD")
+    assert loop.item("OD")["state"] != "queued"
+    assert not json.loads(loop.evo("-p", "OD", "status", "--json").stdout)["orca_down_since"]

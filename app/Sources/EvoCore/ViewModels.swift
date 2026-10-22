@@ -219,7 +219,7 @@ public enum Speech {
         case .paused: return "循环在睡觉。点「恢复」叫醒我"
         case .stale:
             if let b = beats.filter({ $0.level == .stale }).max(by: { ($0.ageMinutes ?? 0) < ($1.ageMinutes ?? 0) }) {
-                return "\(b.project) 已 \(HeartbeatStatus.human(b.ageMinutes ?? 0))没转动，看看常驻和 Orca？"
+                return "\(b.project) 已 \(HeartbeatStatus.human(b.ageMinutes ?? 0))没转动，看看常驻和执行端（Multica / Orca）？"
             }
             return "有项目好久没转动了"
         case .running:

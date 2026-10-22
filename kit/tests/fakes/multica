@@ -1,0 +1,202 @@
+#!/usr/bin/env python3
+"""假 multica CLI（第二十轮）：只模拟 evo 的 Multica 后端用到的子命令，输出格式照 Air 实测（~/tmp/MULTICA-HANDOFF-3.md）。
+状态存在 $FAKE_MULTICA_DIR/state.json。
+
+issue assign（不带 --no-start）/ issue rerun 时同步跑一次 run：假工人 worker.py（剧本同假 Orca 的 plan.json），
+工作目录：施工 = 在 $FAKE_MULTICA_REPO 上开的 git worktree（分支 agent/dsh/<issue>），验收 / 决策 = 仓库本身。
+假工人用 `multica issue comment add --content-stdin` 交卷（作者是 agent，source_task_id = run id），退出码非 0 = run failed。
+施工 run 完成后 issue 自动转 in_review（和 Air 实测一样）；验收 / 决策不改状态。
+开关：$FAKE_MULTICA_DIR/daemon-down（daemon 停了）、server-down（服务端连不上，退出码 2）、
+      comment-triggers（留言会叫醒被指派的 agent，测 evo 不会重复派）。
+"""
+import fcntl, json, os, subprocess, sys, uuid
+
+D = os.environ["FAKE_MULTICA_DIR"]
+os.makedirs(D, exist_ok=True)
+SP = os.path.join(D, "state.json")
+HERE = os.path.dirname(os.path.abspath(__file__))
+AGENTS = [{"id": "ag-build", "name": "施工-DSH", "role": "build", "rt": "dsh"},
+          {"id": "ag-verify", "name": "验收-Claude", "role": "verify", "rt": "claude"},
+          {"id": "ag-decide", "name": "决策-Claude", "role": "decide", "rt": "claude"}]
+
+
+class St:
+    def __enter__(self):
+        self.lk = open(SP + ".lock", "w"); fcntl.flock(self.lk, fcntl.LOCK_EX)
+        self.s = json.load(open(SP)) if os.path.exists(SP) else {"n": 0, "t": 0, "issues": {}, "runs": [], "comments": [], "calls": []}
+        return self.s
+
+    def __exit__(self, *e):
+        json.dump(self.s, open(SP + ".tmp", "w"), ensure_ascii=False, indent=1); os.replace(SP + ".tmp", SP)
+        fcntl.flock(self.lk, fcntl.LOCK_UN); self.lk.close()
+
+
+def out(x, code=0):
+    print(json.dumps(x, ensure_ascii=False)); sys.exit(code)
+
+
+def fail(msg, code=1):
+    print(msg, file=sys.stderr); sys.exit(code)
+
+
+def opts(argv):
+    o, flags, pos, i = {}, set(), [], 0
+    while i < len(argv):
+        a = argv[i]
+        if a.startswith("--"):
+            if i + 1 < len(argv) and not argv[i + 1].startswith("--") and a[2:] not in ("description-stdin", "content-stdin", "no-start", "full"):
+                o[a[2:]] = argv[i + 1]; i += 2; continue
+            flags.add(a[2:])
+        else:
+            pos.append(a)
+        i += 1
+    return o, flags, pos
+
+
+def tick(s):
+    s["t"] += 1
+    return f"Tue 2026-10-20 12:{s['t'] // 60:02d}:{s['t'] % 60:02d} PM CST (UTC+08:00) #{s['t']:05d}"
+
+
+def find(s, ref):
+    for i in s["issues"].values():
+        if ref in (i["id"], i["identifier"]):
+            return i
+    fail(f"issue {ref} not found", 4)
+
+
+def agent(name=None, aid=None):
+    for a in AGENTS:
+        if (name and (a["name"] == name or name in a["name"])) or (aid and a["id"] == aid):
+            return a
+    fail(f"agent {name or aid} not found", 4)
+
+
+def start_run(s, iss):
+    a = agent(aid=iss["assignee_id"])
+    rid = str(uuid.uuid4())
+    run = {"id": rid, "issue_id": iss["id"], "agent_id": a["id"], "status": "running", "created_at": tick(s),
+           "branch_name": None, "work_dir": None, "error": None, "attempt": 1, "kind": "direct"}
+    repo = os.environ.get("FAKE_MULTICA_REPO") or "."
+    if a["role"] == "build":
+        br = f"agent/{a['rt']}/{iss['identifier'].lower()}"
+        wd = os.path.join(D, "ws", iss["identifier"].lower(), "worktree")
+        if not os.path.isdir(wd):
+            os.makedirs(os.path.dirname(wd), exist_ok=True)
+            hasb = subprocess.run(["git", "-C", repo, "rev-parse", "--verify", br], capture_output=True).returncode == 0
+            subprocess.run(["git", "-C", repo, "worktree", "add", "-q"] + ([wd, br] if hasb else ["-b", br, wd]), check=True, capture_output=True)
+        run.update(branch_name=br, work_dir=wd)
+    s["runs"].append(run)
+    iss["status"] = "in_progress"; iss["last_activity_at"] = run["created_at"]
+    spec = iss["description"] + "".join("\n\n" + c["content"] for c in s["comments"] if c["issue_id"] == iss["id"] and c["author_type"] == "member")
+    sf = os.path.join(D, f"{rid}.spec"); open(sf, "w", encoding="utf-8").write(spec)
+    return run, {"MULTICA_ISSUE": iss["identifier"], "MULTICA_RUN_ID": rid, "MULTICA_AGENT_ID": a["id"], "MULTICA_SPEC_FILE": sf,
+                 "MULTICA_ROLE": a["role"]}, (run["work_dir"] or repo)
+
+
+def finish_run(rid, rc, text):
+    with St() as s:
+        run = next(r for r in s["runs"] if r["id"] == rid)
+        if run["status"] != "running":
+            return
+        if rc == 99:                       # 假工人「silent」：run 一直跑着
+            return
+        run["status"] = "completed" if rc == 0 else "failed"
+        run["completed_at"] = tick(s)
+        if rc:
+            run["error"] = text[-2000:]
+        iss = next(i for i in s["issues"].values() if i["id"] == run["issue_id"])
+        if run["status"] == "completed" and agent(aid=run["agent_id"])["role"] == "build" and iss["status"] == "in_progress":
+            iss["status"] = "in_review"
+        elif iss["status"] == "in_progress":
+            iss["status"] = "in_review" if run["status"] == "completed" else "todo"
+        iss["last_activity_at"] = run["completed_at"]
+
+
+def main():
+    argv = [a for a in sys.argv[1:]]
+    if "--output" in argv:
+        i = argv.index("--output"); del argv[i:i + 2]
+    with St() as s:
+        s["calls"].append(argv[:3])
+    if argv[:2] == ["daemon", "status"]:
+        if os.path.exists(os.path.join(D, "daemon-down")):
+            out({"status": "stopped", "running": False})
+        out({"status": "running", "pid": 4242, "agents": ["claude", "dsh"]})
+    if os.path.exists(os.path.join(D, "server-down")):
+        fail("Network error: connection refused", 2)
+    if argv[:2] == ["agent", "list"]:
+        out([{"id": a["id"], "name": a["name"]} for a in AGENTS])
+    if argv[:2] == ["project", "list"]:
+        names = (os.environ.get("FAKE_MULTICA_PROJECTS") or "EV,MA,MB,MC,MD,ME,MF,MG").split(",")
+        out([{"id": f"proj-{n.lower()}", "title": n} for n in names])
+    if argv[:1] != ["issue"]:
+        fail(f"unknown command {' '.join(argv[:2])}")
+    sub = argv[1]
+    if sub == "comment":
+        sub = "comment-" + argv[2]; rest = argv[3:]
+    else:
+        rest = argv[2:]
+    o, flags, pos = opts(rest)
+    run_after = None
+    with St() as s:
+        if sub == "create":
+            s["n"] += 1
+            iid = str(uuid.uuid4())
+            iss = {"id": iid, "identifier": f"EVO-{s['n']}", "number": s["n"], "title": o["title"], "status": "todo",
+                   "description": sys.stdin.read() if "description-stdin" in flags else o.get("description", ""),
+                   "project_id": o.get("project"), "assignee_id": None, "assignee_type": None, "created_at": tick(s)}
+            iss["last_activity_at"] = iss["created_at"]
+            s["issues"][iid] = iss
+            print(json.dumps(iss, ensure_ascii=False)); return
+        iss = find(s, o["issue"] if sub == "cancel-task" else pos[0]) if sub != "list" else None
+        if sub == "get":
+            print(json.dumps(iss, ensure_ascii=False)); return
+        if sub == "list":
+            xs = [i for i in s["issues"].values() if not o.get("project") or i["project_id"] == o["project"]]
+            f = o.get("fields", "").split(",") if o.get("fields") else None
+            print(json.dumps({"issues": [{k: v for k, v in i.items() if not f or k in f} for i in xs], "has_more": False,
+                              "limit": int(o.get("limit", 50)), "offset": 0}, ensure_ascii=False)); return
+        if sub == "assign":
+            a = agent(name=o["to"])
+            iss["assignee_id"] = a["id"]; iss["assignee_type"] = "agent"; iss["last_activity_at"] = tick(s)
+            if "no-start" not in flags:
+                run_after = start_run(s, iss)
+        elif sub == "cancel-task":
+            for r in s["runs"]:
+                if r["id"] == pos[0] and r["status"] == "running":
+                    r["status"] = "cancelled"; r["completed_at"] = tick(s)
+        elif sub == "rerun":
+            run_after = start_run(s, iss)
+        elif sub == "status":
+            iss["status"] = pos[1]; iss["last_activity_at"] = tick(s)
+        elif sub == "runs":
+            print(json.dumps([r for r in s["runs"] if r["issue_id"] == iss["id"]], ensure_ascii=False)); return
+        elif sub == "comment-list":
+            print(json.dumps([c for c in s["comments"] if c["issue_id"] == iss["id"]], ensure_ascii=False)); return
+        elif sub == "comment-add":
+            body = sys.stdin.read() if "content-stdin" in flags else o.get("content", "")
+            by_agent = os.environ.get("MULTICA_AGENT_ID")
+            c = {"id": str(uuid.uuid4()), "issue_id": iss["id"], "content": body, "created_at": tick(s), "parent_id": None,
+                 "author_type": "agent" if by_agent else "member", "author_id": by_agent or "member-owner",
+                 "source_task_id": os.environ.get("MULTICA_RUN_ID") if by_agent else None, "resolved_at": None}
+            s["comments"].append(c); iss["last_activity_at"] = c["created_at"]
+            if by_agent and os.environ.get("FAKE_MULTICA_BLOCK"):
+                iss["status"] = "blocked"
+            if not by_agent and iss["assignee_id"] and os.path.exists(os.path.join(D, "comment-triggers")):
+                run_after = start_run(s, iss)
+        else:
+            fail(f"unknown issue command {sub}")
+        result = iss
+    if run_after:
+        run, env, cwd = run_after
+        e = {**os.environ, **env}
+        e.pop("FAKE_MULTICA_BLOCK", None)
+        r = subprocess.run([sys.executable, os.path.join(HERE, "worker.py"), env["MULTICA_ROLE"]], cwd=cwd, env=e,
+                           capture_output=True, text=True)
+        finish_run(run["id"], r.returncode, r.stdout + r.stderr)
+    print(json.dumps(result, ensure_ascii=False))
+
+
+if __name__ == "__main__":
+    main()

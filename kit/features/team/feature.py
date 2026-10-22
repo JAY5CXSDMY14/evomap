@@ -122,8 +122,17 @@ def cmd_models(a):
         print(f"  ! magpie 没响应（{g.get('magpie_url')}/v1/models），跳过「模型在不在列表里」的核对")
     else:
         print(f"  ✓ magpie 列出 {len(listed)} 个模型/组")
+    if K.HAS_PROJECT:      # Air 试跑 10-21：-p 只看这个项目实际用的；全局里的问题只提示，不算这个项目的错
+        for w in models_warnings(g, listed):
+            print("  · （全局，不影响 " + K.CODE + "）" + w)
+        warns += project_model_view(K.CODE, listed)["warnings"]
+        for w in warns:
+            print("  ! " + w)
+        if not warns:
+            print(f"  ✓ {K.CODE} 实际用的施工/验收模型都在 magpie 里，且两边不重叠")
+        sys.exit(1 if warns else 0)
     warns += models_warnings(g, listed)
-    for code in ([K.CODE] if K.HAS_PROJECT else K.list_projects()):
+    for code in K.list_projects():
         raw = K._read_json(K._project_cfg_path(code))
         if (raw.get("overrides") or {}).get("roles") or raw.get("roles"):     # 只核对自己改过模型的项目，其余同全局
             warns += project_model_view(code, listed)["warnings"]
