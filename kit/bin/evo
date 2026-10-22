@@ -3556,7 +3556,9 @@ def cmd_status(a):
     for k, it in s["items"].items():
         flag = " ⚠疑似卡住" if it.get("stalled") else ""
         u = it.get("usage") or {}
-        print(f"  {k}  {state_name(it)}{flag}  {it['title']}  （派工 {u.get('runs', 0)} 次 · {int(item_minutes(it))} 分钟）")
+        ed = exec_doc(it) or {}
+        mx = f" · Multica issue {ed['issue']}" if ed.get("issue") and ed.get("backend") == "multica" else ""
+        print(f"  {k}  {state_name(it)}{flag}  {it['title']}  （派工 {u.get('runs', 0)} 次 · {int(item_minutes(it))} 分钟{mx}）")
     rl = {r: e for r, e in _rl_peek().items() if e["until"] > TM.now()}
     if rl:
         print("■ 额度暂停")
@@ -3578,6 +3580,15 @@ def state_name(it):
     w = waiting_reason(it)
     return {"window": "等窗口", "rate_limit": "等额度", "model_blocked": "等换模型", "magpie_down": "等 magpie",
             "owner_budget": "等你定：继续还是不做", "main_red": "等主线修绿"}.get(w) or NAMES.get(it["state"], it["state"])
+
+
+def exec_doc(it):
+    """件在执行端里的样子：{backend, issue, url}；没有 exec 记录（老状态还没迁移）返回 None。"""
+    e = it.get("exec")
+    if not isinstance(e, dict):
+        return None
+    iss = e.get("issue")
+    return {"backend": e.get("backend"), "issue": iss, "url": EX.link(iss) if iss and e.get("backend") == EX.name else None}
 
 
 def status_doc(s, pend):
@@ -3622,7 +3633,8 @@ def status_doc(s, pend):
                    "manual_checks": (it.get("report") or {}).get("manual_checks") or [],
                    "state_since": TM.iso(it["state_since"]) if it.get("state_since") else None,
                    "no_live_path": bool(it.get("no_live")), "look_gate": it["gates"].get("look"),
-                   "usage": {"runs": (it.get("usage") or {}).get("runs", 0), "minutes": round(item_minutes(it), 1)}}
+                   "usage": {"runs": (it.get("usage") or {}).get("runs", 0), "minutes": round(item_minutes(it), 1)},
+                   "exec": exec_doc(it)}       # 第二十轮新增（只加字段）：执行端、Multica issue 号和网页链接
                   for k, it in s["items"].items()],
         "rate_limits": rl,
         "paused": (s.get("_ro") or {}).get("paused") if "_ro" in s else paused_reason(),

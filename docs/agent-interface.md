@@ -75,7 +75,9 @@
 | `items[].look_gate` | 这件的看效果闸门号（没有为 `null`）。第十二轮新增 |
 | `paused` / `tick_running` / `gates_stale` / `main_red` / `limits` | 第十七轮：status 改为只读（不抢锁、暂停时照常返回 `paused` 原因、不新建协调终端）；`tick_running` 是正在跑的一轮；`main_red` 主线本身测试红；`limits` 每件上限。`gates[].kind` 多了 `budget`（上限到了：继续 / 不做），`gates[].confirm` 表示 Orca 端被点了放行类结果、要老板在 evo 入口确认；`items[].waiting` 多了 `main_red`、`owner_budget` |
 
-第十二轮只加字段，`schema_version` 仍是 1。
+| `items[].exec` | 第二十轮：这件在执行端里的样子 `{"backend": "orca"/"multica", "issue": Multica issue 号（例 EVO-7）或 null, "url": 配了 `multica.app_url` 时的网页链接或 null}`；老状态还没迁移时整个为 `null`。`orca_down_since` 字段名不变，意思扩成「执行端（Orca 或 Multica）掉线的时间」 |
+
+第十二轮只加字段，`schema_version` 仍是 1。第二十轮同样只加字段。
 
 ### 2.1c `evo -p <代号> log <件号> --json`（每件时间线）
 读 `~/.evoloop/projects/<代号>/state/timeline.jsonl`（只追加，一行一个事件）。每行 `{"at", "item", "event", …}`，`event` 取 `add` `dispatch` `report` `gate_open` `gate_approve` `gate_reject` `gate_superseded` `feedback` `rework` `merge` `push` `ship` `deploy_failed` `restart` `decision` `drop` `state` `no_live_path` `live_again` `fallback_on` `fallback_off` `model_blocked`（第十四轮；`dispatch` 另带 `tool` `account` `fallback`）；打回/补充反馈的原话在 `words`，合并、推送带 `sha`。`--diff` 输出这件的改动（工作区还在看分支，合并后看合并提交）。不抢锁，只读。

@@ -196,3 +196,12 @@ def test_new_project_defaults_to_multica(loop):
     loop.project("MC")
     c = json.load(open(loop.cfg_path("MC")))
     assert c["executor"] == "multica" and c["multica"]["agents"]["decide"] == "决策-Claude"
+
+
+def test_status_json_carries_issue_link(loop):
+    loop.multica_project("MB")
+    loop.add("MB")
+    loop.tick("MB")
+    item = loop.status_json("MB")["items"][0]
+    ident = loop.item("MB")["exec"]["issue"]
+    assert item["exec"] == {"backend": "multica", "issue": ident, "url": f"http://multica.test/issues/{ident}"}

@@ -165,7 +165,7 @@ async function refresh(){
       <div class="row" style="margin-top:8px"><button class="btn" onclick="feedback()">记下来</button><span class="others">原话进 issue，决策岗只补标签不改意思</span></div></div>
     <h2>每件进度</h2><div class="card"><table>${(data.items||[]).slice().reverse().map(it => `<tr class="item-row${it.no_live_path?" nolive":""}" onclick="location.hash='item='+encodeURIComponent('${esc(it.key)}')">
       <td class="key">${esc(it.key)}</td><td>${esc(it.title)}${it.round?` <span class="others">返工 ${it.round}</span>`:""}${it.window?` <span class="others">窗口 ${esc(it.window)}</span>`:""}
-      <div class="others">派工 ${it.usage?.runs||0} 次 · ${Math.round(it.usage?.minutes||0)} 分钟</div></td>
+      <div class="others">派工 ${it.usage?.runs||0} 次 · ${Math.round(it.usage?.minutes||0)} 分钟${issueLink(it)}</div></td>
       <td style="text-align:right"><span class="st ${stuck(it)||it.no_live_path?"stuck":(/可收菜|已上线/.test(it.state)?"done":"")}">${it.no_live_path?"没有活路":it.stalled?"疑似卡住":esc(it.state)}</span></td></tr>`).join("") || '<tr><td class="empty">还没有件</td></tr>'}</table></div>
     <h2>项目目标</h2><div class="card settings"><textarea id="goal" maxlength="200" placeholder="一两句：这个项目为什么做、给谁用（写进每份任务书开头）">${esc(data.goal||"")}</textarea>
       <div class="row" style="margin-top:8px"><button class="btn ghost" onclick="saveGoal()">保存</button><span class="others">留空 = 清掉；下一份任务书起生效</span></div></div>
@@ -179,7 +179,10 @@ async function refresh(){
 }
 
 // 每件一页：时间线、交卷、diff、产出物、补充反馈
-const EV_NAMES = {add:"登记", dispatch:"派工", report:"交卷", gate_open:"开闸门", gate_approve:"老板通过", gate_reject:"老板打回/不同意",
+// 第二十轮：Multica 执行端的件带 issue 号；配了 multica.app_url 就能点开网页里的 issue（Orca 时代这里没有入口）
+function issueLink(it){ const e = it.exec; if (!e || !e.issue) return "";
+  return " · " + (e.url ? `<a href="${esc(e.url)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">Multica issue ${esc(e.issue)}</a>` : `Multica issue ${esc(e.issue)}`); }
+const EV_NAMES = {exec_reseed:"换执行端", add:"登记", dispatch:"派工", report:"交卷", gate_open:"开闸门", gate_approve:"老板通过", gate_reject:"老板打回/不同意",
   gate_superseded:"旧闸门作废", gate_external:"Orca 端结闸门", msg_error:"消息出错已跳过", msg_stale:"过时回报已丢", main_red:"等主线修绿",
   decider_timeout:"决策岗卡住重叫", merge_error:"合并出错", feedback:"老板补充反馈", rework:"返工", merge:"合并", push:"推送", ship:"上线", deploy_failed:"上线失败",
   restart:"工人重启", decision:"决策岗决定", drop:"不做", state:"状态", no_live_path:"没有活路", live_again:"恢复活路"};

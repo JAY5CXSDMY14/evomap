@@ -123,7 +123,7 @@ public struct StaleTracker: Equatable {
                 if !alerted.contains(b.project) && !quiet {
                     alerted.insert(b.project)
                     out.append(PlannedNotification(id: "stale/\(b.project)", title: "[\(b.project)] 接棒器停了",
-                                                   body: "已 \(HeartbeatStatus.human(b.ageMinutes ?? 0))没转动。看看常驻进程、Orca 和这台 Mac 是否睡着了",
+                                                   body: "已 \(HeartbeatStatus.human(b.ageMinutes ?? 0))没转动。看看常驻进程、执行端（Multica / Orca）和这台 Mac 是否睡着了",
                                                    project: b.project, gate: nil))
                 }
             } else if b.level == .ok {
