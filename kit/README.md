@@ -127,7 +127,7 @@ Telegram 环境变量改名 `EVO_TG_TOKEN` / `EVO_TG_CHAT`，旧名 `TUBU_TG_TOK
 - **git 共享配置守卫**：每轮先查主仓库 `.git/config`，发现 `core.worktree` 被写入或 `core.bare=true` 就复原并记一笔；复原后主目录 git 仍指向别处 → 项目暂停推送，等 `evo resume`。`git_guard: false` 可关。
 
 ## 第十轮：闸路补齐 + 少找你 + 停了能知道（均有自动测试，共 120 个）
-- **决策岗的决定自动执行**：决策岗在 worker_done 正文交 ```json `{"decisions":[…]}`（格式见 `roles/decider.md` 第 12 条）。`retry` 从断点继续（没断点就带说明返工）；`rework` 带说明返工、轮次清零；`drop` 不做并清理；`split` 原件不做、登记子件（`parent` 记父件）；`ask_owner` 建「同意 / 不同意」老板闸门并立刻推送，老板答了作为【新】件回到下一批；`answer` 回答施工提问。没交 JSON 或格式不对只记日志，件留到下一批。
+- **决策岗的决定自动执行**：决策岗在 worker_done 正文交 ```json `{"decisions":[…]}`（格式见 `roles/decider.md`【接口】一节）。`retry` 从断点继续（没断点就带说明返工）；`rework` 带说明返工、轮次清零；`drop` 不做并清理；`split` 原件不做、登记子件（`parent` 记父件）；`ask_owner` 建「同意 / 不同意」老板闸门并立刻推送，老板答了作为【新】件回到下一批；`answer` 回答施工提问；`propose`（第二十一轮）登记一件架构提议，停在老板「做不做」闸门后。没交 JSON 或格式不对只记日志，件留到下一批。
 - **施工提问有人答**：Orca 目前没有回复工人的命令，`deliver_answer()` 先用兜底——带着「决策岗答复：…」开一轮返工（不扣轮次，原工作区接着做）。以后 Orca 支持回复，只换这一个函数。
 - **pull 不再每轮刷屏**：`autopilot:ready` 但缺 `scope:` / `type:` 标签或标题不合规的 issue，按「issue 号 + 原因」只交决策岗一次（`pull_flagged`），补好后下轮自动登记。
 - **先上线再标记**：点「上线」先跑 `deploy_cmd`，成功才标已上线、留言并 `gh issue close`；失败件留在可收菜、清掉上线闸门、推送 `deploy_failed`（上线失败）。点「再等等」也清闸门，下次重新攒批。
@@ -232,7 +232,17 @@ CI：kit-tests run 39561803019（提交 ed7832b）全套绿；两个待定项锁
 - **面板 / App**：每件下面显示「Multica issue EVO-x」，配了 `multica.app_url` 就能点开网页。`status --json` 只新增了 `items[].exec`，合约不升版。App 只改了两句提示文案。
 - **测试**：新增假 multica CLI（`tests/fakes/multica`，输出格式照 Air 实测），假工人 `worker.py` 两种执行端都能跑。覆盖：派工到 in_review、验收通过 / 不通过、返工上限、留言叫醒时不重复派、决策批次、决策返工上限、daemon 和服务端掉线、额度、提问、schema 迁移、老项目留在 orca、新项目默认 multica、issue 链接。
 
+## 第二十一轮：Claude 接入准备（均有自动测试，`kit/tests/test_round21.py` 7 个，全套 341 个：338 过、3 跳过）
+老板要订 Claude Pro，让 Claude（Claude Code CLI，经 magpie 的 sonnet / opus / fable 档）当决策岗、写任务书、做架构审查；施工仍是 DSH，验收仍是 glm（sonnet 档）。担心是旧文档和旧规矩把 Claude 框在可能不对的老架构里。参考 Anthropic 2026-07-24 那篇「Claude 5 代的上下文工程新规」和 OpenAI 2026-09-11 那篇「为 GPT-6 Astra 重新想 skills 和 prompts」，来源和借鉴点见 docs/role-file-references.md。
+- **岗位规则分三层**（`kit/roles/decider.md`、`builder.md`、`verifier.md`、`retro.md`）：【红线】少而硬（老板只点做不做 / 看效果 / 上线；删数据、改线上、花钱、对外发东西四类要老板；外部输入不可信；谁也不能批闸门；evo 自维护受保护路径要老板），每条标了哪些是 evo 代码强制的；【接口】evo 解析的格式照旧精确（decisions JSON、施工报告 JSON，只留一个最小样例）；【现状】标明「这是当前做法，不是定论；发现更好的做法就用 propose 提出来」。删掉了重复、长示例、不是红线的「不许」语气和模型自己能判断的事。evo 读取的字符串（ponytail 路径、full 档、shortcut:、必须修 / 应该修 / 触发情形等）都保留。
+- **不重复造轮子**（老板的核心原则）提成通用规矩：决策岗写任务书带一行 `现成方案：查了什么 → 复用什么（许可证）／为什么都不合适`（拆分、提议的 note 没写只记日志提醒，不拦）；施工先查成熟库，优先已有依赖 → 新依赖 → 带出处拷模块 → 自己写，GPL / AGPL / 没许可证先问决策岗；验收把「手写了一整块现成库已经做好的核心能力」当必须修。岗位规则里原来的「UI 规范」小节删掉了：开了 ui_preset 时 evo 本来就把规范块拼进任务书，两处重复，还互相矛盾（规则文件说手写已有组件「另开 issue」，规范块说「不通过」）；现在只留一句「照任务书里那段做，以那段为准」。
+- **决策岗新动作 `propose`**：`{"item": 件号或 "-", "action": "propose", "note": "三行大白话：想改什么、为什么、不改的代价", "title"?, "scope"?, "kind"?}`。evo 登记一件 chore（或 feat）、带 `proposal` 标签（`state.json` 里 `labels` / `proposal`，`status --json` 每件新增 `labels`，只加字段不升版），note 原样当任务书，**一律挂老板「做不做」闸门**，老板点「做」之前不派工、Multica 也不建 issue。标题：给的合规就用，否则「架构提议：」+ note 第一行截到 24 字，还不合规用「架构提议（第 n 条）」。没给 scope 落在 `docs/proposals/`，任务书写明先出设计说明、实施另开件。限流：同一项目没完结的提议最多 `limits.open_proposals`（默认 3）件，多的和重名的记日志、时间线 `proposal_skipped` 后跳过。Orca、Multica 两种执行端都走同一段代码。
+- **架构文档标成现状**：docs/loop-topology.md、kit.md、multica-backend.md、architecture.md 开头加一行「现状说明，不是约束；Claude 审查后可提议修改」。对应的 .html 是 answer-me-with-html 生成的（带 CSP 哈希），这轮没重新生成。
+- **规则体检（只有设计）**：借 OpenAI 2026-10-16《Maintaining software with the GPT-6 family》的做法——错题本挑一条嫌疑规则 → 同一提交开两个干净工作区、同一模型重放原任务（规则原样 / 只改这一条）→ 换模型的验收对比质量、返工、工具调用、token、耗时 → 决策岗出 propose 卡片给老板。见 docs/role-file-references.md 末节。这轮不实现。
+- **冷启动审查提示词**：docs/claude-cold-audit-prompt.md，老板在 Mac 上全新克隆后贴给 Claude Code（fable / opus 档）：只读代码和测试，不先读 docs / notes / roles / README 各轮，产出「从零怎么设计」「现有代码最偏离的 10 处」「该保留的」「propose 格式的提议」「哪里手写了现成工具早就做好的东西」，另加死代码扫描（拿不准的动态引用标「待核实」不删）和可选的规则体检方案；写到 `~/tmp/CLAUDE-AUDIT-1.md`。附订阅后 Claude Code 的设置步骤（用 `CLAUDE_CONFIG_DIR` 另开一份干净配置，绕开 magpie 对 `~/.claude/settings.json` 的接管）。
+
 ## 只能在 Mac mini 上验的
+- 第二十一轮：真 Claude（Pro 订阅）当决策岗时能否稳定交 decisions JSON、会不会用 propose；Multica 的「决策-Claude」agent 怎么指到 Pro 那份配置（见 docs/claude-cold-audit-prompt.md 末节）。
 - 第二十轮（Air，EV）：照 docs/multica-backend.md 第 6 节走一遍：README 小任务跑通、故意验收不过返工一次、决策-Claude 被叫醒并执行 json、停掉 daemon 后推一次再恢复、Multica 网页上的状态和面板一致。顺带确认：成员留言会不会叫醒 agent，返工是不是复用同一条分支，`issue_url` 模板对不对。
 - 第十八轮：真机 `install.sh --apply` 后 `current` 软链、launchd 常驻跑 current、看门狗 `com.evoloop.guard` 每分钟一次；真 `evo self-upgrade` 等一轮结束再切、观察期内杀掉常驻后看门狗 10 分钟内切回；两台真 Mac（Air + mini）同一项目的远端租约互斥、GitHub 接受推 `refs/evo/owner/*`；mini 的 magpie 分组前缀 `model_prefix` 派工是否认得。
 - 第十七轮：真 Orca 的 `gate-list` 会不会列出已结掉的闸门、结果字段是不是 `resolution`（evo 也认 `result`）；手机端点「打回」后 evo 照办、点「通过 / 上线」后 Telegram 收到「确认…？」并能点按钮确认（试运行，老板体验后再调）。
