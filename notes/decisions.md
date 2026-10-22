@@ -93,3 +93,10 @@
 - 10-22 22:59: 验收标准1全过（EV-DOC-003 合并 6547215，main 7cb45f2，上线闸门 mg_20 等老板）；剩标准2–5，已问老板要不要写 Pi 指令
 - 10-23 00:08: 标准2–5 结果：2 没测到（施工预判直接写第二轮），3/4 过，5 发现 drop 后 issue 被 agent 改回 in_review → close(ok=False) 先 cancel-task；tick reconcile_closed 对齐 done/cancelled（334 passed）
 - 10-23 01:05: EV 验收标准 1–5 全部通过（HANDOFF-4）。施工交卷提示加 report json 示例（tests 用 command/result）。下一步待老板：Air 上恢复 EV 自动接棒？
+
+## 2026-10-23 02:20
+- 老板 wants a front-desk agent between him and evo (chat → 任务书/issues; never approves). Rec: Muse (on mini). Wabi = consumer messenger, no API → excluded.
+- Loop decider quota low; 老板 choosing one sub: Claude Pro / Codex / Grok Bot. Rec Codex (headless codex exec on subscription, Multica native). Awaiting pick.
+- 03:30 Round 21 Pi prompt (work/R21-PI-PROMPT.md) given: solidify multica daemon off ~/tmp via install.sh LaunchAgent, resume EV autopilot (no guard; --dev if plist stale), 2 real items overnight (chore: delete r20 probe files — authorized by 老板 forwarding; doc: kit/multica README acceptance section). Report → ~/tmp/MULTICA-HANDOFF-5.md.
+- 03:35 install.sh pnpm --if-present bug fixed 768da56 (Pi found; daemon already LaunchAgent, /tmp deps 0). Pi going path B (kickstart test, then autopilot + 2 items).
+- 03:40 老板 plans Claude Pro. Rec: Claude = 决策岗+任务书+架构审查 (not builder). Docs in 3 tiers: 红线 (enforced in code) / 接口 JSON / 现状 marked "当前做法非定论"; add decider action `propose` → 做不做 gate; slim role files (no examples); first Claude task = cold audit without our docs. Awaiting his go after subscribing.
