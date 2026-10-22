@@ -285,3 +285,17 @@ def test_issue_url_includes_workspace_slug(loop, monkeypatch):
     m.app_url, m.workspace, m.project = "http://h:3300", "evo", "p"
     m.issue_url = "{app_url}/{workspace}/issues/{identifier}"
     assert m.link("EVO-13") == "http://h:3300/evo/issues/EVO-13"
+
+
+def test_dropped_item_look_gate_hidden_and_refused(loop):
+    """10-22 Air：EV-DOC-002 已不做，它的看效果闸门还在「等你处理」里能点通过。"""
+    import subprocess
+    loop.multica_project("MB")
+    loop.add("MB", extra=("--look",))
+    gid = loop.item("MB")["gates"].get("look")
+    assert gid
+    loop.ok("-p", "MB", "drop", K, "测试")
+    st = json.loads(loop.ok("-p", "MB", "status", "--json").stdout)
+    assert gid not in [g["id"] for g in st["gates"]]
+    r = loop.evo("-p", "MB", "approve", gid, "通过")
+    assert r.returncode != 0

@@ -86,3 +86,5 @@
 - 2026-10-22 17:24 Air 第 3 步：mg_4 是建件时就挂的看效果闸门，status 只在验收通过后列入「等你点头」；builder 规则 12：只改文档不跑全量、先提交再测。待查：同 issue 返工时旧 run 还在跑会不会双开（Multica 有无取消 run 的命令）。
 - 2026-10-22 18:18 Air 第 3 步第二次误判卡住：dsh job_output 干等 28 分钟 pytest，期间指纹不变。改：Multica run 活跃就算活着（兜圈子靠 run_max_minutes 60）；决策岗对还在跑的件说 retry = 清标记接着等，上限从那刻重算；返工/换人前 cancel-task 掉同 issue 上还在跑的旧 run（17:09 那次返工让第一次 run 17:20 交的卷 76eb396 没人收）。
 - 2026-10-22 19:45 Air 第 4 步验收标准 1 通过（EV-DOC-003：16.8 分钟、0 次 pytest、零误报、先提交后报告、验收-Claude 独立复核 5.6 分钟）。issue 链接缺 workspace slug → multica.workspace 配置（默认模板 {app_url}/{workspace}/issues/{identifier}）。mg_16 等老板看效果。
+- 2026-10-22 19:55 App 0.8.0 自带的 evo 早于 Multica，看不到 Multica 闸门（等你 0）。临时：设置里 evo 路径指向仓库 kit/bin/evo，或终端 evo -p EV approve mg_16 通过。待办：App 重打包带新 evo / 自带版本落后时提示。
+- 2026-10-22 20:12 Air 两个 Evo.app（/Applications 与 app/build 同一份 0.8.0，同 bundle id 可同时跑）；向导重弹 = setupDone 从没写过（只在向导第 4 步写）。App 改：已有项目就直接记 setupDone。待办：App 重打包带 Multica 版 evo。

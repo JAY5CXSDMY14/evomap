@@ -2443,9 +2443,17 @@ def restart_worker(s, k, it, role):
 
 
 # ---------- 不做、决策岗的决定 ----------
+def void_item_gates(s, k, it):
+    """10-22 Air：件不做了，它的看效果 / 做不做 / 上线闸门还挂在「等你处理」里（EV-DOC-002 的 mg_4）。一并作废。"""
+    for gid in {it["gates"].get("look"), it["gates"].get("do"), it.get("ship_gate")} - {None}:
+        EX.gate_resolve(coord(s), gid, "作废")
+        s.setdefault("superseded_gates", {})[gid] = {"item": k, "why": "这件已标为不做"}
+
+
 def drop_item(s, k, it, why):
     """一件变成「不做」：标状态、收拾终端和工作区；合并任务标完成，排在它后面的件不再干等。"""
     it["state"] = "dropped"; it.pop("resume", None)
+    void_item_gates(s, k, it)
     EX.task_update(coord(s), it["merge"], "completed", "dropped")
     cleanup(it)
     EX.close((it.get("exec") or {}).get("issue"), ok=False)        # Multica：issue 标 cancelled
@@ -2914,6 +2922,7 @@ def cmd_drop(a):
     e = it.get("exec") or {}
     if e.get("backend", "orca") != EX.name:
         it["state"] = "dropped"; it.pop("resume", None); it.pop("stalled", None)
+        void_item_gates(s, a.key, it)
         e.setdefault("legacy", {}).update({"from": e.get("backend", "orca"), "dropped_at": TM.iso()})
         it["exec"] = e
         tl(a.key, "drop", why=why[:500]); log(s, f"{a.key} 不做（换执行端前，旧执行端的任务不再去动）：{why[:80]}")
@@ -3637,7 +3646,11 @@ def status_doc(s, pend):
     look = {it["gates"].get("look"): k for k, it in s["items"].items() if it["gates"].get("look")}
     owner = {gid: k for k, it in s["items"].items() for gid in (it["gates"].get("do"), it.get("ship_gate")) if gid}
     gates = []
+    dead = {gid for k, it in s["items"].items() if it["state"] == "dropped"
+            for gid in (it["gates"].get("look"), it["gates"].get("do"), it.get("ship_gate")) if gid}
     for g in pend:
+        if g["id"] in dead or g["id"] in (s.get("superseded_gates") or {}):
+            continue                                    # 不做的件 / 作废的闸门不再摆到老板面前
         opts = json.loads(g["options"]) if isinstance(g.get("options"), str) else g.get("options")
         gid = g["id"]
         kind = ("look" if gid in look else "do" if any(it["gates"].get("do") == gid for it in s["items"].values())
@@ -3801,6 +3814,8 @@ def cmd_approve(a):
     if sup:                                              # 作废的闸门：任何人、任何途径点了都不执行
         sys.exit(f"闸门 {a.gate} 已作废（{sup.get('item')} 有新反馈：{sup.get('why', '')[:60]}），这次不执行；请看新开的闸门")
     k0, kind0 = gate_kind(s, a.gate)
+    if k0 and s["items"].get(k0, {}).get("state") == "dropped":
+        sys.exit(f"闸门 {a.gate} 属于 {k0}，这件已标为不做，这次不执行")
     if kind0 == "look" and (s["items"][k0].get("look_bound") or {}).get("gate") not in (None, a.gate):
         sys.exit(f"闸门 {a.gate} 不是 {k0} 当前这一版的看效果闸门，这次不执行")
     conf = (s.get("confirm_gates") or {}).get(a.gate)

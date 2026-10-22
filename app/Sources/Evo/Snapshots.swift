@@ -300,7 +300,7 @@ struct MascotSheet: View {
             HStack(spacing: 14) {
                 ForEach(MascotMood.allCases, id: \.self) { m in
                     HStack(spacing: 4) {
-                        Image(nsImage: MenuBarIcon.image(m)).renderingMode(.template)
+                        Image(nsImage: MenuBarIcon.image(m))
                             .foregroundStyle(Theme.textPrimary)
                         if m == .waiting { Text("2").font(.system(size: 13)).foregroundStyle(Theme.textPrimary) }
                     }
