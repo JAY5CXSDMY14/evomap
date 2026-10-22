@@ -64,3 +64,10 @@
 - 为跑通修了几处：dsh 改用隔离安装的 0.1.0-rc.6（~/tmp/dsh016）；cordis-plugin-hmr 钉在 1.0.17（registerConfig 在 1.0.18 被删，见 bento#195）；dsh-app-boot 改成轮询 ctx.get("hmr") 最多 1 秒，绕开时序竞态；用户 patch 层把 multica runtime 禁掉的 hmr 重新启用；dsh wrapper 写死 node22 路径（daemon 会重置 PATH）；改用隔离的 DSH_HOME（0.2.x 和 0.1.x 的 credentials 格式冲突）；本地目录只能用 CLI 的 `--type local_directory` 绑定。
 - Air 上 Chrome 打不开是 Shadowrocket fake-ip 劫持了 ts.net，Host 规则无效；改用一个独立的 Chrome 实例，加 --no-proxy-server 和 --host-resolver-rules，把域名映射到 100.90.140.106。
 - 未决：上面这些都还在 ~/tmp，npm install 会冲掉补丁；daemon 现在靠 nohup 手动起，autostart 生成的 plist 不带自定义环境变量；收件箱提醒、worktree 模式、另外 3 个路由、多 agent 并发都还没测。evo 的 autopilot 和 guard 已 bootout，暂停前决策岗已经连续 5 次超过 45 分钟没交决定。
+
+## 2026-10-22 12:45 固化 Multica 执行端（老板全按推荐，上游 issue 不提）
+- 永久目录 ~/.evoloop/multica；DSH 继续钉在隔离的 0.1.0-rc.6，hmr 钉 1.0.17，补丁由 postinstall 自动重打；全局 dsh 不动。
+- 开机自启用自己写的 LaunchAgent（com.evoloop.multica-daemon），环境变量放在 env 文件里（权限 600，含 Magpie key，接受明文存本机）。
+- ~/tmp 里的旧文件保留，等新位置跑通、老板确认后再删。
+- 验收 agent「验收-Claude」：模型优先 group/check，没有就用 group/free-qwen；如果 claude 不认这个分组名，就把模型留空，走 Magpie 接入页的默认 GLM-flash。
+- 已推送 3e52bf5：kit/multica（install.sh、package.json、patch-dsh-boot.mjs、cordis.patch.yml、open-multica.sh、README），新增测试 test_multica_kit.py；docs/multica 补了第 7、8 节（踩坑清单、mini 预案）。第二轮 Pi 指令已交给老板，汇报文件约定为 ~/tmp/MULTICA-HANDOFF-2.md。
