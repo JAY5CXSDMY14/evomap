@@ -80,8 +80,17 @@ mkdir -p "$ROOT/vendor" "$(dirname "$RTSRC")"
 if [ ! -f "$RTSRC/package.json" ]; then
   git clone --depth 1 "$RUNTIME_REPO" "$RTSRC" >"$LOGS/runtime-build.log" 2>&1 && ok "已 clone dsh-runtime" || { bad "clone 失败，看 $LOGS/runtime-build.log"; exit 1; }
 fi
-( cd "$RTSRC" && { [ -d node_modules ] || { [ -f package-lock.json ] && "$NPM" ci --no-audit --no-fund || "$NPM" install --no-audit --no-fund; }; } \
-    && "$NPM" run build --if-present && rm -f "$ROOT"/vendor/*dsh-runtime*.tgz && "$NPM" pack --pack-destination "$ROOT/vendor" ) >>"$LOGS/runtime-build.log" 2>&1 \
+# 上游只有 pnpm-lock.yaml：npm install 会崩（edgesOut null，Air 实测）→ 有 pnpm-lock 就用 corepack 的 pnpm（不全局装）
+RTPM="$NPM"
+if [ -f "$RTSRC/pnpm-lock.yaml" ] && [ ! -f "$RTSRC/package-lock.json" ]; then
+  COREPACK=$(dirname "$NODE")/corepack; [ -x "$COREPACK" ] || COREPACK=$(command -v corepack || true)
+  if command -v pnpm >/dev/null 2>&1; then RTPM=$(command -v pnpm)
+  elif [ -n "$COREPACK" ]; then RTPM="$BIN/pnpm"; printf '#!/bin/sh\nexec "%s" pnpm "$@"\n' "$COREPACK" >"$RTPM"; chmod +x "$RTPM"
+  else bad "runtime 用 pnpm-lock，但找不到 pnpm/corepack；装 pnpm，或用 MULTICA_DSH_RUNTIME_PATH 指向已构建目录"; exit 1; fi
+  info "dsh-runtime 用 pnpm 构建：$RTPM"
+fi
+( cd "$RTSRC" && { [ -d node_modules ] || { [ -f package-lock.json ] && "$NPM" ci --no-audit --no-fund; } || { [ "$RTPM" != "$NPM" ] && "$RTPM" install --frozen-lockfile; } || "$NPM" install --no-audit --no-fund; } \
+    && "$RTPM" run build --if-present && rm -f "$ROOT"/vendor/*dsh-runtime*.tgz && "$NPM" pack --pack-destination "$ROOT/vendor" ) >>"$LOGS/runtime-build.log" 2>&1 \
   || { bad "dsh-runtime 构建/打包失败，看 $LOGS/runtime-build.log"; exit 1; }
 RTTGZ=$(ls -t "$ROOT"/vendor/*dsh-runtime*.tgz 2>/dev/null | head -1)
 [ -n "$RTTGZ" ] && ok "dsh-runtime tarball：$RTTGZ" || { bad "没找到 npm pack 产物"; exit 1; }
