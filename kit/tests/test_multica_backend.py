@@ -324,3 +324,20 @@ def test_old_dropped_residue_tidied_on_read(loop):
     it = [i for i in st["items"] if i["key"] == K][0]
     assert it["look_gate"] is None and not it["stalled"] and st["stuck"] == 0
     assert "疑似卡住" not in loop.ok("-p", "MB", "status").stdout
+
+
+def test_legacy_dropped_gate_without_superseded_stays_hidden(loop):
+    """10-22 Air 第二次：老版本 drop 没写 superseded_gates，读时清掉 look 后 mg_4 又冒出来。"""
+    loop.multica_project("MB")
+    loop.add("MB", extra=("--look",))
+    gid = loop.item("MB")["gates"].get("look")
+    path = os.path.join(loop.projects, "MB", "state", "state.json")
+    s = loop.state("MB")
+    s["items"][K]["state"] = "dropped"; s["items"][K]["stalled"] = True     # 模拟老版本 drop：闸门没作废、没记 superseded
+    s.pop("superseded_gates", None)
+    json.dump(s, open(path, "w", encoding="utf-8"), ensure_ascii=False)
+    st = json.loads(loop.ok("-p", "MB", "status", "--json").stdout)
+    assert gid not in [g["id"] for g in st["gates"]] and st["stuck"] == 0
+    assert gid not in loop.ok("-p", "MB", "status").stdout
+    r = loop.evo("-p", "MB", "approve", gid, "通过")
+    assert r.returncode != 0

@@ -89,3 +89,4 @@
 - 2026-10-22 19:55 App 0.8.0 自带的 evo 早于 Multica，看不到 Multica 闸门（等你 0）。临时：设置里 evo 路径指向仓库 kit/bin/evo，或终端 evo -p EV approve mg_16 通过。待办：App 重打包带新 evo / 自带版本落后时提示。
 - 2026-10-22 20:12 Air 两个 Evo.app（/Applications 与 app/build 同一份 0.8.0，同 bundle id 可同时跑）；向导重弹 = setupDone 从没写过（只在向导第 4 步写）。App 改：已有项目就直接记 setupDone。待办：App 重打包带 Multica 版 evo。
 - 10-22 22:25 0e37654: drop 残留清理（tidy_closed），stuck 不算收尾件，import 写 multica.workspace；331 passed
+- 10-22 22:46: tidy_closed 先把闸门号记进 superseded_gates 再清（0e37654 引入的 mg_4 复现 bug）；文字 status 也过滤 superseded；332 passed

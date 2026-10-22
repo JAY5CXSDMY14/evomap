@@ -718,9 +718,9 @@ def load():
     if os.path.exists(STATE):
         try:
             s = migrate_state(json.load(open(STATE, encoding="utf-8")))
-            for it in (s.get("items") or {}).values():      # 老版本 drop 留下的残留标记，读的时候顺手清（下次保存落盘）
-                if isinstance(it, dict):
-                    tidy_closed(it)
+            for k, it in (s.get("items") or {}).items():    # 老版本 drop 留下的残留标记，读的时候顺手清（下次保存落盘）
+                if isinstance(it, dict) and it.get("gates") is not None:
+                    tidy_closed(it, s, k)
             return s
         except ValueError:
             # 读不出 ≠ 空：先把坏文件挪开留证，停下等人，绝不当作「没有任务」重新开始
@@ -2452,13 +2452,13 @@ def void_item_gates(s, k, it):
     for gid in {it["gates"].get("look"), it["gates"].get("do"), it.get("ship_gate")} - {None}:
         EX.gate_resolve(coord(s), gid, "作废")
         s.setdefault("superseded_gates", {})[gid] = {"item": k, "why": "这件已标为不做"}
-    tidy_closed(it)
+    tidy_closed(it, s, k)
 
 
 DONE_STATES = ("dropped", "merged", "shipped")
 
 
-def tidy_closed(it):
+def tidy_closed(it, s=None, k=None):
     """10-22 Air：件已收尾（不做 / 合并 / 上线），身上的「疑似卡住」「没有活路」和看效果闸门号一并清掉，
     status 不再显示 ⚠疑似卡住、stuck 不再多算。作废的闸门号留在 superseded_gates 里查得到。"""
     if it.get("state") not in DONE_STATES:
@@ -2469,10 +2469,13 @@ def tidy_closed(it):
             it.pop(f, None); hit = True
     g = it.get("gates") or {}
     if it["state"] == "dropped":
+        sup = s.setdefault("superseded_gates", {}) if s is not None else {}
         for gk in ("look", "do"):
             if g.get(gk):
+                sup.setdefault(g[gk], {"item": k, "why": "这件已标为不做"})   # 先记作废，状态页和 approve 靠它拦旧闸门
                 g[gk] = None; hit = True
         if it.get("ship_gate"):
+            sup.setdefault(it["ship_gate"], {"item": k, "why": "这件已标为不做"})
             it["ship_gate"] = None; hit = True
     return hit
 
@@ -2888,9 +2891,9 @@ def read_state_ro(code=None):
         s = json.load(open(p, encoding="utf-8"))
     except (OSError, ValueError, TypeError):
         return {"items": {}}
-    for it in (s.get("items") or {}).values():          # 只在内存里清已收尾件的残留标记，不写盘
+    for k, it in (s.get("items") or {}).items():        # 只在内存里清已收尾件的残留标记，不写盘
         if isinstance(it, dict) and it.get("gates") is not None:
-            tidy_closed(it)
+            tidy_closed(it, s, k)
     return s
 
 
@@ -3627,6 +3630,7 @@ def cmd_status(a):
     print("■ 等你点头" + ("（Orca 闸门这次没读到）" if stale else ""))
     early = {it["gates"].get("look") for it in s["items"].values() if it["gates"].get("look") and it["state"] != "verified"}
     pend = [g for g in pend if g["id"] not in early]   # 10-22 Air：看效果闸门建件时就挂着，验收通过前不算「等你点头」
+    pend = [g for g in pend if g["id"] not in (s.get("superseded_gates") or {})]   # 作废 / 不做件的闸门不摆出来
     for g in pend + confirm_gates_doc(s):
         print(f"  {g['id']}  {g.get('question')}")
     if not pend and not confirm_gates_doc(s):
