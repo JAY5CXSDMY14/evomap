@@ -100,3 +100,10 @@
 - 03:30 Round 21 Pi prompt (work/R21-PI-PROMPT.md) given: solidify multica daemon off ~/tmp via install.sh LaunchAgent, resume EV autopilot (no guard; --dev if plist stale), 2 real items overnight (chore: delete r20 probe files — authorized by 老板 forwarding; doc: kit/multica README acceptance section). Report → ~/tmp/MULTICA-HANDOFF-5.md.
 - 03:35 install.sh pnpm --if-present bug fixed 768da56 (Pi found; daemon already LaunchAgent, /tmp deps 0). Pi going path B (kickstart test, then autopilot + 2 items).
 - 03:40 老板 plans Claude Pro. Rec: Claude = 决策岗+任务书+架构审查 (not builder). Docs in 3 tiers: 红线 (enforced in code) / 接口 JSON / 现状 marked "当前做法非定论"; add decider action `propose` → 做不做 gate; slim role files (no examples); first Claude task = cold audit without our docs. Awaiting his go after subscribing.
+
+## 2026-10-23 04:16 第二十一轮：Claude 接入准备
+- 岗位规则分 红线/接口/现状 三层；「不重复造轮子」成通用原则（决策岗任务书须写「现成方案」）。
+- 决策岗新动作 propose → proposal 件，停在老板做不做闸门后，每项目最多 3 件未决。
+- docs/claude-cold-audit-prompt.md（冷启动审查 + 死代码扫描 + 规则体检可选步）。
+- 5eb4124 docs/agent-practices-2026、docs/claude-pro-native-setup：原生 claude CLI + 自己的 Pro 可以；Pro 绝不经 magpie；地区按人所在地算 → 建议 claude_pro.enabled 开关；~/.claude-pro 独立配置。
+- 待老板：修 Pro 决策岗与 magpie claude 验收岗共用额度账户名（限流时一起暂停）的 bug。
