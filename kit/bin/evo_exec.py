@@ -47,6 +47,10 @@ class Executor:
     def close(self, task, ok=True):
         raise NotImplementedError
 
+    def issue_status(self, task):
+        """10-22 Air：执行端上这件的状态（Multica issue 的 status）；没有这个概念返回 None。"""
+        return None
+
     def alive_at(self, did):
         """第二十轮补：执行端看到这次派工最后一次「还在干活」的时间（epoch 秒）；看不到返回 0。"""
         return 0
@@ -466,8 +470,16 @@ class MulticaExecutor(Executor):
         self.cli("issue", "comment", "add", task, "--content-stdin", stdin=text)
 
     def close(self, task, ok=True):
-        if task:
-            self.cli("issue", "status", task, "done" if ok else "cancelled", "--no-start", ok=False)
+        if not task:
+            return
+        if not ok:      # 10-22 Air EV-DOC-005：不做时施工 run 还在跑，跑完 agent 又把 issue 改回 in_review。先停掉在跑的 run
+            for r in self.runs(task):
+                if str(r.get("status") or "").lower() in RUN_ACTIVE and r.get("id"):
+                    self.cli("issue", "cancel-task", r["id"], "--issue", task, ok=False)
+        self.cli("issue", "status", task, "done" if ok else "cancelled", "--no-start", ok=False)
+
+    def issue_status(self, task):
+        return (self.cli("issue", "get", task, ok=False) or {}).get("status") if task else None
 
     def runs(self, task):
         return [r for r in _arr(self.cli("issue", "runs", task, ok=False), "runs", "items") if isinstance(r, dict)]

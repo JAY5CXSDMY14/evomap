@@ -341,3 +341,39 @@ def test_legacy_dropped_gate_without_superseded_stays_hidden(loop):
     assert gid not in loop.ok("-p", "MB", "status").stdout
     r = loop.evo("-p", "MB", "approve", gid, "通过")
     assert r.returncode != 0
+
+
+def test_drop_while_building_cancels_run_and_issue(loop):
+    """10-22 Air 标准 5：EV-DOC-005 施工中被 drop，run 跑完 issue 又成了 in_review。drop 要先停 run 再标 cancelled。"""
+    loop.multica_project("MB")
+    loop.plan(build=["silent"])
+    loop.add("MB")
+    loop.tick("MB")
+    iss = loop.item("MB")["exec"]["issue"]
+    loop.ok("-p", "MB", "drop", K, "探针")
+    ms = loop.multica_state()
+    i = [x for x in ms["issues"].values() if x["identifier"] == iss][0]
+    assert i["status"] == "cancelled"
+    assert all(r["status"] != "running" for r in ms["runs"] if r["issue_id"] == i["id"])
+
+
+def test_tick_realigns_issue_status_of_closed_items(loop):
+    """执行端被 agent 改回 in_review：下一轮 tick 改回 cancelled，并记 exec.closed，之后不再查。"""
+    loop.multica_project("MB")
+    loop.plan(build=["silent"])
+    loop.add("MB")
+    loop.tick("MB")
+    iss = loop.item("MB")["exec"]["issue"]
+    loop.ok("-p", "MB", "drop", K, "探针")
+    p = os.path.join(loop.orca_dir, "multica", "state.json")
+    ms = loop.multica_state()
+    for x in ms["issues"].values():
+        if x["identifier"] == iss:
+            x["status"] = "in_review"
+    json.dump(ms, open(p, "w"), ensure_ascii=False)
+    loop.tick("MB")
+    st = [x for x in loop.multica_state()["issues"].values() if x["identifier"] == iss][0]["status"]
+    assert st == "cancelled"
+    assert any("和 evo 对齐" in l for l in loop.state("MB")["log"])
+    loop.tick("MB")
+    assert loop.item("MB")["exec"].get("closed") is True

@@ -2053,6 +2053,30 @@ orca_up = exec_up          # 旧名（功能包 / 老脚本可能还在叫）
 
 
 # ---------- 接棒一轮 ----------
+def reconcile_closed(s, limit=5):
+    """10-22 Air 标准 5：evo 里已收尾的件（合并 / 上线 = done，不做 = cancelled），执行端 issue 状态对不上就再改一次。
+    对上了记 exec.closed，以后不再查；每轮最多查 limit 件，不拖慢接棒。"""
+    n = 0
+    for k, it in s["items"].items():
+        e = it.get("exec") or {}
+        if it["state"] not in DONE_STATES or e.get("closed") or not e.get("issue") or e.get("backend") != EX.name:
+            continue
+        if n >= limit:
+            break
+        n += 1
+        want = "cancelled" if it["state"] == "dropped" else "done"
+        try:
+            st = EX.issue_status(e["issue"])
+        except Exception as ex:      # 查不到就下一轮再说
+            print(f"查 {e['issue']} 状态失败：{ex}"); continue
+        if st is None:
+            continue
+        if st == want:
+            e["closed"] = True; continue
+        EX.close(e["issue"], ok=(want == "done"))
+        log(s, f"{k} 的 {e['issue']} 在执行端是 {st}，已改回 {want}（和 evo 对齐）")
+
+
 def cmd_tick(a=None):
     lease_check(loop=True)
     s = load(); guard_git(s)
@@ -2061,6 +2085,7 @@ def cmd_tick(a=None):
     c = coord(s)
     if exec_reseed(s, c):
         checkpoint(s, "reseed")
+    reconcile_closed(s)
     T = tasks(s)
     by_task = {}
     for k, it in s["items"].items():
