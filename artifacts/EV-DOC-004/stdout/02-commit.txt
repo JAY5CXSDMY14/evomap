@@ -1,0 +1,15 @@
+$ git show --stat --oneline HEAD
+95e4ae6 feat(notes): notes/r20-probe.md 内容改为「第二轮」，用户打开只看到这两个字
+ notes/r20-probe.md | 1 +
+ 1 file changed, 1 insertion(+)
+
+$ git status --short
+?? .dsh/
+?? .multica/
+?? AGENTS.md
+?? artifacts/EV-DOC-004/
+
+$ cat notes/r20-probe.md
+第二轮
+$ xxd notes/r20-probe.md
+00000000: e7ac ace4 ba8c e8bd ae                   .........
