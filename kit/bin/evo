@@ -717,7 +717,11 @@ def load():
     ensure_clone()
     if os.path.exists(STATE):
         try:
-            return migrate_state(json.load(open(STATE, encoding="utf-8")))
+            s = migrate_state(json.load(open(STATE, encoding="utf-8")))
+            for it in (s.get("items") or {}).values():      # 老版本 drop 留下的残留标记，读的时候顺手清（下次保存落盘）
+                if isinstance(it, dict):
+                    tidy_closed(it)
+            return s
         except ValueError:
             # 读不出 ≠ 空：先把坏文件挪开留证，停下等人，绝不当作「没有任务」重新开始
             bad = STATE + time.strftime(".bad-%m%d%H%M%S")
@@ -2448,6 +2452,29 @@ def void_item_gates(s, k, it):
     for gid in {it["gates"].get("look"), it["gates"].get("do"), it.get("ship_gate")} - {None}:
         EX.gate_resolve(coord(s), gid, "作废")
         s.setdefault("superseded_gates", {})[gid] = {"item": k, "why": "这件已标为不做"}
+    tidy_closed(it)
+
+
+DONE_STATES = ("dropped", "merged", "shipped")
+
+
+def tidy_closed(it):
+    """10-22 Air：件已收尾（不做 / 合并 / 上线），身上的「疑似卡住」「没有活路」和看效果闸门号一并清掉，
+    status 不再显示 ⚠疑似卡住、stuck 不再多算。作废的闸门号留在 superseded_gates 里查得到。"""
+    if it.get("state") not in DONE_STATES:
+        return False
+    hit = False
+    for f in ("stalled", "no_live", "no_live_since", "resume"):
+        if f in it:
+            it.pop(f, None); hit = True
+    g = it.get("gates") or {}
+    if it["state"] == "dropped":
+        for gk in ("look", "do"):
+            if g.get(gk):
+                g[gk] = None; hit = True
+        if it.get("ship_gate"):
+            it["ship_gate"] = None; hit = True
+    return hit
 
 
 def drop_item(s, k, it, why):
@@ -2858,9 +2885,13 @@ def read_state_ro(code=None):
     """只读状态文件（不抢锁、不管暂停）：面板和 evo log 用。"""
     p = os.path.join(HOME_DIR, code, "state", "state.json") if code else STATE
     try:
-        return json.load(open(p, encoding="utf-8"))
+        s = json.load(open(p, encoding="utf-8"))
     except (OSError, ValueError, TypeError):
         return {"items": {}}
+    for it in (s.get("items") or {}).values():          # 只在内存里清已收尾件的残留标记，不写盘
+        if isinstance(it, dict) and it.get("gates") is not None:
+            tidy_closed(it)
+    return s
 
 
 def item_diff(it, limit=1 << 20):
@@ -3084,7 +3115,8 @@ def _setup_project(code, name, path, github, test_cmd, notes, goal=None, ui_pres
     exk = EXMOD.backend_of({"executor": executor or GCFG.get("executor") or "multica"})
     base["executor"] = exk
     if exk == "multica":
-        base["multica"] = {"project": code, "agents": dict(EXMOD.MULTICA_AGENTS), "app_url": ""}
+        base["multica"] = {"project": code, "agents": dict(EXMOD.MULTICA_AGENTS), "app_url": GCFG.get("multica_app_url", ""),
+                           "workspace": GCFG.get("multica_workspace") or os.environ.get("MULTICA_WORKSPACE_SLUG", "")}
     if goal:
         base["goal"] = goal
     if ui_preset and ui_preset != "none":
@@ -3601,7 +3633,7 @@ def cmd_status(a):
         print("  （没有）")
     print("■ 每件进度")
     for k, it in s["items"].items():
-        flag = " ⚠疑似卡住" if it.get("stalled") else ""
+        flag = " ⚠疑似卡住" if it.get("stalled") and it["state"] not in DONE_STATES else ""
         u = it.get("usage") or {}
         ed = exec_doc(it) or {}
         mx = f" · Multica issue {ed['issue']}" if ed.get("issue") and ed.get("backend") == "multica" else ""
@@ -3671,7 +3703,8 @@ def status_doc(s, pend):
         "last_tick": read_heartbeats().get(CODE),
         "orca_down_since": TM.iso(s.get("exec_down") or s["orca_down"]) if (s.get("exec_down") or s.get("orca_down")) else None,   # 合约字段名不变：执行端掉线的时间（第二十轮起 Multica 也算）
         "count": cnt,
-        "stuck": sum(1 for it in s["items"].values() if it.get("stalled") or it["state"] in ("escalated", "asking")),
+        "stuck": sum(1 for it in s["items"].values() if it["state"] not in DONE_STATES
+                     and (it.get("stalled") or it["state"] in ("escalated", "asking"))),
         "goal": CFG.get("goal") or None,
         "roles": roles_doc(s),
         "stale": stale_list(s),
@@ -3679,7 +3712,7 @@ def status_doc(s, pend):
         "gates": gates,
         "items": [{"key": k, "title": it["title"], "kind": it.get("kind"), "state": state_name(it), "raw": it["state"],
                    "waiting": waiting_reason(it), "window": it.get("window"),
-                   "stalled": bool(it.get("stalled")), "look": bool(it.get("ui")), "round": it.get("round", 0),
+                   "stalled": bool(it.get("stalled")) and it["state"] not in DONE_STATES, "look": bool(it.get("ui")), "round": it.get("round", 0),
                    "issue": it.get("issue"), "parent": it.get("parent"),
                    "manual_checks": (it.get("report") or {}).get("manual_checks") or [],
                    "state_since": TM.iso(it["state_since"]) if it.get("state_since") else None,

@@ -299,3 +299,28 @@ def test_dropped_item_look_gate_hidden_and_refused(loop):
     assert gid not in [g["id"] for g in st["gates"]]
     r = loop.evo("-p", "MB", "approve", gid, "通过")
     assert r.returncode != 0
+
+
+def test_dropped_item_clears_stalled_and_look_gate(loop):
+    """10-22 Air 重装后：EV-DOC-002 已不做，status 还显示 ⚠疑似卡住、stuck 多算一个、look_gate 还在。"""
+    loop.multica_project("MB")
+    loop.add("MB", extra=("--look",))
+    loop.ok("-p", "MB", "drop", K, "测试")
+    st = json.loads(loop.ok("-p", "MB", "status", "--json").stdout)
+    it = [i for i in st["items"] if i["key"] == K][0]
+    assert it["look_gate"] is None and not it["stalled"] and not it["no_live_path"] and st["stuck"] == 0
+
+
+def test_old_dropped_residue_tidied_on_read(loop):
+    """老版本 drop 留下 stalled / look_gate：读状态时自动清掉，status 不再报卡住。"""
+    loop.multica_project("MB")
+    loop.add("MB", extra=("--look",))
+    loop.ok("-p", "MB", "drop", K, "测试")
+    path = os.path.join(loop.projects, "MB", "state", "state.json")
+    s = loop.state("MB")
+    s["items"][K]["stalled"] = True; s["items"][K]["gates"]["look"] = "mg_4"
+    json.dump(s, open(path, "w", encoding="utf-8"), ensure_ascii=False)
+    st = json.loads(loop.ok("-p", "MB", "status", "--json").stdout)
+    it = [i for i in st["items"] if i["key"] == K][0]
+    assert it["look_gate"] is None and not it["stalled"] and st["stuck"] == 0
+    assert "疑似卡住" not in loop.ok("-p", "MB", "status").stdout

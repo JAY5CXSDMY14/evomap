@@ -10,9 +10,9 @@
     "project": "AB",
     "agents": {"build": "施工-DSH", "verify": "验收-Claude", "decide": "决策-Claude"},
     "app_url": "",
-    "issue_url": "{app_url}/issues/{identifier}"
+    "workspace": ""
   },
-  "_multica": "project：Multica 里的项目名或 id（要先绑定 evo 的专用克隆，--type local_directory）；agents：三个岗位对应的 agent 名；app_url：Multica 网页地址（面板上点 issue 用，可空）；issue_url：issue 链接模板；cmd：multica 命令（默认 multica）",
+  "_multica": "project：Multica 里的项目名或 id（要先绑定 evo 的专用克隆，--type local_directory）；agents：三个岗位对应的 agent 名；app_url：Multica 网页地址（面板上点 issue 用，可空）；workspace：Multica 工作区 slug（网址里 app_url 后面那段，如 evo；不填链接会跳登录页）；issue_url：可选，自定义链接模板（默认 {app_url}/{workspace}/issues/{identifier}）；cmd：multica 命令（默认 multica）",
   "repo": "/path/to/your-repo",
   "main_branch": "main",
   "github_repo": "owner/repo",
