@@ -68,6 +68,7 @@
 | `goal` | 项目目标（一两句，写进每份任务书开头）；没写为 `null`。第十二轮新增 |
 | `roles` | 岗位状态列表：`{"role": "build"/"verify"/"decide", "name": "施工"…, "status": "busy"/"idle"/"paused"/"rate_limited", "label": "忙"/"闲"/"暂停"/"额度满", "items": [件号], "why": 说明或 null, "until": 额度恢复时间或 null}`。第十二轮新增 |
 | `stale` | 卡太久：同一状态超过 `limits.stale_hours`（默认 6）小时的件，`{"key","title","state","raw","since","hours"}`，按时长倒序；可收菜、已上线、不做不算。第十二轮新增 |
+| `items[].labels` | 件的标签列表，目前只有决策岗提议的 `proposal`。第二十一轮新增 |
 | `no_live_path` | 没有活路超过 `limits.no_live_path_minutes`（默认 30）分钟的件（面板标红，已交决策岗一次）：`{"key","title","state","raw","reason","why","since","minutes"}`；`reason` 取 `stalled` `dep_dead` `task_dead` `no_decider` `decider_idle` `unknown_state`。第十二轮新增 |
 | `items[].state_since` | 进入当前状态的时间。第十二轮新增 |
 | `items[].no_live_path` | 这件此刻有没有活路的判断（`true` = 没有，正在计时；到阈值才进顶层 `no_live_path`）。第十二轮新增 |
@@ -80,7 +81,7 @@
 第十二轮只加字段，`schema_version` 仍是 1。第二十轮同样只加字段。
 
 ### 2.1c `evo -p <代号> log <件号> --json`（每件时间线）
-读 `~/.evoloop/projects/<代号>/state/timeline.jsonl`（只追加，一行一个事件）。每行 `{"at", "item", "event", …}`，`event` 取 `add` `dispatch` `report` `gate_open` `gate_approve` `gate_reject` `gate_superseded` `feedback` `rework` `merge` `push` `ship` `deploy_failed` `restart` `decision` `drop` `state` `no_live_path` `live_again` `fallback_on` `fallback_off` `model_blocked`（第十四轮；`dispatch` 另带 `tool` `account` `fallback`）；打回/补充反馈的原话在 `words`，合并、推送带 `sha`。`--diff` 输出这件的改动（工作区还在看分支，合并后看合并提交）。不抢锁，只读。
+读 `~/.evoloop/projects/<代号>/state/timeline.jsonl`（只追加，一行一个事件）。每行 `{"at", "item", "event", …}`，`event` 取 `add` `dispatch` `report` `gate_open` `gate_approve` `gate_reject` `gate_superseded` `feedback` `rework` `merge` `push` `ship` `deploy_failed` `restart` `decision` `drop` `state` `no_live_path` `live_again` `fallback_on` `fallback_off` `model_blocked`（第十四轮；`dispatch` 另带 `tool` `account` `fallback`）、`proposal` `proposal_skipped`（第二十一轮：决策岗 propose 登记 / 因限流或重名跳过；跳过时 `item` 可能是 `-`）；打回/补充反馈的原话在 `words`，合并、推送带 `sha`。`--diff` 输出这件的改动（工作区还在看分支，合并后看合并提交）。不抢锁，只读。
 
 不带 `-p` 的 `evo status` 是多项目总览（纯文本，不是稳定接口）；要多项目就对每个代号各跑一次 `--json`（`evo projects` 列代号）。
 

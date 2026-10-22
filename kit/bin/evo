@@ -1894,8 +1894,8 @@ def decider_wake(s, T):
         for e in ext:
             lines.append(f"- #{e['issue']} {e['title']}（作者 {e.get('author') or '?'}，{'可信' if e.get('trusted') else '不可信'}，"
                          f"标签 {','.join(e.get('labels') or [])}）" + (f" {e['note']}" if e.get("note") else ""))
-    lines.append("\n每件的决定写在最后一条 worker_done 正文的 ```json 块里，格式见岗位规则第 12 条"
-                 "（retry / rework / drop / split / ask_owner / answer），接棒器自动执行；外部来报在 issue 上补标签。")
+    lines.append("\n每件的决定写在最后一条 worker_done 正文的 ```json 块里，格式见岗位规则【接口】一节"
+                 "（retry / rework / drop / split / ask_owner / answer / propose），接棒器自动执行；外部来报在 issue 上补标签。")
     c = coord(s)
     tid = EX.task_create(c, f"{CODE} 决策批次 {TM.local().strftime('%m-%d %H:%M')}",
                          goal_head() + role_prompt("decide") + "\n".join(lines))
@@ -2516,7 +2516,7 @@ def drop_item(s, k, it, why):
     log(s, f"{k} 不做：{why[:80]}")
 
 
-DECISION_ACTIONS = ("retry", "rework", "drop", "split", "ask_owner", "answer")
+DECISION_ACTIONS = ("retry", "rework", "drop", "split", "ask_owner", "answer", "propose")
 
 
 def parse_decisions(body):
@@ -2543,6 +2543,14 @@ def apply_decisions(s, body):
         k = (d or {}).get("item") if isinstance(d, dict) else None
         act = (d or {}).get("action") if isinstance(d, dict) else None
         it = s["items"].get(k) if k else None
+        if act == "propose":                             # 第二十一轮：提议不挂在哪件上（item 可以是 "-"），单独处理
+            note = str(d.get("note") or "").strip()
+            tl(k if it else "-", "decision", action=act, note=note[:1000])
+            try:
+                decide_propose(s, k if it else None, it, note, d)
+            except SystemExit as e:
+                log(s, f"决策岗的 propose 没执行成：{e}")
+            save(s); continue
         if not it or act not in DECISION_ACTIONS:
             log(s, f"决策岗的决定看不懂，跳过：{json.dumps(d, ensure_ascii=False)[:120]}"); continue
         if it["state"] in ("merged", "shipped", "dropped", "pushing"):
@@ -2615,6 +2623,7 @@ def decide_split(s, k, it, note, d):
         if bad or not x.get("scope") or (x.get("kind") or "feat").lower() not in KINDS:
             return log(s, f"{k} 拆分的子件不合规（{x.get('title')}：{bad or '缺 scope 或类别不对'}），整条不执行")
     drop_item(s, k, it, f"决策岗拆成 {len(kids)} 件")
+    no_reuse(s, k, note)
     for x in kids:
         sc = x["scope"] if isinstance(x["scope"], str) else ",".join(x["scope"])
         ns = argparse.Namespace(kind=(x.get("kind") or "feat").lower(), title=x["title"], scope=sc, ui=bool(x.get("look")),
@@ -2649,8 +2658,63 @@ def deliver_answer(s, k, it, note):
     log(s, f"{k} 决策岗答复已随返工送给施工")
 
 
+PROPOSAL_PREFIX = "架构提议："
+PROPOSAL_DONE = ("merged", "shipped", "dropped")
+
+
+def proposal_title(d, note, n):
+    """提议的件名：决策岗给的 title 合规就用；否则「架构提议：」+ note 第一行截到 24 字；还不合规用「架构提议（第 n 条）」。"""
+    t = str(d.get("title") or "").strip()
+    if t and not check_title(t):
+        return t
+    first = re.sub(r"\s+", " ", (note.splitlines() or [""])[0]).strip().strip("：:。. ")
+    first = re.sub(r"^(想改什么|想改|改什么)[：:]\s*", "", first)
+    t = (PROPOSAL_PREFIX + first)[:24]
+    return t if first and not check_title(t) else f"架构提议（第{n}条）"
+
+
+def no_reuse(s, k, note):
+    """不重复造轮子：决策岗写的任务书（拆分 / 提议）应带一行「现成方案：…」。缺了只记日志提醒，不拦。"""
+    if "现成方案" not in (note or ""):
+        log(s, f"{k} 决策岗的任务书没写「现成方案」（查了什么、复用什么、为什么都不合适）")
+
+
+def decide_propose(s, k, it, note, d):
+    """第二十一轮：决策岗提议改架构 / 做法 / 规矩。登记成一件带 proposal 标签的件，note 原样当任务书，
+    一律挂老板「做不做」闸门（product），老板点「做」之前不派工。每个项目同时最多 limits.open_proposals（默认 3）件没完结的提议。"""
+    if not note:
+        return log(s, "决策岗的 propose 没写 note（想改什么、为什么、不改的代价），跳过")
+    cap = int(LIM.get("open_proposals", 3))
+    live = [x for x, v in s["items"].items() if v.get("proposal") and v["state"] not in PROPOSAL_DONE]
+    seq = s.get("proposals_seen", 0) + 1
+    title = proposal_title(d, note, seq)
+    if any(s["items"][x]["title"] == title for x in live):
+        log(s, f"决策岗的提议「{title}」已经在等老板，不重复登记"); tl(k or "-", "proposal_skipped", why="重复", title=title)
+        return
+    if len(live) >= cap:
+        log(s, f"决策岗的提议「{title}」没登记：已有 {len(live)} 件提议在等老板（上限 {cap}）")
+        tl(k or "-", "proposal_skipped", why=f"已有 {len(live)} 件提议在等（上限 {cap}）", title=title, note=note[:500])
+        return
+    kind = str(d.get("kind") or "chore").lower()
+    kind = kind if kind in ("chore", "feat") else "chore"
+    sc = d.get("scope") or "docs/proposals/"
+    sc = sc if isinstance(sc, str) else ",".join(sc)
+    spec = ("【架构提议】决策岗提出，老板点「做」才开工。\n" + (f"相关件：{k}\n" if k else "")
+            + ("没给 scope：先把提议写成 docs/proposals/ 下的一份设计说明（现状、提议、代价、怎么回退），实施另开件。\n" if not d.get("scope") else "")
+            + f"提议原文：\n{note}\n")
+    ns = argparse.Namespace(kind=kind, title=title, scope=sc, ui=bool(d.get("look")), product=True,
+                            issue=(it or {}).get("issue"), window=None, parent=k, spec=spec)
+    key = add_item(s, ns)
+    s["proposals_seen"] = seq
+    no_reuse(s, key, note)
+    nit = s["items"][key]
+    nit["proposal"] = True; nit["labels"] = sorted(set(nit.get("labels") or []) | {"proposal"})
+    tl(key, "proposal", source=k, note=note[:1000])
+    log(s, f"{key} 决策岗提议：{title}（等老板点做不做）")
+
+
 DECIDE_DO = {"retry": decide_retry, "rework": decide_rework, "drop": decide_drop, "split": decide_split,
-             "ask_owner": decide_ask_owner, "answer": decide_answer}
+             "ask_owner": decide_ask_owner, "answer": decide_answer, "propose": decide_propose}
 
 
 # ---------- 新反馈作废旧闸门（借 Paperclip「确认卡会过期」）----------
@@ -3747,6 +3811,7 @@ def status_doc(s, pend):
                    "state_since": TM.iso(it["state_since"]) if it.get("state_since") else None,
                    "no_live_path": bool(it.get("no_live")), "look_gate": it["gates"].get("look"),
                    "usage": {"runs": (it.get("usage") or {}).get("runs", 0), "minutes": round(item_minutes(it), 1)},
+                   "labels": it.get("labels") or [],   # 第二十一轮新增（只加字段）：决策岗提议带 proposal
                    "exec": exec_doc(it)}       # 第二十轮新增（只加字段）：执行端、Multica issue 号和网页链接
                   for k, it in s["items"].items()],
         "rate_limits": rl,
