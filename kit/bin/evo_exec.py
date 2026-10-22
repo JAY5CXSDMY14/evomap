@@ -346,7 +346,14 @@ BUILD_TAIL = """
 ---
 【交卷方式（Multica）】做完把改动提交到本 issue 的工作分支（不要推送、不要合并到 main）。
 最后一条评论里放施工报告：一个 ```json 块，格式同 templates/report.schema.json
-（status / summary / changes / tests / unfinished / risks / manual_checks）。
+（status / summary / changes / tests / unfinished / risks / manual_checks）。字段名照抄，示例：
+```json
+{"status": "done", "summary": "README 末尾加了常见问题一节",
+ "changes": [{"path": "README.md", "why": "加常见问题"}],
+ "tests": [{"command": "python3 artifacts/EV-DOC-001/check.py", "result": "passed"}],
+ "unfinished": [], "risks": [], "manual_checks": ["README 最后一节"]}
+```
+tests 每项只能用 command 和 result（passed / failed / not_run），不要写成 cmd。
 这里不用 orca orchestration send；evo 读你最后的评论。卡住要人回答时把 issue 状态改成 blocked，并在评论里写清问题。"""
 VERIFY_TAIL = """
 
