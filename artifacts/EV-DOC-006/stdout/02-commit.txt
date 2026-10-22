@@ -1,0 +1,16 @@
+=== git show --stat --oneline HEAD
+f6049de feat(notes): 返工探针文件末尾多了一行「已返工」，验收按内容应判通过
+ notes/r20-rework.md | 1 +
+ 1 file changed, 1 insertion(+)
+=== git status --short
+ M artifacts/EV-DOC-006/check_probe.py
+ M artifacts/EV-DOC-006/commands.txt
+ M artifacts/EV-DOC-006/stdout/01-check-probe.txt
+ M artifacts/EV-DOC-006/stdout/02-commit.txt
+?? .dsh/
+?? .multica/
+?? AGENTS.md
+=== git log --oneline -3
+f6049de feat(notes): 返工探针文件末尾多了一行「已返工」，验收按内容应判通过
+72e56f0 chore(artifacts): EV-DOC-006 证据（commands.txt、stdout、manifest.json）
+0339fba feat(notes): 新建 notes/r20-rework.md，打开只有一行「返工探针」

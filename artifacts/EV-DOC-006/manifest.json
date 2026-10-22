@@ -1,0 +1,72 @@
+{
+  "task_id": "EV-DOC-006",
+  "issue": "EVO-17",
+  "issue_id": "01a1647b-727b-7d64-b31f-1b9d6189be2e",
+  "model": "group/free-ds",
+  "started_at": "2026-10-22T16:40:00Z",
+  "finished_at": "2026-10-22T17:05:00Z",
+  "branch": "agent/dsh/evo-17",
+  "commit": "f6049de",
+  "files_changed": [
+    "notes/r20-rework.md"
+  ],
+  "commands": [
+    {
+      "cmd": "multica issue comment list 01a1647b-727b-7d64-b31f-1b9d6189be2e --roots-only --summary --compact --output json",
+      "exit_code": 0,
+      "stdout": null,
+      "note": "扫描全部根线程：施工 worker_done ×2 + 触发指令 ×2 + 验收线程。"
+    },
+    {
+      "cmd": "multica issue comment list 01a1647b-727b-7d64-b31f-1b9d6189be2e --thread 01a16485-4d39-74cb-ab20-6ab3202557a2 --tail 30 --compact --output json",
+      "exit_code": 0,
+      "stdout": null,
+      "note": "读验收线程，拿到第 2 轮 verdict=fail 与原因：返工探针：第一次验收一律不通过，请在文件末尾加一行『已返工』。"
+    },
+    {
+      "cmd": "multica issue comment list 01a1647b-727b-7d64-b31f-1b9d6189be2e --thread 01a1648a-d8ad-748f-9d37-581b6e3f5201 --tail 30 --compact --output json",
+      "exit_code": 0,
+      "stdout": null,
+      "note": "读本轮触发线程，返工原因与上一条一致。"
+    },
+    {
+      "cmd": "od -c notes/r20-rework.md && wc -c notes/r20-rework.md && wc -l notes/r20-rework.md",
+      "exit_code": 0,
+      "stdout": "stdout/03-round3-pass.txt",
+      "note": "文件实况：两行「返工探针」「已返工」，23 字节，无 BOM、无尾部空格。"
+    },
+    {
+      "cmd": "python3 artifacts/EV-DOC-006/check_probe.py",
+      "exit_code": 0,
+      "stdout": "stdout/03-round3-pass.txt",
+      "note": "正例 PASS：第一行「返工探针」，末行「已返工」。"
+    },
+    {
+      "cmd": "python3 artifacts/EV-DOC-006/check_probe.py artifacts/EV-DOC-006/tmp/only-first.md",
+      "exit_code": 1,
+      "stdout": "stdout/04-round3-negative.txt",
+      "note": "回退测试：删掉「已返工」行 → FAIL exit=1，原因指向末行缺少「已返工」。临时文件已删。"
+    },
+    {
+      "cmd": "python3 artifacts/EV-DOC-006/check_probe.py artifacts/EV-DOC-006/tmp/wrong.md",
+      "exit_code": 1,
+      "stdout": "stdout/04-round3-negative.txt",
+      "note": "回退测试：内容换成「别的」→ FAIL exit=1。临时文件已删。"
+    },
+    {
+      "cmd": "git status --short && git show --stat --oneline HEAD",
+      "exit_code": 0,
+      "stdout": "stdout/02-commit.txt",
+      "note": "scope 核对：本轮只动 artifacts/EV-DOC-006/ 证据，notes/ 内容零改动。"
+    }
+  ],
+  "scope_check": {
+    "scope": [
+      "notes/"
+    ],
+    "changed_outside_scope": [],
+    "note": "artifacts/EV-DOC-006/ 是契约 §5 规定的证据目录，按 kit.md 的例外处理。"
+  },
+  "round": 3,
+  "note_rework": "第 3 轮施工（返工探针 2 的第 2 次返工）：验收原因要求在文件末尾加一行「已返工」，notes/r20-rework.md 在 f6049de 已满足（两行、23 字节），本轮内容零改动，只重跑自检 + 回退测试并补齐第 3 轮证据。"
+}

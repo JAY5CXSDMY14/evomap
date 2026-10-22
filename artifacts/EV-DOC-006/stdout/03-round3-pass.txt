@@ -1,0 +1,17 @@
+=== 1) 返工文件实况：notes/r20-rework.md
+$ od -c notes/r20-rework.md && wc -c notes/r20-rework.md && wc -l notes/r20-rework.md
+0000000  350 277 224 345 267 245 346 216 242 351 222 210  \n 345 267 262
+0000020  350 277 224 345 267 245  \n                                    
+0000027
+      23 notes/r20-rework.md
+       2 notes/r20-rework.md
+
+=== 2) 正例：python3 artifacts/EV-DOC-006/check_probe.py
+$ python3 artifacts/EV-DOC-006/check_probe.py
+path   : /Users/zhuyuechen/multica_workspaces/evo-e396a795b356/evo-17-c32d1d25d578/worktree/notes/r20-rework.md
+bytes  : 23
+hex    : e8bf94e5b7a5e68ea2e992880ae5b7b2e8bf94e5b7a50a
+lines  : ['返工探针', '已返工']
+expect : 第一行「返工探针」，末行「已返工」
+PASS 第一行是「返工探针」，末行是「已返工」
+exit=0
