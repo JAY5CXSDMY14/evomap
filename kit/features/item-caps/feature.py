@@ -52,11 +52,10 @@ def open_budget_gate(s, k, it, why, rework=None):
     if it.get("hold"):
         return it["hold"]
     c = K.coord(s)
-    t, _ = K.orca("orchestration", "task-create", "--from", c, "--task-title", f"{k} 上限到了", "--spec", why)
+    tid = K.EX.task_create(c, f"{k} 上限到了", why)
     q = f"{k} {it['title']}：{why}，继续还是不做？"[:200]
-    g, _ = K.orca("orchestration", "gate-create", "--from", c, "--task", t["task"]["id"], "--question", q, "--options", json.dumps(["继续", "不做"]))
-    gid = g["gate"]["id"]
-    s.setdefault("budget_gates", {})[gid] = {"key": k, "task": t["task"]["id"], "why": why, "rework": rework, "at": TM.now()}
+    gid = K.EX.gate_create(c, tid, q, ["继续", "不做"])
+    s.setdefault("budget_gates", {})[gid] = {"key": k, "task": tid, "why": why, "rework": rework, "at": TM.now()}
     it["hold"] = gid
     s.setdefault("gate_since", {})[gid] = TM.now(); s.setdefault("gate_pushed", []).append(gid)     # 已推过，5 分钟提醒不重复
     K.tl(k, "gate_open", kind="budget", gate=gid, question=q)
@@ -67,7 +66,7 @@ def open_budget_gate(s, k, it, why, rework=None):
 
 def budget_answered(s, bud, choice, why):
     """老板答了上限闸门：继续 → 从现在起重新计数（决策岗那条照它的说明返工）；不做 → 这件不做。"""
-    K.orca("orchestration", "task-update", "--from", K.coord(s), "--id", bud["task"], "--status", "completed", ok=False)
+    K.EX.task_update(K.coord(s), bud["task"], "completed")
     k = bud["key"]; it = s["items"].get(k)
     if not it:
         return
@@ -91,7 +90,7 @@ def check_budget(s):
     for k, it in s["items"].items():
         if it.get("hold") and it["state"] in K.QUIET_STATES + ("pushing",):
             # 在跑的那次已经把活干完了（或者不做了）：上限闸门作废
-            K.orca("orchestration", "gate-resolve", "--from", K.coord(s), "--id", it["hold"], "--resolution", "作废（已完成）", ok=False)
+            K.EX.gate_resolve(K.coord(s), it["hold"], "作废（已完成）")
             K.mark_evo_resolved(s, it["hold"]); (s.get("budget_gates") or {}).pop(it["hold"], None); it.pop("hold")
             continue
         if it["state"] in K.QUIET_STATES + ("pushing",) or it.get("hold"):
