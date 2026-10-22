@@ -2886,6 +2886,26 @@ def cmd_retry(a):
     log(s, f"{a.key} 继续（{it['state']}）"); save(s)
 
 
+def cmd_drop(a):
+    """第二十轮补：老板直接说「这件不做」。还在旧执行端（换执行端前）的件只记不做、不碰旧执行端，
+    下一轮也不会在新执行端重建；已在当前执行端的件照常收尾（Multica issue 标 cancelled）。"""
+    s = load(); it = s["items"].get(a.key)
+    if not it:
+        sys.exit(f"{CODE} 没有这件：{a.key}")
+    if it["state"] in ("dropped", "merged", "shipped"):
+        print(f"{a.key} 已经是{NAMES.get(it['state'], it['state'])}，不用再标"); return
+    why = a.why or "老板说不做"
+    e = it.get("exec") or {}
+    if e.get("backend", "orca") != EX.name:
+        it["state"] = "dropped"; it.pop("resume", None); it.pop("stalled", None)
+        e.setdefault("legacy", {}).update({"from": e.get("backend", "orca"), "dropped_at": TM.iso()})
+        it["exec"] = e
+        tl(a.key, "drop", why=why[:500]); log(s, f"{a.key} 不做（换执行端前，旧执行端的任务不再去动）：{why[:80]}")
+    else:
+        drop_item(s, a.key, it, why)
+    save(s); print(f"{a.key} 已标为不做")
+
+
 def cmd_resume(a):
     """状态文件损坏后：人处理好（恢复或确认放弃旧状态）再解除暂停。"""
     if PAUSED and os.path.exists(PAUSED):
@@ -4086,6 +4106,7 @@ if __name__ == "__main__":
     x = sp.add_parser("suite"); x.add_argument("command", nargs=argparse.REMAINDER)
     sp.add_parser("retro")
     x = sp.add_parser("retry"); x.add_argument("key"); sp.add_parser("resume")
+    x = sp.add_parser("drop", help="老板：这件不做（换执行端前的老件也能用）"); x.add_argument("key"); x.add_argument("why", nargs="?")
     x = sp.add_parser("selfcheck", help="第十八轮：自检（编译、功能包、features.yml、事件日志）"); x.add_argument("--json", action="store_true")
     x = sp.add_parser("self-upgrade", help="第十八轮：自升级到某个版本 / 提交（装旁边、等一轮结束、切软链、自检）")
     x.add_argument("ref"); x.add_argument("--source", help="evoloop 仓库目录（默认记在当前版本的 SOURCE 里）")
@@ -4123,6 +4144,6 @@ if __name__ == "__main__":
         sys.exit(f"有多个项目，请加 -p <代号>：{', '.join(list_projects()) or '（还没有项目）'}")
     if a.cmd in FEATURE_CMDS:
         sys.exit(FEATURE_CMDS[a.cmd][0](a) or 0)
-    {"panel": cmd_panel, "new": cmd_new, "import": cmd_import, "projects": cmd_projects, "once": cmd_once, "add": cmd_add, "tick": cmd_tick, "run": cmd_run, "status": cmd_status, "approve": cmd_approve, "ship": cmd_ship, "retry": cmd_retry, "resume": cmd_resume, "feedback": cmd_feedback, "suite": cmd_suite, "retro": cmd_retro,
+    {"panel": cmd_panel, "new": cmd_new, "import": cmd_import, "projects": cmd_projects, "once": cmd_once, "add": cmd_add, "tick": cmd_tick, "run": cmd_run, "status": cmd_status, "approve": cmd_approve, "ship": cmd_ship, "retry": cmd_retry, "drop": cmd_drop, "resume": cmd_resume, "feedback": cmd_feedback, "suite": cmd_suite, "retro": cmd_retro,
      "notify-test": cmd_notify_test, "watchdog": cmd_watchdog, "log": cmd_log,
      "goal": cmd_goal, "relocate": cmd_relocate, "claim": cmd_claim}[a.cmd](a)

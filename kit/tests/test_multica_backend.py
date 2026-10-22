@@ -205,3 +205,17 @@ def test_status_json_carries_issue_link(loop):
     item = loop.status_json("MB")["items"][0]
     ident = loop.item("MB")["exec"]["issue"]
     assert item["exec"] == {"backend": "multica", "issue": ident, "url": f"http://multica.test/issues/{ident}"}
+
+
+def test_owner_drop_before_switch_is_not_reseeded(loop):
+    """10-22 Air：EV 两件老件卡在 Orca，切 Multica 前老板先 drop，切换后不在 Multica 里重跑。"""
+    loop.project("MB")
+    loop.add("MB")
+    loop.patch_cfg("MB", executor="multica", multica={"project": "MB"})
+    loop.env["FAKE_MULTICA_REPO"] = loop.repo("MB")
+    r = loop.evo("-p", "MB", "drop", K, "切换前清掉")
+    assert r.returncode == 0, r.stderr
+    loop.tick("MB")
+    it = loop.item("MB")
+    assert it["state"] == "dropped" and not issues(loop)
+    assert it["exec"]["legacy"]["from"] == "orca"

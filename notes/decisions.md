@@ -81,3 +81,4 @@
 - 15:20 第 20 轮代码完成并推送（ac802ed…，9 步一步一个提交，外加一处小修）：新增 kit/bin/evo_exec.py，Orca 调用收进 OrcaExecutor，行为不变；新增 MulticaExecutor，所有派工都是 `issue assign`，不再走 `dispatch --inject`（决策岗超时的根因）；state.json 升到 schema 2，件加 exec 字段；面板显示 Multica issue 链接；新增假 multica CLI 和 14 个测试。我自己定的：没写 executor 的老项目继续走 orca，只有新建项目默认 multica；任务和闸门记在 evo 自己的账本 state/exec-multica.json，保证返工上限、决策逻辑不用改；施工分支 fetch 进 evo 的克隆，验收和合并都在这份副本上做；验收结论看评论里的 verdict json。还要 Air 确认：成员留言会不会叫醒 agent、返工是不是复用同一条分支、issue_url 模板对不对、EV 两件老件换执行端后要不要重跑。第四轮 Pi 指令已交老板，汇报写到 ~/tmp/MULTICA-HANDOFF-4.md。
 
 - 2026-10-22 15:40 mini 上 Multica 前端端口改为 3300（FRONTEND_PORT=3300，tailscale serve 8443→127.0.0.1:3300），给土布让出 3000；8443/9443/8080/Air daemon 不变。以后重部署按 3300，别改回 3000。顺手把文档里的 tailnet 主机名换成占位符。
+- 2026-10-22 16:15 第二十轮补：新增 `evo -p X drop <件号> [原因]`（老板直接标不做；换执行端前的老件只记不做、不碰旧执行端、切换后不重建）。EV 的 EV-FEAT-001 / EV-DOC-001 用它清掉再跑第四轮验证。
