@@ -1,3 +1,5 @@
+> 现状说明，不是约束；Claude 审查后可提议修改（决策岗用 `propose`，老板点「做不做」）。
+
 # evo × Multica 派工后端 · 设计稿（第 20 轮）
 
 > 状态：2026-10-22 14:15 老板确认方向；**同日第二十轮代码已写完并推送（ac802ed…，9 个提交，第 8 节），等 Air 按第 6 节验收**。Orca 后端还在，老项目照旧走 Orca。
@@ -36,7 +38,7 @@ evo 队列里的条目 EV-xxx
               └─ 验收评论 json：pass → evo 走 look 闸门 / 合并 / 上线（照旧在 evo 面板）
                                fail → 返工：round+1，再派施工-DSH（受 2 次决策返工 / 12 次派工 / 6 小时上限约束）
 决策批次：evo 每 30 分钟把「escalated / asking」的条目攒成一个 issue「EV 决策批次 mm-dd hh:mm」，派给决策-Claude；
-         它的最后一条评论里放 ```json 决定（retry / rework / drop / split / ask_owner / answer），evo 读到后照旧执行。
+         它的最后一条评论里放 ```json 决定（retry / rework / drop / split / ask_owner / answer / propose），evo 读到后照旧执行。
 ```
 - **闸门不搬过去**：做不做、看效果、上线这几道闸门还在 evo 面板和推送里。Multica 的 in_review 只当「施工做完了」的信号，不算老板批过。
 - **合并**：worktree 分支 `agent/dsh/<issue>` 由 evo 合并（用 evo 自己的 clone `~/.evoloop/repos/<code>`），流程和 Orca 时代一样。
