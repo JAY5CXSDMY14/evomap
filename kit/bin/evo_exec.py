@@ -47,6 +47,10 @@ class Executor:
     def close(self, task, ok=True):
         raise NotImplementedError
 
+    def alive_at(self, did):
+        """第二十轮补：执行端看到这次派工最后一次「还在干活」的时间（epoch 秒）；看不到返回 0。"""
+        return 0
+
     def health(self):
         """→ (通不通, 不通的原因)"""
         raise NotImplementedError
@@ -310,10 +314,28 @@ class OrcaExecutor(Executor):
 # Multica：一件 = 一个 issue；派工 = issue assign（不再往已有终端 --inject，10-22 决策岗超时的根因就此绕开）
 # ======================================================================================
 MULTICA_AGENTS = {"build": "施工-DSH", "verify": "验收-Claude", "decide": "决策-Claude"}
+def _newest_mtime(path, cap=3000):
+    """工作区里最新一次改动的时间（跳过 .git / node_modules；最多看 cap 个文件）。没有工作区返回 None。"""
+    if not path or not os.path.isdir(path):
+        return None
+    best, n = 0.0, 0
+    for root, dirs, files in os.walk(path):
+        dirs[:] = [x for x in dirs if x not in (".git", "node_modules", ".venv", "__pycache__")]
+        for f in files:
+            try:
+                best = max(best, os.stat(os.path.join(root, f)).st_mtime)
+            except OSError:
+                pass
+            n += 1
+            if n >= cap:
+                return best
+    return best
+
+
 RUN_ACTIVE = ("queued", "dispatched", "running", "waiting_local_directory", "pending", "claimed", "started")
 RUN_OK = ("completed", "succeeded", "success", "done", "finished")
 ROLE_NAMES = {"build": "施工", "verify": "验收", "decide": "决策"}
-REPOLL_SECONDS = 300
+REPOLL_SECONDS = float(os.environ.get("EVO_MULTICA_REPOLL", 300))
 
 BUILD_TAIL = """
 
@@ -664,6 +686,8 @@ class MulticaExecutor(Executor):
             if p.get("state") == "blocked" and d["role"] != "decide":
                 typ, outcome = "question", None
             elif not run or rs in RUN_ACTIVE:
+                if run:
+                    self._heartbeat(d, run, x)
                 continue
             else:
                 typ, outcome = "worker_done", "succeeded" if rs in RUN_OK else "failed"
@@ -697,6 +721,17 @@ class MulticaExecutor(Executor):
 
     def worker_gone(self, did):
         return bool(self._load()["dispatches"].get(did, {}).get("gone"))
+
+    def alive_at(self, did):
+        return float(self._load()["dispatches"].get(did, {}).get("alive_at") or 0)
+
+    def _heartbeat(self, d, run, x):
+        """10-22 Air：dsh 跑了 19 分钟、调了 97 次工具，evo 却判「15 分钟没有任何回报」——run 在跑时 issue 不留评论、
+        状态不变。这里用「run 的 usage / 尝试次数 + issue 活动时间 + 工作区最新改动时间」做指纹，指纹变了就算还在干活。"""
+        sig = json.dumps([run.get("usage"), run.get("attempt"), run.get("status"), (x or {}).get("last_activity_at"),
+                          _newest_mtime(run.get("work_dir"))], sort_keys=True, default=str)
+        if d.get("hb_sig") != sig:
+            d["hb_sig"] = sig; d["alive_at"] = time.time()
 
     def repo_add(self, path, timeout):
         return "skip"

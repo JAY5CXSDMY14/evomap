@@ -69,7 +69,7 @@ DEFAULTS = {
     # auto_ship_gate / ship_gate_at：第十八轮搬进功能包 deploy 的设置（config.json 写了仍以它为准）
     "relook_on_change": True,          # 看效果通过后又返工、改了老板看过的内容 → 合并前重开看效果闸门
     "audit_weekday": 6,                # 每周哪天夜审时提醒决策岗跑 ponytail-audit：0=周一 … 6=周日
-    "limits": {"builders_total": 2, "owner_queue_pause": 5, "rework_rounds": 2, "stall_minutes": 15,
+    "limits": {"builders_total": 2, "owner_queue_pause": 5, "rework_rounds": 2, "stall_minutes": 15, "run_max_minutes": 60,
                "usage_item_runs": 8, "usage_item_minutes": 180, "rate_limit_default_minutes": 60, "decide_every_minutes": 30,
                "heartbeat_stale_minutes": 10, "no_live_path_minutes": 30, "stale_hours": 6,
                # 第十七轮：决策岗卡住超时、推送失败退避（每件上限第十八轮搬进功能包 item-caps，默认值在它的 manifest）
@@ -2373,7 +2373,14 @@ def check_stalls(s):
             continue
         d = it["dispatch"]["build" if it["state"] == "building" else "verify"]
         gone = EX.worker_gone(d["id"])
-        idle = (now - max(it.get("last_seen", 0), d["since"])) / 60
+        alive = EX.alive_at(d["id"])                       # 第二十轮补：Multica run 还在动（usage / 工作区改动）就不算没回报
+        idle = (now - max(it.get("last_seen", 0), d["since"], alive)) / 60
+        ran = (now - d["since"]) / 60
+        if it.get("stalled") == "idle" and idle <= LIM["stall_minutes"]:
+            it.pop("stalled", None); log(s, f"{k} 又有动静了，取消「疑似卡住」")
+            s["decide_inbox"] = [x for x in s.get("decide_inbox", []) if not (x.get("todo") and x.get("item") == k
+                                 and str(x.get("title", "")).endswith("疑似卡住"))]   # 还没送决策岗的就撤回
+            continue
         # 额度用完的工人常常不回报、停在提示上：安静够久就看一眼终端尾部，连续两次同一提示且输出没再变才算
         if idle >= LIM.get("rate_limit_idle_minutes", 3):
             tail = terminal_tail(d["terminal"])
@@ -2392,9 +2399,12 @@ def check_stalls(s):
                 restart_worker(s, k, it, role)
                 checkpoint(s, "restart")
                 continue
-        if (gone or idle > LIM["stall_minutes"]) and not it.get("stalled"):
-            it["stalled"] = True
-            why = "工人进程不在了" if gone else f"{int(idle)} 分钟没有任何回报"
+        cap = LIM.get("run_max_minutes", 60) if EX.name == "multica" else 0
+        over = bool(cap) and ran > cap
+        if (gone or idle > LIM["stall_minutes"] or over) and not it.get("stalled"):
+            it["stalled"] = "idle" if not gone and not over else True
+            why = ("工人进程不在了" if gone else f"跑了 {int(ran)} 分钟还没交卷（上限 {cap} 分钟，可能在兜圈子）" if over
+                   else f"{int(idle)} 分钟没有任何回报")
             log(s, f"{k} 疑似卡住：{why}"); notify("stalled", "疑似卡住", f"{it['title']}：{why}", item=k)
             # Air 试跑 10-21：标了卡住之后 20 分钟没人管。技术问题交决策岗看一次（retry / rework / drop），不用等老板
             s.setdefault("decide_inbox", []).append({"todo": True, "issue": None, "item": k, "title": f"{k} 疑似卡住",

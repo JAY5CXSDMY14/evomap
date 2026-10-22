@@ -219,3 +219,31 @@ def test_owner_drop_before_switch_is_not_reseeded(loop):
     it = loop.item("MB")
     assert it["state"] == "dropped" and not issues(loop)
     assert it["exec"]["legacy"]["from"] == "orca"
+
+
+def test_long_run_with_activity_is_not_stalled_and_run_cap(loop):
+    """10-22 Air：dsh 跑 19 分钟、97 次工具调用，evo 误判「15 分钟没有任何回报」。run 还在动就不算卡住；跑超上限才算。"""
+    import time
+    loop.write_global({"limits": {"builders_total": 2, "stall_minutes": 0.03, "run_max_minutes": 999}})
+    loop.env["EVO_MULTICA_REPOLL"] = "0"
+    loop.multica_project("MB")
+    loop.plan(build=["silent"])
+    loop.add("MB")
+    loop.tick("MB")
+    wd = [r for r in loop.multica_state()["runs"] if r["status"] == "running"][0]["work_dir"]
+    for i in range(2):
+        time.sleep(2.2)
+        open(os.path.join(wd, f"progress-{i}.txt"), "w").write(str(i))     # 工人还在改文件
+        loop.tick("MB")
+        assert not loop.item("MB").get("stalled"), loop.state("MB")["log"][-3:]
+    time.sleep(2.2)
+    loop.tick("MB")                                                          # 这回真没动静了
+    assert loop.item("MB").get("stalled")
+    open(os.path.join(wd, "progress-x.txt"), "w").write("x")
+    loop.tick("MB")
+    assert not loop.item("MB").get("stalled")                                # 又动了：取消卡住
+    assert any("又有动静了" in l for l in loop.state("MB")["log"])
+    loop.write_global({"limits": {"builders_total": 2, "stall_minutes": 999, "run_max_minutes": 0.01}})
+    loop.tick("MB")
+    assert loop.item("MB").get("stalled") is True
+    assert any("还没交卷" in l for l in loop.state("MB")["log"])
