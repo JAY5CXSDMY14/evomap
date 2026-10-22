@@ -87,7 +87,7 @@ DEFAULTS = {
     "lessons_file": "docs/LESSONS.md",
     "standards_file": "docs/code-standards.md",
 }
-PROJECT_KEYS = ("clone", "clone_path", "git_env", "orca_gate_sync", "code", "name", "repo", "main_branch", "github_repo", "trusted_authors", "trusted_labelers", "test_cmd", "push_cmd", "deploy_cmd",
+PROJECT_KEYS = ("executor", "multica", "clone", "clone_path", "git_env", "orca_gate_sync", "code", "name", "repo", "main_branch", "github_repo", "trusted_authors", "trusted_labelers", "test_cmd", "push_cmd", "deploy_cmd",
                 "policy_terms", "lessons_file", "standards_file", "digest_issue", "goal", "ui_preset", "ui_overrides", "ui_paths",
                 "arch_preset", "arch_overrides")
 # 旧环境变量名照认（先认新名，没有再认旧名）
@@ -729,7 +729,7 @@ def load():
     return {"coord": None, "items": {}, "seq": 0, "log": []}
 
 
-def make_clone(src, dst, mb):
+def make_clone(src, dst, mb, register=True):
     """从老板的工作副本克隆一份给 evo 用（本地克隆，不走网络），origin 改成工作副本的 origin（GitHub），
     能拉到远端就把 main 对齐到 origin/main（老板本地没推的提交不带进来）。返回一句说明。"""
     if os.path.isdir(os.path.join(dst, ".git")):
@@ -748,7 +748,8 @@ def make_clone(src, dst, mb):
             note += f"，{mb} 对齐 origin/{mb}"
         else:
             note += f"；这次没拉到 origin（{(f.stderr or '').strip()[-80:]}），先用工作副本的 {mb}，下次推送前会再拉"
-    EX.repo_add(dst, tmo("orca"))
+    if register:
+        EX.repo_add(dst, tmo("orca"))
     return note
 
 
@@ -2939,7 +2940,7 @@ def cmd_run(a):
 # ---------- 开新项目 / 导入旧项目 ----------
 
 
-def _setup_project(code, name, path, github, test_cmd, notes, goal=None, ui_preset=None, arch_preset=None, in_place=False):
+def _setup_project(code, name, path, github, test_cmd, notes, goal=None, ui_preset=None, arch_preset=None, in_place=False, executor=None):
     """只写项目自己的 config.json；岗位、模型、上限、提醒都在全局 ~/.evoloop/config.json。"""
     code = code.upper()
     if not re.fullmatch(r"[A-Z]{2,4}", code):
@@ -2953,6 +2954,11 @@ def _setup_project(code, name, path, github, test_cmd, notes, goal=None, ui_pres
             "trusted_authors": [github.split("/")[0]] if github else [], "test_cmd": test_cmd or "",
             "push_cmd": f"git push origin {mb}" if has_origin else "", "deploy_cmd": "", "policy_terms": "",
             "lessons_file": DEFAULTS["lessons_file"], "standards_file": DEFAULTS["standards_file"], "digest_issue": None}
+    # 第二十轮：新项目默认用 Multica 执行端（全局配置写了 executor 就按全局；--executor 优先）；老项目没写这个键 = orca
+    exk = EXMOD.backend_of({"executor": executor or GCFG.get("executor") or "multica"})
+    base["executor"] = exk
+    if exk == "multica":
+        base["multica"] = {"project": code, "agents": dict(EXMOD.MULTICA_AGENTS), "app_url": ""}
     if goal:
         base["goal"] = goal
     if ui_preset and ui_preset != "none":
@@ -2967,18 +2973,23 @@ def _setup_project(code, name, path, github, test_cmd, notes, goal=None, ui_pres
     if has_origin and not in_place:      # 第十七轮 · 老板决定②：evo 只在自己的克隆里动手，不碰老板的工作副本
         base["clone"] = True
         work = clone_dir(code, base)
-        notes.append(make_clone(path, work, mb) + "。以后合并、推送只在这里；你的工作副本 evo 不碰，要看最新代码就在那边 git pull")
+        notes.append(make_clone(path, work, mb, register=exk == "orca") + "。以后合并、推送只在这里；你的工作副本 evo 不碰，要看最新代码就在那边 git pull")
     elif has_origin:
         notes.append("按 --in-place 直接在这个目录里合并（不建专用克隆）")
     d = os.path.join(HOME_DIR, code); os.makedirs(os.path.join(d, "state"), exist_ok=True)
     json.dump(base, open(os.path.join(d, "config.json"), "w", encoding="utf-8"), ensure_ascii=False, indent=2)
     if github and svc("github"):
         svc("github").ensure_labels(github)
-    ra = EX.repo_add(os.path.abspath(work), 30)
-    if ra == "missing":
-        notes.append(f"没装 Orca，先不登记；装好后跑：orca repo add --path {os.path.abspath(work)}")
+    if exk == "multica":
+        ag = "、".join(base["multica"]["agents"].values())
+        notes.append(f"执行端：Multica。在 Multica 里建项目「{code}」并绑定本地目录 {os.path.abspath(work)}（--type local_directory），"
+                     f"三个 agent：{ag}（名字不同就改 config.json 的 multica.agents）；面板想点开 issue，再填 multica.app_url")
     else:
-        notes.append("已登记到 Orca（手机端能看到）" if ra == "ok" else "Orca 登记没成功，装好 Orca 后重跑 orca repo add")
+        ra = EX.repo_add(os.path.abspath(work), 30)
+        if ra == "missing":
+            notes.append(f"没装 Orca，先不登记；装好后跑：orca repo add --path {os.path.abspath(work)}")
+        else:
+            notes.append("已登记到 Orca（手机端能看到）" if ra == "ok" else "Orca 登记没成功，装好 Orca 后重跑 orca repo add")
     print(f"项目 {code}「{name}」就绪：{d}/config.json")
     for n in notes:
         print("  · " + n)
@@ -3033,7 +3044,8 @@ def cmd_new(a):
     if a.github and a.create:
         r = subprocess.run(["gh", "repo", "create", a.github, "--private", "--source", path, "--push"], capture_output=True, text=True)
         notes.append("GitHub 私有仓库已建并推送" if r.returncode == 0 else "GitHub 建仓没成功：" + r.stderr.strip()[:120])
-    _setup_project(a.code, a.name, path, a.github, a.test, notes, goal, _ui_arg(a), _arch_arg(a), getattr(a, "in_place", False))
+    _setup_project(a.code, a.name, path, a.github, a.test, notes, goal, _ui_arg(a), _arch_arg(a), getattr(a, "in_place", False),
+                   getattr(a, "executor", None))
 
 
 def cmd_import(a):
@@ -3071,7 +3083,8 @@ def cmd_import(a):
     if not os.path.exists(ai):     # 只放文件不提交（导入不动历史），要不要提交你定
         open(ai, "w", encoding="utf-8").write(open(os.path.join(KIT, "templates", "project", "AGENT_INTERFACE.md"), encoding="utf-8").read())
         notes.append("放了 AGENT_INTERFACE.md（外部 Agent 怎么读、怎么报；未提交，要用就自己提交）")
-    _setup_project(a.code, a.name, path, gh, t, notes, goal, _ui_arg(a), _arch_arg(a), getattr(a, "in_place", False))
+    _setup_project(a.code, a.name, path, gh, t, notes, goal, _ui_arg(a), _arch_arg(a), getattr(a, "in_place", False),
+                   getattr(a, "executor", None))
 
 
 def cmd_projects(a):
@@ -3962,6 +3975,7 @@ if __name__ == "__main__":
         x.add_argument("--ui-preset", dest="ui_preset", help="UI 栈预设：web-react | swiftui | none（默认 none）")
         x.add_argument("--arch-preset", dest="arch_preset", help="后端/架构预设：python-fastapi | node-ts | swift-app | none（默认 none）")
         x.add_argument("--in-place", dest="in_place", action="store_true", help="不建专用克隆，直接在这个目录里合并（老做法）")
+        x.add_argument("--executor", choices=["multica", "orca"], help="执行端（第二十轮）：multica（新项目默认）| orca")
         if nm == "new":
             x.add_argument("--create", action="store_true", help="在 GitHub 建私有仓库并推送")
     x = sp.add_parser("projects"); x.add_argument("--json", action="store_true"); sp.add_parser("once")
