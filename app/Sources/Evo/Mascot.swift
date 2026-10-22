@@ -160,89 +160,43 @@ struct MouthShape: Shape {
     }
 }
 
-/// 菜单栏图标：彩色小调度球（10-22 老板要「跟应用图标一样的调度球」，不再用单色模板脸）。
-/// 珊瑚橙软球 + 两只略斜的竖椭圆眼；随心情变：施工 → 眼睛往右看，等你 → 眼睛睁大上抬，
-/// 出错 / 卡住 → 球变红、眼睛八字，暂停 → 球变淡、眼睛闭成弧线。浅色 / 深色菜单栏都看得清。
+/// 菜单栏图标：静态白色小调度球，两只竖椭圆眼睛镂空（10-22 老板：不要动效、不随心情变，白底眼睛镂空，参考调度球）。
+/// 做成 template 图：深色菜单栏是白球，浅色菜单栏系统自动染成黑球，眼睛始终是透明的洞。
 @MainActor
 enum MenuBarIcon {
-    private static var cache: [MascotMood: NSImage] = [:]
+    private static var cached: NSImage?
 
-    static func image(_ mood: MascotMood) -> NSImage {
-        if let i = cache[mood] { return i }
-        let r = ImageRenderer(content: DispatchBallIcon(mood: mood).frame(width: 18, height: 18))
+    static func image(_ mood: MascotMood = .idle) -> NSImage {
+        if let i = cached { return i }
+        let r = ImageRenderer(content: DispatchBallIcon().frame(width: 18, height: 18))
         r.scale = 2
         let img = r.nsImage ?? NSImage(systemSymbolName: "circle.fill", accessibilityDescription: nil)!
-        img.isTemplate = false
+        img.isTemplate = true
         img.accessibilityDescription = "Evo"
-        cache[mood] = img
+        cached = img
         return img
     }
 }
 
-/// 小调度球本体（菜单栏 18pt；也可放大用）。纯 SwiftUI 形状，不用图片。
+/// 小调度球：实心圆 + 两只竖椭圆眼睛挖空（略偏左上，像应用图标里那颗球往左上看）。纯 SwiftUI 形状。
 struct DispatchBallIcon: View {
-    var mood: MascotMood
-
-    private var colors: (Color, Color) {
-        switch mood {
-        case .worried: return (Color(red: 1.0, green: 0.47, blue: 0.39), Color(red: 0.78, green: 0.20, blue: 0.18))
-        case .sleepy:  return (Color(red: 0.94, green: 0.63, blue: 0.53), Color(red: 0.77, green: 0.43, blue: 0.35))
-        default:       return (Color(red: 1.0, green: 0.63, blue: 0.46), Color(red: 0.89, green: 0.34, blue: 0.22))
-        }
-    }
-
     var body: some View {
         GeometryReader { g in
-            let d = min(g.size.width, g.size.height) * 0.92
-            let u = d / 2                                   // 球半径
+            let d = min(g.size.width, g.size.height) * 0.94
+            let u = d / 2
             let c = CGPoint(x: g.size.width / 2, y: g.size.height / 2)
-            let ink = Color(red: 0.09, green: 0.086, blue: 0.11)
-            let shift: CGFloat = mood == .working ? 0.14 : 0
-            let lift: CGFloat = mood == .waiting ? -0.06 : 0
-            let eyes = [CGPoint(x: -0.30 + shift, y: -0.08 + lift), CGPoint(x: 0.22 + shift, y: -0.18 + lift)]
-            let (rx, ry): (CGFloat, CGFloat) = mood == .waiting ? (0.15, 0.29) : mood == .worried ? (0.12, 0.22) : (0.13, 0.26)
             ZStack {
-                Circle()
-                    .fill(RadialGradient(colors: [colors.0, colors.1], center: UnitPoint(x: 0.35, y: 0.28),
-                                         startRadius: 0, endRadius: d * 0.75))
-                    .frame(width: d, height: d)
-                    .position(c)
-                Ellipse()                                   // 左上一点高光
-                    .fill(Color.white.opacity(0.38))
-                    .frame(width: u * 0.52, height: u * 0.36)
-                    .blur(radius: u * 0.06)
-                    .position(x: c.x - u * 0.36, y: c.y - u * 0.60)
-                ForEach(0..<2, id: \.self) { i in
-                    let p = CGPoint(x: c.x + eyes[i].x * u, y: c.y + eyes[i].y * u)
-                    if mood == .sleepy {
-                        ClosedEye().stroke(ink, style: StrokeStyle(lineWidth: u * 0.13, lineCap: .round))
-                            .frame(width: u * 0.34, height: u * 0.16)
-                            .position(p)
-                    } else {
-                        Ellipse().fill(ink)
-                            .frame(width: rx * 2 * u, height: ry * 2 * u)
-                            .rotationEffect(.degrees(mood == .worried ? (i == 0 ? -14 : 14) : 20))
-                            .position(p)
-                        if mood != .worried {
-                            Circle().fill(Color.white.opacity(0.9))
-                                .frame(width: u * 0.08, height: u * 0.08)
-                                .position(x: p.x - u * 0.04, y: p.y - u * 0.11)
-                        }
-                    }
+                Circle().fill(Color.white).frame(width: d, height: d).position(c)
+                ForEach([CGPoint(x: -0.27, y: -0.10), CGPoint(x: 0.25, y: -0.10)], id: \.x) { e in
+                    Ellipse().fill(Color.black)
+                        .frame(width: u * 0.26, height: u * 0.54)
+                        .position(x: c.x + e.x * u, y: c.y + e.y * u)
+                        .blendMode(.destinationOut)
                 }
             }
+            .compositingGroup()
         }
         .accessibilityHidden(true)
-    }
-}
-
-/// 闭着的眼：往下弯的一道弧。
-private struct ClosedEye: Shape {
-    func path(in r: CGRect) -> Path {
-        var p = Path()
-        p.move(to: CGPoint(x: r.minX, y: r.minY))
-        p.addQuadCurve(to: CGPoint(x: r.maxX, y: r.minY), control: CGPoint(x: r.midX, y: r.maxY * 1.6))
-        return p
     }
 }
 
