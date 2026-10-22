@@ -88,3 +88,4 @@
 - 2026-10-22 19:45 Air 第 4 步验收标准 1 通过（EV-DOC-003：16.8 分钟、0 次 pytest、零误报、先提交后报告、验收-Claude 独立复核 5.6 分钟）。issue 链接缺 workspace slug → multica.workspace 配置（默认模板 {app_url}/{workspace}/issues/{identifier}）。mg_16 等老板看效果。
 - 2026-10-22 19:55 App 0.8.0 自带的 evo 早于 Multica，看不到 Multica 闸门（等你 0）。临时：设置里 evo 路径指向仓库 kit/bin/evo，或终端 evo -p EV approve mg_16 通过。待办：App 重打包带新 evo / 自带版本落后时提示。
 - 2026-10-22 20:12 Air 两个 Evo.app（/Applications 与 app/build 同一份 0.8.0，同 bundle id 可同时跑）；向导重弹 = setupDone 从没写过（只在向导第 4 步写）。App 改：已有项目就直接记 setupDone。待办：App 重打包带 Multica 版 evo。
+- 10-22 22:25 0e37654: drop 残留清理（tidy_closed），stuck 不算收尾件，import 写 multica.workspace；331 passed
