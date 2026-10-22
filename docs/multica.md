@@ -29,14 +29,14 @@
 
 ## 3. 已踩的坑
 
-1. **Chrome 打不开 ts.net:8443（ERR_CONNECTION_CLOSED），mini 本机也一样**：Chrome 的「安全 DNS」绕过了 MagicDNS，走公网 DNS 时，这个域名因为开了 Funnel 会解析到 Funnel 中转；中转不转发 8443，连接就被关掉。解决：Chrome 设置里关掉安全 DNS，然后在 `chrome://net-internals/#dns` 点 Clear host cache。Clash 用户还要在 fake-ip-filter 里加 `+.ts.net`，并把 `DOMAIN-SUFFIX,ts.net,DIRECT` 和 `IP-CIDR,100.64.0.0/10,DIRECT,no-resolve` 加到规则最前面。
+1. **Chrome 打不开 8443 端口，mini 本机也一样**：报 ERR_CONNECTION_CLOSED。Chrome 的「安全 DNS」绕过了 MagicDNS，走公网 DNS 时，这个域名因为开了 Funnel 会解析到 Funnel 中转；中转不转发 8443，连接就被关掉。解决：Chrome 设置里关掉安全 DNS，然后在 `chrome://net-internals/#dns` 点 Clear host cache。Clash 用户还要在 fake-ip-filter 里加 `+.ts.net`，并把 `DOMAIN-SUFFIX,ts.net,DIRECT` 和 `IP-CIDR,100.64.0.0/10,DIRECT,no-resolve` 加到规则最前面。
 2. 旧试点给 compose 加了 internal 网络，和端口发布冲突。这次不加。
 3. 旧试点只绑了 127.0.0.1，别的机器连不上。这次不改成 0.0.0.0，改用 Tailscale serve 反代。
 
 ## 4. 角色分工（目标）
 
 - **Multica = 身体**：issue、agent、执行端（Air 的 daemon）、审核状态、收件箱、重试和超时。
-- **evo = 大脑（以后瘦身）**：施工完交给验收（模型不能和施工一样）、三道老板关（做不做 / 看效果 / 上线）、决策岗兜底、上限（2 次返工 / 12 次派工 / 6 小时）、预设和 Ponytail 规则注入。只通过 `multica` CLI 和 API 对接，不 fork Multica。
+- **evo = 大脑（以后瘦身）**：施工完交给验收，验收模型和施工不同。还管三道老板关（做不做 / 看效果 / 上线）和决策岗兜底。上限是 2 次返工、12 次派工、6 小时。预设和 Ponytail 规则也由 evo 注入。只通过 `multica` CLI 和 API 对接，不 fork Multica。
 - **Air**：EV 的执行端（dsh / claude / codex / pi）。**mini**：服务端，以后也是 TB 的执行端。
 
 ## 5. 实测清单（B 段，Air）
@@ -45,9 +45,11 @@
 2. `brew install multica-ai/tap/multica`，然后运行 `multica setup self-host --server-url …:9443 --app-url …:8443`。
 3. 装好 DSH 的 Multica 配置，运行 `multica daemon start`，确认能识别到 dsh、claude、codex、pi。
 4. 建 probe 项目（指向 `~/tmp/multica-probe`），再建 agent「施工-DSH」。
-5. 派一个只改 README 的小 issue，看这几件事：dsh 有没有启动、用的是什么模型、改出来的 diff、最后有没有到 in_review、收件箱有没有提醒。
+5. 派一个小 issue，只改 README。看 dsh 起没起来、用哪个模型、diff 对不对。再看 issue 到没到 in_review、收件箱有没有提醒。
 
 ## 6. 实测通过后 evo 要改的（暂不动代码）
+
+> 10-22 更新：这一节已按 [multica-backend.md](multica-backend.md)（第二十轮）落成代码：项目配置 `executor: multica` 就走 Multica 派工；派工是 `multica issue assign`，进度看 `issue runs` 加评论（没用 `run-messages`）。「老板关映射到 issue 状态」「收件箱当第一推送渠道」两条没做，闸门仍在 evo 面板，理由见那份文档第 7 节。
 
 - 新增 `multica` 派工后端，和 Orca 后端并列，用开关切换：派工 = `multica issue create --assignee <agent>`；进度 = `multica issue runs` 加 `run-messages`。
 - 验收岗、决策岗都换成 Multica 里的 agent（每个 agent 单独绑模型，施工和验收用不同模型）。
