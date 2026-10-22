@@ -1,0 +1,28 @@
+# EV-DOC-003 证据：跑过的命令原文（按顺序）
+# 任务：README 末尾加「Multica 执行端」小节（2–3 句）。只改文档，不跑全量测试。
+
+# 0) 确认本分支基线与真实远端 main 的差距（决定下面链接怎么核）
+git rev-parse HEAD origin/main
+git ls-remote origin main
+
+# 1) README 相对链接自检 + 新增小节位置 + 指向
+#    --upstream-clone 指向一个已跟上真实远端 main 的克隆，用来核对本分支基线里还没有的 docs/multica.md
+python3 artifacts/EV-DOC-003/check_links.py --upstream-clone /Users/zhuyuechen/Projects/evomap
+
+# 2) 反证：把本分支这个落后基线当 upstream-clone，脚本必须判 stale 并报 MISS
+python3 artifacts/EV-DOC-003/check_links.py --upstream-clone "$PWD"
+
+# 3) 每条断言在真实 main（52011da）上的出处
+cd /Users/zhuyuechen/Projects/evomap
+grep -n "新建的项目写 \`multica\`\|默认 multica" docs/multica-backend.md
+grep -n "agents" docs/multica-backend.md
+grep -n "进度看\|verdict" docs/multica-backend.md
+sed -n '7p' docs/multica-backend.md
+grep -n "2 次返工、12 次派工、6 小时\|2 次决策返工" docs/multica-backend.md docs/multica.md
+grep -n "^## " docs/multica.md
+
+# 4) README 改动 diff
+git diff -- README.md
+
+# 5) 确认改动范围只有 README.md（scope 外零改动）
+git show --stat --oneline HEAD

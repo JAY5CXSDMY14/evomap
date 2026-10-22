@@ -1,0 +1,4 @@
+46f73df feat(readme): README 末尾多一节「Multica 执行端」，一眼看出新项目默认走 Multica、evo 只排期闸门和上限
+ README.md | 4 ++++
+ 1 file changed, 4 insertions(+)
+README.md
