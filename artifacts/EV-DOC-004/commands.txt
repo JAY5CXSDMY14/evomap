@@ -1,0 +1,26 @@
+# EV-DOC-004 证据：跑过的命令原文（按顺序）
+# 任务：新建 notes/r20-probe.md，内容必须正好是「第二轮」。
+# 只改文档（notes/），按规则 12 不跑全量测试。
+
+# 0) 先按任务书原文建「第一轮」，确认基线
+printf '第一轮\n' > notes/r20-probe.md
+xxd notes/r20-probe.md
+
+# 1) 改成验收要求的内容：正好「第二轮」，不带换行（“正好”按字节比）
+printf '第二轮' > notes/r20-probe.md
+xxd notes/r20-probe.md
+wc -c < notes/r20-probe.md
+wc -l < notes/r20-probe.md
+
+# 2) 自检：字节比对，多一个换行也算 fail
+python3 artifacts/EV-DOC-004/check_probe.py
+# 反证：自检脚本对错内容必须判 fail，否则 PASS 就是白给
+printf '第一轮\n' > artifacts/EV-DOC-004/tmp/round1.md
+printf '第二轮\n' > artifacts/EV-DOC-004/tmp/round2-newline.md
+python3 artifacts/EV-DOC-004/check_probe.py artifacts/EV-DOC-004/tmp/round1.md
+python3 artifacts/EV-DOC-004/check_probe.py artifacts/EV-DOC-004/tmp/round2-newline.md
+rm -rf artifacts/EV-DOC-004/tmp
+
+# 3) 确认改动范围：只新增 notes/r20-probe.md（scope 外零改动）
+git status --short
+git show --stat --oneline HEAD

@@ -1,0 +1,26 @@
+=== 正例：notes/r20-probe.md ===
+path   : /Users/zhuyuechen/multica_workspaces/evo-e396a795b356/evo-14-1daf157ed8db/worktree/notes/r20-probe.md
+bytes  : 9
+hex    : e7acace4ba8ce8bdae
+text   : '第二轮'
+expect : b'\xe7\xac\xac\xe4\xba\x8c\xe8\xbd\xae' (9 bytes)
+PASS 内容正好是「第二轮」
+exit=0
+
+=== 反证 1：第一轮内容（含换行）必须 fail ===
+path   : artifacts/EV-DOC-004/tmp/round1.md
+bytes  : 10
+hex    : e7acace4b880e8bdae0a
+text   : '第一轮\n'
+expect : b'\xe7\xac\xac\xe4\xba\x8c\xe8\xbd\xae' (9 bytes)
+FAIL 内容不是「第二轮」
+exit=1
+
+=== 反证 2：多一个尾部换行必须 fail ===
+path   : artifacts/EV-DOC-004/tmp/round2-newline.md
+bytes  : 10
+hex    : e7acace4ba8ce8bdae0a
+text   : '第二轮\n'
+expect : b'\xe7\xac\xac\xe4\xba\x8c\xe8\xbd\xae' (9 bytes)
+FAIL 内容多了尾部空白: b'\n'
+exit=1
