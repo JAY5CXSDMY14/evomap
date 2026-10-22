@@ -75,11 +75,11 @@ evo 队列里的条目 EV-xxx
 ```json
 "executor": "multica",
 "multica": {"project": "EV", "agents": {"build": "施工-DSH", "verify": "验收-Claude", "decide": "决策-Claude"},
-            "app_url": "<Multica 网页地址，可空>", "issue_url": "{app_url}/issues/{identifier}"}
+            "app_url": "<Multica 网页地址，可空>", "workspace": "<workspace slug，如 evo>", "issue_url": "{app_url}/{workspace}/issues/{identifier}"}
 ```
 - 没写 `executor` 的老项目一律按 orca 跑（不会因为升级突然换执行端）；`evo new / import` 新建的项目写 `multica`（`--executor orca` 可改；全局配置写了 `executor` 就按全局）。
 - 每条 multica 命令的超时：`limits.timeouts.multica`，默认 1 分钟。
-- `issue_url` 是按 Multica 网页的常见路由猜的，第一次在 Air 上点开不对就改这个模板。
+- 网页路由带 workspace slug：`{app_url}/<slug>/issues/EVO-13`（10-22 Air 实测，不带会跳 /login）。填 `workspace` 即可，`issue_url` 一般不用改。
 
 **和设计稿不一样、或设计稿没写到的地方**
 1. **接口比 7 个动作宽。** 七个动作（ensure_project / create / assign / poll / comment / close / health）都有。内核原来把 Orca 当任务、闸门和收件箱用。返工上限、决策批次、闸门作废都挂在这上面。为了不改这些逻辑，`Executor` 保留了这套编排原语。Multica 后端把任务和闸门记在 `state/exec-multica.json`。这本账和 Orca 的状态一样，不进 state.json。收件箱靠轮询 issue 合成：run 结束就算 worker_done。

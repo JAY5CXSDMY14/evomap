@@ -378,7 +378,10 @@ class MulticaExecutor(Executor):
         self.project = str(mcfg.get("project") or code or "")
         self.agents = {**MULTICA_AGENTS, **{r: a for r, a in (mcfg.get("agents") or {}).items() if a}}
         self.app_url = str(mcfg.get("app_url") or "").rstrip("/")
-        self.issue_url = str(mcfg.get("issue_url") or "{app_url}/issues/{identifier}")
+        self.workspace = str(mcfg.get("workspace") or os.environ.get("MULTICA_WORKSPACE_SLUG") or "").strip("/")
+        # 10-22 Air：网页路由带 workspace slug（/evo/issues/EVO-13），不带会 307 到 /login
+        self.issue_url = str(mcfg.get("issue_url") or ("{app_url}/{workspace}/issues/{identifier}" if self.workspace
+                                                        else "{app_url}/issues/{identifier}"))
 
     # ---------- CLI ----------
     def cli(self, *args, ok=True, stdin=None, out=True):
@@ -786,7 +789,7 @@ class MulticaExecutor(Executor):
     def link(self, h):
         if not (h and self.app_url):
             return None
-        return self.issue_url.format(app_url=self.app_url, identifier=h, project=self.project)
+        return self.issue_url.format(app_url=self.app_url, identifier=h, project=self.project, workspace=self.workspace)
 
 
 def verdict(body):

@@ -275,3 +275,13 @@ def test_rework_cancels_old_active_run_first(loop):
     loop.run_until("MB", lambda st: len([r for r in loop.multica_state()["runs"] if r["agent_id"] == "ag-build"]) >= 2, n=6)
     b = runs(loop, "build")
     assert b[0]["status"] == "cancelled" and any("cancel-task" in c for c in calls(loop))
+
+
+def test_issue_url_includes_workspace_slug(loop, monkeypatch):
+    import importlib, sys
+    sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "bin"))
+    ex = importlib.import_module("evo_exec")
+    m = ex.MulticaExecutor.__new__(ex.MulticaExecutor)
+    m.app_url, m.workspace, m.project = "http://h:3300", "evo", "p"
+    m.issue_url = "{app_url}/{workspace}/issues/{identifier}"
+    assert m.link("EVO-13") == "http://h:3300/evo/issues/EVO-13"
