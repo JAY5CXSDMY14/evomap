@@ -72,3 +72,4 @@
 - 验收 agent「验收-Claude」：模型优先 group/check，没有就用 group/free-qwen；如果 claude 不认这个分组名，就把模型留空，走 Magpie 接入页的默认 GLM-flash。
 - 已推送 3e52bf5：kit/multica（install.sh、package.json、patch-dsh-boot.mjs、cordis.patch.yml、open-multica.sh、README），新增测试 test_multica_kit.py；docs/multica 补了第 7、8 节（踩坑清单、mini 预案）。第二轮 Pi 指令已交给老板，汇报文件约定为 ~/tmp/MULTICA-HANDOFF-2.md。
 - 13:15 Air 第二轮修了两处：一是 dsh profile 包不在 npm 上，改成源码构建 + npm pack，再用 `dsh plugin --profile multica add <tgz>` 装（60438f0）；二是 daemon 必须加 `--foreground`，否则 launchd 管不到（3510671）。Pi 实测：daemon 正常跑，4 个 runtime 都在线；profile 用的是 vendor 里的 tarball，不再依赖 ~/tmp。
+- 13:37 第二轮第 1–8 步通过：EVO-3 回归 29 秒；EVO-4 用 worktree 模式（分支 agent/dsh/evo-4）；用 `multica issue assign --to` 交给 验收-Claude，它只读不改，评论「验收通过」，状态保持 in_review；收件箱里能看到审核中提醒和验收评论。问题：claude 不认 group/check，退回了自己账号的默认模型，没走 Magpie。老板定验收模型先试 group/free-qwen，再试 group/free-glm-flash，只给验收 agent 单独设 ANTHROPIC_BASE_URL 走 Magpie，不改全局；第 8.5 步已交给 Pi。另外仓库里出现了未跟踪的 .claude/、.multica/、CLAUDE.md，要查是谁写入的。
