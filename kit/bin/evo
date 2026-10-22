@@ -3578,6 +3578,8 @@ def cmd_status(a):
     elif down:
         print(f"■ {EX.label} 执行端掉线（从 {TM.local(down).strftime('%H:%M')} 起）：先不派工，恢复后自动接着跑")
     print("■ 等你点头" + ("（Orca 闸门这次没读到）" if stale else ""))
+    early = {it["gates"].get("look") for it in s["items"].values() if it["gates"].get("look") and it["state"] != "verified"}
+    pend = [g for g in pend if g["id"] not in early]   # 10-22 Air：看效果闸门建件时就挂着，验收通过前不算「等你点头」
     for g in pend + confirm_gates_doc(s):
         print(f"  {g['id']}  {g.get('question')}")
     if not pend and not confirm_gates_doc(s):
