@@ -56,7 +56,7 @@
 - 老板觉得 Orca 一般，提议再看 Multica。我的结论：Multica 更合适。它原生支持 dsh（`dsh --profile multica --stdio`，可用 MULTICA_DSH_MODEL 指定模型）；每个 agent 可单独设模型；有审核关、收件箱、失败自动重试、Squads 组长分派、Autopilots（cron 和 webhook）、issue metadata。弱点：iOS App 要自己编译；需要服务端（官方云或 Docker 自建）；协议是 Apache 2.0 加额外条款。
 - 建议：关掉那 4 个窗口；EV-DOC-001 作废；先暂停 evo 常驻进程，等平台定了再开；决策岗模型不换。已提议：给 Multica 也画一版关系图（等老板回复）。
 - 00:51 mini 上的新 Multica 工作目录定为 ~/Projects/multica。发现 10-17/18 的旧影子试点 ~/Desktop/项目/Multica-shadow-pilot-20261017：官方 selfhost compose，项目名 multica，只绑 127.0.0.1；卡在 I04（自己加的 internal 网络和端口发布冲突）和 I05（邮件验证码登记，开到第六窗口也没收口），流程太重。这次给 A 段加了三条：新实例改名 multica2、不复用旧卷；用 Tailscale 反代（不覆盖 /mcp 的 443）；ALLOWED_EMAILS 只放老板一人，验证码从 backend 日志里取。
-- 01:23 mini 上的 Multica v0.6.5 已搭好：compose 项目名 multica2，目录 ~/Projects/multica，用 docker compose -p multica2 手动部署（官方脚本写死了 INSTALL_DIR，用不了）。网页走 tailscale serve https://mac-mini.taila6de43.ts.net:8443，API 走 :9443，都只在 tailnet 内可达；443 根路径（Funnel→8010）没动。没有 Redis，mini 上没跑 daemon，土布容器状态没变。下一步：老板注册并建工作区 evo，然后给 Air 发 B 段（地址已填好）。
+- 01:23 mini 上的 Multica v0.6.5 已搭好：compose 项目名 multica2，目录 ~/Projects/multica，用 docker compose -p multica2 手动部署（官方脚本写死了 INSTALL_DIR，用不了）。网页走 tailscale serve https://<mini>.<tailnet>.ts.net:8443，API 走 :9443，都只在 tailnet 内可达；443 根路径（Funnel→8010）没动。没有 Redis，mini 上没跑 daemon，土布容器状态没变。下一步：老板注册并建工作区 evo，然后给 Air 发 B 段（地址已填好）。
 - 02:43 老板 已注册 Multica 并建好工作区 evo（mini 本机 Chrome 打不开 ts.net:8443，判断是 Chrome 的安全 DNS 绕过了 MagicDNS，解析到了 Funnel 中转；建议关掉安全 DNS）。下一步：把 B 段 prompt 发给 Air 的 Pi。
 
 ## 2026-10-22 12:30 Air 实测 Multica：端到端跑通
@@ -79,3 +79,5 @@
 - 14:08 决策岗模型待定：Codex 额度用完了，老板在犹豫要不要买 Claude Pro，或者找外援（Hark/wabi/grokbot）。我的建议：先不买，决策岗用 claude 的 fable 档位，经 Magpie 走决策脑；外援没法当 Multica 的 runtime，只能人工帮着看；先试 5 条，质量不够再买。等老板回复。
 - 14:16 老板同意第 20 轮方向，决策岗用 fable 档位走决策脑（先试 5 条，暂不买 Claude Pro）。设计文档 docs/multica-backend（提交 1766826）。第三轮 Pi 指令已发：只读查决策岗超时原因、新建决策-Claude agent、收集 multica CLI 的 help 和 json 样例，结果写到 ~/tmp/MULTICA-HANDOFF-3.md。代码等老板说开工再写。
 - 15:20 第 20 轮代码完成并推送（ac802ed…，9 步一步一个提交，外加一处小修）：新增 kit/bin/evo_exec.py，Orca 调用收进 OrcaExecutor，行为不变；新增 MulticaExecutor，所有派工都是 `issue assign`，不再走 `dispatch --inject`（决策岗超时的根因）；state.json 升到 schema 2，件加 exec 字段；面板显示 Multica issue 链接；新增假 multica CLI 和 14 个测试。我自己定的：没写 executor 的老项目继续走 orca，只有新建项目默认 multica；任务和闸门记在 evo 自己的账本 state/exec-multica.json，保证返工上限、决策逻辑不用改；施工分支 fetch 进 evo 的克隆，验收和合并都在这份副本上做；验收结论看评论里的 verdict json。还要 Air 确认：成员留言会不会叫醒 agent、返工是不是复用同一条分支、issue_url 模板对不对、EV 两件老件换执行端后要不要重跑。第四轮 Pi 指令已交老板，汇报写到 ~/tmp/MULTICA-HANDOFF-4.md。
+
+- 2026-10-22 15:40 mini 上 Multica 前端端口改为 3300（FRONTEND_PORT=3300，tailscale serve 8443→127.0.0.1:3300），给土布让出 3000；8443/9443/8080/Air daemon 不变。以后重部署按 3300，别改回 3000。顺手把文档里的 tailnet 主机名换成占位符。

@@ -15,10 +15,10 @@
 
 - 版本 v0.6.5；compose 项目名 `multica2`；目录 `~/Projects/multica`（官方 selfhost compose 加 `.env`）。
 - 用手动方式部署（官方安装脚本写死了 INSTALL_DIR，也没法改项目名），启动命令是 `docker compose -p multica2 up -d`。
-- 端口只绑 127.0.0.1：前端 3000，后端 8080，postgres 不暴露到宿主机。
+- 端口只绑 127.0.0.1：前端 3300（`.env` 里 `FRONTEND_PORT=3300`，10-22 起；原来是 3000，和土布要求空闲的端口冲突，别再改回 3000），后端 8080，postgres 不暴露到宿主机。
 - 用 Tailscale serve 转发，只在 tailnet 内可达：
-  - 网页 `https://mac-mini.taila6de43.ts.net:8443` → 127.0.0.1:3000
-  - API `https://mac-mini.taila6de43.ts.net:9443` → 127.0.0.1:8080
+  - 网页 `https://<mini>.<tailnet>.ts.net:8443` → 127.0.0.1:3300
+  - API `https://<mini>.<tailnet>.ts.net:9443` → 127.0.0.1:8080
   - 443 根路径（Funnel → 8010）保持原样，没有动。
 - `.env` 的关键项：`DO_NOT_TRACK=1`，`ALLOWED_EMAILS` 只放老板一个人；`FRONTEND_ORIGIN`、`MULTICA_APP_URL`、`CORS_ALLOWED_ORIGINS` 都填 8443 的地址；`NEXT_PUBLIC_WS_URL` 填 9443（以后升级镜像如果实时更新失效，把这一行清空，会回落到同源的 /ws）。
 - 没有 Redis，后端日志会提示 auth rate limiting disabled，单用户用没关系。
