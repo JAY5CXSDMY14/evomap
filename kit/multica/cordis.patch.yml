@@ -1,0 +1,33 @@
+# Multica 用的 dsh 用户层补丁（在 @multica-ai/dsh-runtime 的 bundle 之后生效，可以覆盖它）。
+# install.sh 把它放到 $DSH_HOME/profiles/multica/cordis.patch.yml。改模型列表就改这里，再重跑 install.sh --apply。
+
+# 1) dsh 0.1.0-rc.6 的 runProfile 不管 hmr 有没有禁用都会 watchUserPatches，而 multica runtime 把 hmr 禁了 → 必崩。重新打开。
+- id: hmr
+  disabled: false
+
+# 2) 模型走本机 Magpie 网关（Magpie 再按分组路由；Air 上分组也可以来自 mini 的远程 Magpie）。
+- id: llm-deepseek
+  config:
+    apiKeyEnv: MAGPIE_GATEWAY_KEY
+    baseURL: http://127.0.0.1:3425/v1
+    models:
+      - id: group/build
+        name: 施工队·实施
+        contextWindow: 1000000
+        maxTokens: 131072
+        inputModalities: [text]
+      - id: group/free-ds
+        name: 免费池·DeepSeek
+        contextWindow: 128000
+        maxTokens: 8192
+        inputModalities: [text]
+      - id: group/free-qwen
+        name: 免费池·千问
+        contextWindow: 128000
+        maxTokens: 8192
+        inputModalities: [text]
+      - id: group/free-glm-flash
+        name: 免费池·GLM-flash
+        contextWindow: 128000
+        maxTokens: 8192
+        inputModalities: [text]

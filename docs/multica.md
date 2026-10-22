@@ -1,6 +1,6 @@
 # Multica 自建记录与切换方案（2026-10-22）
 
-> 状态：服务端已在 mini 上跑起来；Air 的执行端和 DSH 实测正在进行。Orca 路线暂停，evo 的代码暂时不动，等实测结果出来再改。
+> 状态（10-22 12:30）：Air 端到端跑通（EVO-2，施工-DSH 用时 30 秒，只改 README，自动进 in_review）。Air 上的修复已固化成 `kit/multica/install.sh`，mini 以后照着同一份脚本装。Orca 路线暂停。
 
 ## 1. 为什么换成 Multica
 
@@ -53,3 +53,25 @@
 - 验收岗、决策岗都换成 Multica 里的 agent（每个 agent 单独绑模型，施工和验收用不同模型）。
 - 老板关映射到 issue 状态和标签（`look` 对应看效果）；收件箱当推送的第一渠道，Telegram 留作兜底。
 - 先冻结 Orca 后端、Evo App 和网页面板的新功能。
+
+## 7. Air 实测踩过的坑（都已在 kit/multica 固化）
+
+| # | 坑 | 表现 | 解法 |
+|---|---|---|---|
+| 1 | 代理 fake-ip 劫持 *.ts.net | Chrome ERR_CONNECTION_CLOSED，curl 正常 | `kit/multica/open-multica.sh`（独立 Chrome + --no-proxy-server + --host-resolver-rules） |
+| 2 | 全局 dsh 0.2.x 和 multica runtime 不兼容 | incompatible with dsh 0.2.1-rc.2 | 隔离装 0.1.0-rc.6 |
+| 3 | daemon 重置 PATH，退回 Node 20 | ESM import 崩 | wrapper 写死 Node 22 绝对路径 |
+| 4 | Node 路径带空格 | PATH 被截断 | 软链 bin/node |
+| 5 | cordis-plugin-hmr 版本漂移 | registerConfig is not a function | overrides 钉 1.0.17（bento#195） |
+| 6 | hmr 时序竞态 | requires the Cordis HMR service | postinstall 补丁：轮询 1 秒 |
+| 7 | multica runtime 禁了 hmr | 同上 | 用户补丁层 disabled: false |
+| 8 | ~/.dsh 凭据格式 0.1/0.2 冲突 | version must be a string | 隔离 DSH_HOME |
+| 9 | 网页不能绑本地目录 | 只能选 GitHub 仓库 | CLI `--type local_directory` |
+| 10 | multica setup 浏览器回调超时 | 重定向丢失 | `multica login --token`（PAT） |
+| 11 | autostart 不带自定义环境变量 | 开机后起不来 | 自己写 LaunchAgent + env 文件 |
+
+## 8. mini 接 TB 时的步骤（预案，未执行）
+1. brew 装 multica，PAT 登录（服务端就在本机，也可以直接用 127.0.0.1:8080）。
+2. `bash kit/multica/install.sh --apply`，然后 bootstrap LaunchAgent。
+3. TB 仓库用 worktree 模式建项目，agent 按 施工 / 验收 不同模型配。
+4. 先跑一件小活，跑通后再关旧的协作契约（按 切换清单）。

@@ -1,0 +1,15 @@
+{
+  "name": "evo-multica-dsh",
+  "private": true,
+  "description": "给 Multica daemon 用的隔离 dsh（版本钉死 + 自动补丁），装在 ~/.evoloop/multica/dsh",
+  "dependencies": {
+    "@deepseek-ai/dsh": "0.1.0-rc.6",
+    "@multica-ai/dsh-runtime": "*"
+  },
+  "overrides": {
+    "@deepseek-ai/cordis-plugin-hmr": "1.0.17"
+  },
+  "scripts": {
+    "postinstall": "node ./patch-dsh-boot.mjs"
+  }
+}
