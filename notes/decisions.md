@@ -58,3 +58,9 @@
 - 00:51 mini 上的新 Multica 工作目录定为 ~/Projects/multica。发现 10-17/18 的旧影子试点 ~/Desktop/项目/Multica-shadow-pilot-20261017：官方 selfhost compose，项目名 multica，只绑 127.0.0.1；卡在 I04（自己加的 internal 网络和端口发布冲突）和 I05（邮件验证码登记，开到第六窗口也没收口），流程太重。这次给 A 段加了三条：新实例改名 multica2、不复用旧卷；用 Tailscale 反代（不覆盖 /mcp 的 443）；ALLOWED_EMAILS 只放老板一人，验证码从 backend 日志里取。
 - 01:23 mini 上的 Multica v0.6.5 已搭好：compose 项目名 multica2，目录 ~/Projects/multica，用 docker compose -p multica2 手动部署（官方脚本写死了 INSTALL_DIR，用不了）。网页走 tailscale serve https://mac-mini.taila6de43.ts.net:8443，API 走 :9443，都只在 tailnet 内可达；443 根路径（Funnel→8010）没动。没有 Redis，mini 上没跑 daemon，土布容器状态没变。下一步：老板注册并建工作区 evo，然后给 Air 发 B 段（地址已填好）。
 - 02:43 老板 已注册 Multica 并建好工作区 evo（mini 本机 Chrome 打不开 ts.net:8443，判断是 Chrome 的安全 DNS 绕过了 MagicDNS，解析到了 Funnel 中转；建议关掉安全 DNS）。下一步：把 B 段 prompt 发给 Air 的 Pi。
+
+## 2026-10-22 12:30 Air 实测 Multica：端到端跑通
+- 派给 施工-DSH（模型 deepseek-official/group/free-ds，经 Magpie）的 EVO-2 用时 30 秒：只改了 README，没有越界，issue 自动转为 in_review。daemon 用的是 PAT 登录（`multica login --token`），4 个 runtime（claude/codex/dsh/pi）都在线。
+- 为跑通修了几处：dsh 改用隔离安装的 0.1.0-rc.6（~/tmp/dsh016）；cordis-plugin-hmr 钉在 1.0.17（registerConfig 在 1.0.18 被删，见 bento#195）；dsh-app-boot 改成轮询 ctx.get("hmr") 最多 1 秒，绕开时序竞态；用户 patch 层把 multica runtime 禁掉的 hmr 重新启用；dsh wrapper 写死 node22 路径（daemon 会重置 PATH）；改用隔离的 DSH_HOME（0.2.x 和 0.1.x 的 credentials 格式冲突）；本地目录只能用 CLI 的 `--type local_directory` 绑定。
+- Air 上 Chrome 打不开是 Shadowrocket fake-ip 劫持了 ts.net，Host 规则无效；改用一个独立的 Chrome 实例，加 --no-proxy-server 和 --host-resolver-rules，把域名映射到 100.90.140.106。
+- 未决：上面这些都还在 ~/tmp，npm install 会冲掉补丁；daemon 现在靠 nohup 手动起，autostart 生成的 plist 不带自定义环境变量；收件箱提醒、worktree 模式、另外 3 个路由、多 agent 并发都还没测。evo 的 autopilot 和 guard 已 bootout，暂停前决策岗已经连续 5 次超过 45 分钟没交决定。
