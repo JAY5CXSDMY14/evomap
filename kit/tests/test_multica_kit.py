@@ -34,3 +34,28 @@ def test_scripts_syntax_and_no_real_paths():
     for p in KIT.iterdir():
         t = p.read_text()
         assert "/Users/" not in t and "zhuyuechen" not in t and "100.90." not in t, p
+
+def _run(args, env_extra, home):
+    import os
+    env = dict(os.environ, HOME=str(home), **env_extra)
+    return subprocess.run(["bash", str(KIT / "install.sh"), *args], capture_output=True, text=True, env=env)
+
+def test_uninstall_needs_yes_and_only_deletes_multica_dir(tmp_path):
+    root = tmp_path / "x" / "multica"; (root / "bin").mkdir(parents=True)
+    r = _run(["--uninstall"], {"EVO_MULTICA_DIR": str(root)}, tmp_path)
+    assert r.returncode == 1 and root.exists() and "--yes" in r.stdout
+    bad = tmp_path / "important"; bad.mkdir()
+    r = _run(["--uninstall", "--yes"], {"EVO_MULTICA_DIR": str(bad)}, tmp_path)
+    assert r.returncode == 1 and bad.exists()
+    r = _run(["--uninstall", "--yes"], {"EVO_MULTICA_DIR": str(root)}, tmp_path)
+    assert r.returncode == 0 and not root.exists()
+
+def test_throttle_must_be_integer(tmp_path):
+    r = _run([], {"MULTICA_THROTTLE": "abc", "EVO_MULTICA_DIR": str(tmp_path / "multica")}, tmp_path)
+    assert r.returncode == 2
+
+def test_install_has_round2_fixes():
+    t = (KIT / "install.sh").read_text()
+    for needle in ["pnpm-lock.yaml", "--no-package-lock", "trap on_fail EXIT", "probe.log\"   # 成功也留底",
+                   "--check \"$BOOTJS\"", "<integer>$THROTTLE</integer>", "MAGPIE_KEY_FROM_KEYCHAIN", "--update-src", "pull --ff-only"]:
+        assert needle in t, needle
