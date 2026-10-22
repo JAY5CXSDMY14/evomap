@@ -717,7 +717,7 @@ def load():
     ensure_clone()
     if os.path.exists(STATE):
         try:
-            return json.load(open(STATE, encoding="utf-8"))
+            return migrate_state(json.load(open(STATE, encoding="utf-8")))
         except ValueError:
             # 读不出 ≠ 空：先把坏文件挪开留证，停下等人，绝不当作「没有任务」重新开始
             bad = STATE + time.strftime(".bad-%m%d%H%M%S")
@@ -726,7 +726,73 @@ def load():
             open(PAUSED, "w", encoding="utf-8").write(f"状态文件损坏，已挪到 {bad}")
             notify("state_corrupt", "接棒器状态文件损坏", f"已挪到 {bad}，接棒暂停，等人处理")
             sys.exit(f"状态文件读不出，已挪到 {bad}；接棒暂停")
-    return {"coord": None, "items": {}, "seq": 0, "log": []}
+    return {"coord": None, "items": {}, "seq": 0, "log": [], "schema_version": STATE_SCHEMA_VERSION}
+
+
+# ---------- 第二十轮：state.json 的 schema_version（没写 = 1）。人和 Pi 都不手改，evo 读的时候自动迁移 ----------
+STATE_SCHEMA_VERSION = 2
+
+
+def exec_blank(backend="orca"):
+    return {"backend": backend, "issue": None, "agent": None, "branch": None}
+
+
+def migrate_state(s):
+    """1 → 2：每件加 exec {backend, issue, agent, branch}；老件都是 Orca 派的，Orca 的任务号 / 派工 / 终端记进 exec.legacy。
+    只加字段，老字段原样留着（Orca 后端照旧用）。"""
+    if (s.get("schema_version") or 1) >= STATE_SCHEMA_VERSION:
+        return s
+    for it in (s.get("items") or {}).values():
+        if isinstance(it, dict) and "exec" not in it:
+            e = exec_blank("orca")
+            e["legacy"] = {"build": it.get("build"), "verify": it.get("verify"), "merge": it.get("merge"),
+                           "dispatch": {r: {"id": d.get("id"), "terminal": d.get("terminal")} for r, d in (it.get("dispatch") or {}).items()
+                                        if isinstance(d, dict)},
+                           "worktree": it.get("worktree")}
+            it["exec"] = e
+    if s.get("orca_down") and not s.get("exec_down"):
+        s["exec_down"] = s.pop("orca_down")
+    s["schema_version"] = STATE_SCHEMA_VERSION
+    return s
+
+
+RESEED_STATES = ("queued", "building", "built", "verifying", "verified", "escalated", "asking")
+
+
+def exec_reseed(s, c):
+    """项目从 Orca 换到 Multica（或反过来）后，没做完的件在新执行端里重建任务和闸门：
+    旧任务号 / 闸门号记进 exec.legacy，施工 / 验收中的件退回排队（在新执行端从头施工，轮次不清零）。返回重建了几件。"""
+    n = 0
+    for k, it in s["items"].items():
+        e = it.setdefault("exec", exec_blank("orca"))
+        if e.get("backend") == EX.name or it["state"] not in RESEED_STATES:
+            continue
+        leg = e.setdefault("legacy", {})
+        leg.update({"build": it.get("build"), "verify": it.get("verify"), "merge": it.get("merge"),
+                    "gates": dict(it.get("gates") or {}), "worktree": it.get("worktree"), "from": e.get("backend"),
+                    "state": it["state"], "at": TM.iso()})
+        if it["state"] in ("building", "verifying", "built", "verified"):
+            for role, d in (it.get("dispatch") or {}).items():
+                if not d.get("ended"):
+                    worker_end(s, it, role)
+            it["state"] = "queued"; it.pop("verified_sha", None); it.pop("verified_patch", None); it.pop("look_bound", None)
+        it["worktree"] = None; it["dispatch"] = {}; it.pop("stalled", None)
+        b = EX.task_create(c, f"{k} 施工", it.get("build_spec") or (spec_head("build", it) + role_prompt("build") + it["spec"]))
+        v = EX.task_create(c, f"{k} 验收", it.get("verify_spec") or (spec_head("verify", it) + role_prompt("verify") + it["spec"]), [b])
+        m = EX.task_create(c, f"{k} 合并", "由接棒器合并", [v])
+        it["build"], it["verify"], it["merge"] = b, v, m
+        gates = {}
+        if it["gates"].get("do") and not it.get("do_ok"):
+            gates["do"] = EX.gate_create(c, b, f"做不做：{it['title']}", ["做", "不做"])
+        if it.get("ui"):
+            gates["look"] = EX.gate_create(c, m, f"看效果：{it['title']}", ["通过", "打回"])
+            it.pop("look_ok", None); it.pop("look_patch", None)
+        it["gates"] = gates
+        it["exec"] = {**exec_blank(EX.name), "legacy": leg}
+        tl(k, "exec_reseed", frm=leg["from"], to=EX.name, state=leg["state"])
+        log(s, f"{k} 换执行端（{leg['from']} → {EX.name}）：任务和闸门在新执行端重建，从{NAMES.get(it['state'], it['state'])}接着走")
+        n += 1
+    return n
 
 
 def make_clone(src, dst, mb, register=True):
@@ -767,7 +833,7 @@ def save(s):
     track_states(s)
     tmp = STATE + ".tmp"
     with open(tmp, "w", encoding="utf-8") as f:
-        json.dump({k: v for k, v in s.items() if k != "_ro"}, f, ensure_ascii=False, indent=1)
+        json.dump({**{k: v for k, v in s.items() if k != "_ro"}, "schema_version": STATE_SCHEMA_VERSION}, f, ensure_ascii=False, indent=1)
         f.flush(); os.fsync(f.fileno())                  # 第十七轮 L-29：断电后不会剩一个空文件
     os.replace(tmp, STATE)
 
@@ -1037,7 +1103,7 @@ def add_item(s, a):
     it = {"kind": kind, "parent": getattr(a, "parent", None), "title": a.title, "scope": scope, "ui": a.ui, "issue": a.issue, "build": b,
           "verify": v, "merge": m, "spec": spec, "after": deps, "state": "queued", "round": 0,
           "model_i": 0, "worktree": None, "gates": {}, "dispatch": {}, "window": win, "build_spec": bspec, "verify_spec": vspec,
-          "usage": {"runs": 0, "minutes": 0.0}}
+          "usage": {"runs": 0, "minutes": 0.0}, "exec": exec_blank(EX.name)}
     if owner_only:
         it["owner_only"] = owner_only
     if a.product:
@@ -1071,6 +1137,8 @@ def start_worker(s, key, it, role):
     it["dispatch"][role] = {"id": did, "terminal": h, "since": time.time(), "model": model, "fallback": fb, "tool": R.tool_of(rc)}
     if role == "build":
         it["build_model"] = model
+    if EX.name == "orca":                              # 第二十轮：Multica 的 exec 在 launch 里写（issue / agent）
+        it["exec"] = {**(it.get("exec") or {}), **exec_blank("orca"), "agent": R.tool_of(rc)}
     it["state"] = "building" if role == "build" else "verifying"
     usage_add(s, it, role, runs=1)
     tl(key, "dispatch", role=role, model=model, dispatch=did, round=it.get("round", 0), worktree=it["worktree"],
@@ -1986,7 +2054,10 @@ def cmd_tick(a=None):
     s = load(); guard_git(s)
     if not exec_up(s):
         return
-    c = coord(s); T = tasks(s)
+    c = coord(s)
+    if exec_reseed(s, c):
+        checkpoint(s, "reseed")
+    T = tasks(s)
     by_task = {}
     for k, it in s["items"].items():
         for r in ("build", "verify", "merge"):
