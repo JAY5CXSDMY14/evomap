@@ -119,6 +119,7 @@ fi
 if [ ! -f "$RTSRC/package.json" ]; then
   git clone --depth 1 "$RUNTIME_REPO" "$RTSRC" >"$LOGS/runtime-build.log" 2>&1 && ok "已 clone dsh-runtime" || { bad "clone 失败，看 $LOGS/runtime-build.log"; exit 1; }
 fi
+# build 脚本存在才跑（pnpm 不认 --if-present，会透传给 tsc 报 TS5023，Air 10-23 实测）
 # 上游只有 pnpm-lock.yaml：npm install 会崩（edgesOut null，Air 实测）→ 有 pnpm-lock 就用 corepack 的 pnpm（不全局装）
 RTPM="$NPM"
 if [ -f "$RTSRC/pnpm-lock.yaml" ] && [ ! -f "$RTSRC/package-lock.json" ]; then
@@ -129,7 +130,7 @@ if [ -f "$RTSRC/pnpm-lock.yaml" ] && [ ! -f "$RTSRC/package-lock.json" ]; then
   info "dsh-runtime 用 pnpm 构建：$RTPM"
 fi
 ( cd "$RTSRC" && { [ -d node_modules ] || { [ -f package-lock.json ] && "$NPM" ci --no-audit --no-fund; } || { [ "$RTPM" != "$NPM" ] && "$RTPM" install --frozen-lockfile; } || "$NPM" install --no-audit --no-fund --no-package-lock; } \
-    && "$RTPM" run build --if-present && rm -f "$ROOT"/vendor/*dsh-runtime*.tgz && "$NPM" pack --pack-destination "$ROOT/vendor" ) >>"$LOGS/runtime-build.log" 2>&1 \
+    && { if "$NODE" -e 'process.exit(require("./package.json").scripts?.build?0:1)'; then "$RTPM" run build; fi; } && rm -f "$ROOT"/vendor/*dsh-runtime*.tgz && "$NPM" pack --pack-destination "$ROOT/vendor" ) >>"$LOGS/runtime-build.log" 2>&1 \
   || { bad "dsh-runtime 构建/打包失败，看 $LOGS/runtime-build.log"; exit 1; }
 STAGE="dsh-runtime 打包"
 RTTGZ=$(ls -t "$ROOT"/vendor/*dsh-runtime*.tgz 2>/dev/null | head -1)
