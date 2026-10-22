@@ -3,7 +3,7 @@
 按 $FAKE_ORCA_DIR/plan.json 里的剧本依次出招（每个角色一个队列，用完默认 ok/pass）：
   build:  ok（在 scope 目录写文件并提交，按格式交卷） | dep:<包名>（另在 scope 目录 package.json 加依赖） | file:<路径> | dirty（提交后再改一个已跟踪文件不提交） | fail（回报失败）
           noreport（不交 JSON） | oos（另外改了范围外的文件） | blocked / unfinished / redtest（交卷内容不合格）
-  verify: pass | fail
+  verify: pass | fail | skipped（Multica：verdict=skipped，正文写验收通过）
           same（不改任何东西，照常交卷：返工后指纹不变）
   任何角色：ratelimit（打印额度提示并回报失败）| ratelimit-hang（打印提示后不回报）| silent（不回报）
           die（工人进程死掉：不回报，worker-show 报这次派工 exited）
@@ -96,7 +96,9 @@ else:
     outcome = "succeeded" if move == "pass" else "failed"
 body = f"假{role}：{move}"
 if MX and role == "verify":              # Multica 验收结论看评论里的 verdict（run 成功 ≠ 验收通过）
-    body += "\n```json\n" + json.dumps({"verdict": "pass" if move == "pass" else "fail", "reasons": [move]}) + "\n```"
+    if move == "skipped":                # 第二十二轮：验收说跳过了（正文还写着验收通过）——跳过不能算通过
+        body += "\n验收通过（凭据没配，跳过了核心检查）"
+    body += "\n```json\n" + json.dumps({"verdict": {"pass": "pass", "skipped": "skipped"}.get(move, "fail"), "reasons": [move]}) + "\n```"
     outcome = "succeeded"
 if role == "build" and outcome == "succeeded" and move != "noreport":
     rep = {"status": {"blocked": "blocked", "unfinished": "in_progress"}.get(move, "done"), "summary": f"假施工 {task}",

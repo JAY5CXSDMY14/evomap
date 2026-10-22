@@ -38,6 +38,8 @@
   evo -p AB goal [set "一两句" | clear]   项目目标：写进每份任务书开头「项目目标：…」
   evo -p AB ui [show | set web-react|swiftui|none | set 类别=包名[,包名] | set 类别= | check]   UI 栈预设（见 kit/presets/ui/README.md）
   evo plugin list|enable|disable|run|validate|install …   插件（第十六轮，见 docs/plugins.md）：侧栏页 / 输入框命令 / 通知渠道
+  evo -p TB runs [件号] [--json]  永久运行记录 runs/<件号>/（第二十二轮：任务书、交卷全文、Multica run、合并前测试日志）
+  evo canary [--json]             判据金丝雀：喂已知不合格的样例，有一条被判通过就报（第二十二轮）
   evo projects --json             项目列表（App 用；所有给 App 的 --json 都带 schema_version，见 docs/app-contract.md）
 """
 import argparse, datetime, fcntl, hashlib, hmac, json, os, re, secrets, subprocess, sys, time, shlex
@@ -314,13 +316,12 @@ def self_head(it):
 
 def protected_delivery_check(s, k, it):
     """交卷时：改到看门狗 / 回退（kit/selfmaint/）→ 打回；改到受保护路径但登记时没算上 → 补成老板闸门件（合并前要老板看效果）。"""
-    globs = protected_globs(); wt = it.get("worktree")
-    if not globs or not wt:
+    globs = protected_globs()
+    if not globs:
         return None
-    base = git(wt, "merge-base", CFG["main_branch"], "HEAD", check=False)
-    if not base:
-        return None
-    changed = [x for x in git(wt, "diff", "--name-only", base, "HEAD", check=False).splitlines() if x.strip()]
+    changed, err = changed_files(it)
+    if err:                                            # 第二十二轮：读不出改了什么 ≠ 没碰受保护路径
+        return "evo 读不出这件改了哪些文件（" + err + "），没法确认有没有碰受保护路径，先打回"
     bad = [f for f in changed if self_maintained() and any(_glob_hit(f, g) for g in SELF_FORBIDDEN)]
     if bad:
         return ("改了看门狗 / 回退逻辑（" + "、".join(bad[:5]) + "）：施工任务书禁止修改 kit/selfmaint/，只有老板手改。把这些改动撤掉")
@@ -376,8 +377,106 @@ def selfcheck_doc():
         checks.append({"name": "events", "ok": True, "detail": []})
     except OSError as e:
         checks.append({"name": "events", "ok": False, "detail": [str(e)]})
+    try:
+        cd = canary_doc()                              # 第二十二轮：判据的金丝雀件也算自检（自升级切过去后判据坏了就回退）
+        checks.append({"name": "canary", "ok": cd["ok"], "detail": cd["wrong"][:10]})
+    except Exception as e:
+        checks.append({"name": "canary", "ok": False, "detail": [f"{type(e).__name__}: {e}"]})
     return {"schema_version": APP_SCHEMA_VERSION, "ok": all(c["ok"] for c in checks), "release": running_release(),
             "kit": KIT, "checks": checks}
+
+
+# ---------- 第二十二轮：金丝雀——判据先喂「应该变红」的输入（永远不会变红的检查等于没写；跳过绝不算通过） ----------
+def verify_ok(outcome):
+    """Orca 验收回报：只有 outcome == succeeded 才算通过；缺 / skipped / cancelled 一律不算。"""
+    return outcome == "succeeded"
+
+
+_RPT = {"status": "done", "summary": "改了按钮", "changes": [], "unfinished": [], "risks": [], "manual_checks": []}
+
+
+def _report_pass(body):
+    rep, err = parse_report(body)
+    return not err and report_red(rep) is None
+
+
+def _rpt(**kw):
+    return "```json\n" + json.dumps({**_RPT, **kw}, ensure_ascii=False) + "\n```"
+
+
+def canary_cases():
+    """每条 (判据, 样例说明, 期望, 判定函数)。期望 fail 的是金丝雀件（已知不合格，必须判不过）；pass 的是对照（证明判据没坏成永远红）。
+    判定函数返回 True = 判据放行。"""
+    V = EXMOD.verdict
+    J = lambda o: "```json\n" + json.dumps(o, ensure_ascii=False) + "\n```"
+    lk = lambda **kw: {"ui": True, "gates": {"look": "g2"}, **kw}
+    C = [
+        ("验收结论 verdict", "verdict=skipped", "fail", lambda: V(J({"verdict": "skipped"}))),
+        ("验收结论 verdict", "verdict 为空、正文写验收通过", "fail", lambda: V(J({"verdict": ""}) + "\n验收通过")),
+        ("验收结论 verdict", "json 判 fail、正文写验收通过", "fail", lambda: V("验收通过\n" + J({"verdict": "fail"}))),
+        ("验收结论 verdict", "没 json：凭据没配，验收跳过（未验收通过）", "fail", lambda: V("凭据没配，验收跳过，未验收通过")),
+        ("验收结论 verdict", "没 json：PASS 字样但写了不通过", "fail", lambda: V("PASS 检查项 1；整体验收不通过")),
+        ("验收结论 verdict", "空正文", "fail", lambda: V("")),
+        ("验收结论 verdict", "对照：verdict=pass", "pass", lambda: V(J({"verdict": "pass", "reasons": []}))),
+        ("验收回报 outcome", "outcome 缺失", "fail", lambda: verify_ok(None)),
+        ("验收回报 outcome", "outcome=skipped", "fail", lambda: verify_ok("skipped")),
+        ("验收回报 outcome", "对照：succeeded", "pass", lambda: verify_ok("succeeded")),
+        ("范围 in_scope", "scope web，改 webhooks/", "fail", lambda: in_scope("webhooks/x.py", ["web"])),
+        ("范围 in_scope", "web/../ 绕出去", "fail", lambda: in_scope("web/../secrets.env", ["web/"])),
+        ("范围 in_scope", "绝对路径", "fail", lambda: in_scope("/etc/passwd", ["web/"])),
+        ("范围 in_scope", "整仓 scope 也挡 ../", "fail", lambda: in_scope("../outside.txt", ["."])),
+        ("范围 in_scope", "别的目录", "fail", lambda: in_scope("api/x.py", ["web/"])),
+        ("范围 in_scope", "对照：web/ 下的文件", "pass", lambda: in_scope("web/a.ts", ["web/"])),
+        ("范围 out_of_scope", "工作区不在、读不出改动", "fail", lambda: not out_of_scope({"worktree": "/nonexistent/evo-canary", "scope": ["web/"]})),
+        ("交卷 parse_report", "tests 里 result=skipped", "fail", lambda: _report_pass(_rpt(tests=[{"command": "pytest", "result": "skipped"}]))),
+        ("交卷 parse_report", "status=passed（不是合法值）", "fail", lambda: _report_pass(_rpt(status="passed", tests=[]))),
+        ("交卷 parse_report", "没有 JSON", "fail", lambda: _report_pass("做完了，测试都过了")),
+        ("交卷 parse_report", "tests 缺 command", "fail", lambda: _report_pass(_rpt(tests=[{"result": "passed"}]))),
+        ("交卷 report_red", "status=done 但有 failed 测试", "fail",
+         lambda: _report_pass(_rpt(tests=[{"command": "pytest", "result": "passed"}, {"command": "npm test", "result": "failed"}]))),
+        ("交卷 report_red", "status=in_progress", "fail", lambda: _report_pass(_rpt(status="in_progress", tests=[]))),
+        ("交卷 report_red", "status=blocked", "fail", lambda: _report_pass(_rpt(status="blocked", tests=[]))),
+        ("交卷 parse_report", "对照：done + passed", "pass", lambda: _report_pass(_rpt(tests=[{"command": "pytest", "result": "passed"}]))),
+        ("全量测试 run_suite", "pytest 全部 skipped、退出码 0", "fail", lambda: not suite_all_skipped("===== 5 skipped in 0.02s =====")),
+        ("全量测试 run_suite", "全部 deselected", "fail", lambda: not suite_all_skipped("3 deselected in 0.10s")),
+        ("全量测试 run_suite", "no tests ran", "fail", lambda: not suite_all_skipped("no tests ran in 0.01s")),
+        ("全量测试 run_suite", "unittest Ran 0 tests", "fail", lambda: not suite_all_skipped("Ran 0 tests in 0.000s\n\nOK")),
+        ("全量测试 run_suite", "unittest 全跳过", "fail", lambda: not suite_all_skipped("Ran 4 tests in 0.1s\n\nOK (skipped=4)")),
+        ("全量测试 run_suite", "对照：有 passed", "pass", lambda: not suite_all_skipped("== 5 passed, 1 skipped in 0.30s ==")),
+        ("看效果闸门 look_approved", "点的是旧闸门", "fail", lambda: look_approved(lk(look_ok="g1"))),
+        ("看效果闸门 look_approved", "还没点", "fail", lambda: look_approved(lk())),
+        ("看效果闸门 look_approved", "对照：点了当前闸门", "pass", lambda: look_approved(lk(look_ok="g2"))),
+        ("决策 parse_decisions", "没 json 块", "fail", lambda: parse_decisions("我决定 retry TB-FIX-001")[1] is None),
+        ("决策 parse_decisions", "对照：合法 decisions", "pass",
+         lambda: parse_decisions(J({"decisions": [{"item": "TB-FIX-001", "action": "retry", "note": "x"}]}))[1] is None),
+    ]
+    return C
+
+
+def canary_doc():
+    rows, wrong = [], []
+    for check, name, expect, fn in canary_cases():
+        try:
+            passed = bool(fn()); err = None
+        except Exception as e:                       # 判据自己崩了：不算放行，但要报出来
+            passed, err = False, f"{type(e).__name__}: {e}"
+        ok = (passed == (expect == "pass")) and not err
+        rows.append({"check": check, "sample": name, "expect": expect, "judged": "pass" if passed else "fail", "ok": ok, "error": err})
+        if not ok:
+            wrong.append(f"{check}｜{name}：期望{'放行' if expect == 'pass' else '判不过'}，实际{'放行' if passed else '判不过'}" + (f"（{err}）" if err else ""))
+    return {"schema_version": APP_SCHEMA_VERSION, "ok": not wrong, "total": len(rows),
+            "canaries": sum(1 for r in rows if r["expect"] == "fail"), "wrong": wrong, "rows": rows}
+
+
+def cmd_canary(a):
+    d = canary_doc()
+    if a.json:
+        print(json.dumps(d, ensure_ascii=False))
+    else:
+        print(f"金丝雀 {d['canaries']} 条、对照 {d['total'] - d['canaries']} 条：" + ("全部判对" if d["ok"] else f"{len(d['wrong'])} 条判错"))
+        for w in d["wrong"]:
+            print("✗ " + w)
+    return 0 if d["ok"] else 1
 
 
 def cmd_selfcheck(a):
@@ -598,7 +697,10 @@ def lease_remote_set(host, drop=()):
     """把远端租约写成 host（推一个指向主线的 ref），去掉别的机器的。"""
     refs = [f"{CFG['main_branch']}:{LEASE_PREFIX}{host}"] + [f":{LEASE_PREFIX}{h}" for h in drop if h != host]
     r = run_cmd(["git", "-C", CFG["repo"], "push", "-q", "origin", *refs], timeout=tmo("git_net"))
-    return r.returncode == 0
+    if r.returncode:
+        return False
+    hosts = lease_remote_get()                      # 第二十二轮：推完问远端，租约 ref 真在才算
+    return hosts is not None and host in hosts and not any(h in hosts for h in drop if h != host)
 
 
 def lease_check(loop=False):
@@ -781,8 +883,8 @@ def exec_reseed(s, c):
                     worker_end(s, it, role)
             it["state"] = "queued"; it.pop("verified_sha", None); it.pop("verified_patch", None); it.pop("look_bound", None)
         it["worktree"] = None; it["dispatch"] = {}; it.pop("stalled", None)
-        b = EX.task_create(c, f"{k} 施工", it.get("build_spec") or (spec_head("build", it) + role_prompt("build") + it["spec"]))
-        v = EX.task_create(c, f"{k} 验收", it.get("verify_spec") or (spec_head("verify", it) + role_prompt("verify") + it["spec"]), [b])
+        b = EX.task_create(c, f"{k} 施工", with_decl(it.get("build_spec") or build_spec(it)))
+        v = EX.task_create(c, f"{k} 验收", it.get("verify_spec") or verify_spec(it), [b])
         m = EX.task_create(c, f"{k} 合并", "由接棒器合并", [v])
         it["build"], it["verify"], it["merge"] = b, v, m
         gates = {}
@@ -908,6 +1010,92 @@ def read_timeline(k, code=None):
     return out
 
 
+# ---------- 第二十二轮：永久运行记录 ~/.evoloop/projects/<代号>/runs/<件号>/（只增不删，evo 任何地方都不清它） ----------
+# 时间线（state/timeline.jsonl）记「发生了什么」，这里留「原件」：任务书、施工 / 验收交卷全文、终端尾部、Multica run 记录、
+# 合并前测试日志、决策批次全文。每件一个目录，index.jsonl 一行一份。复盘、规则体检、回测都靠它。
+def runs_root(code=None):
+    if code:
+        return os.path.join(HOME_DIR, code.upper(), "runs")
+    return os.path.join(os.path.dirname(os.path.abspath(STATE_DIR)), "runs") if STATE_DIR else None
+
+
+def _runs_key(k):
+    return re.sub(r"[^A-Za-z0-9_.-]", "_", str(k or "")) or "_"
+
+
+def trail(k, kind, text=None, meta=None, copy=None, extra=None):
+    """存一份原件：runs/<件号>/<序号>-<kind>.md（text）/ .log（copy 拷一份文件）/ .<后缀>（extra：{后缀: 内容}），
+    index.jsonl 记 {at, item, kind, files, …meta}。写不进去只打印，不拖垮接棒。返回目录或 None。"""
+    root = runs_root()
+    if not root or not k:
+        return None
+    d = os.path.join(root, _runs_key(k))
+    try:
+        os.makedirs(d, exist_ok=True)
+        idx = os.path.join(d, "index.jsonl")
+        n = (sum(1 for _ in open(idx, encoding="utf-8")) if os.path.exists(idx) else 0) + 1
+        name = f"{n:03d}-{_runs_key(kind)}"; files = []
+        if text is not None:
+            open(os.path.join(d, name + ".md"), "w", encoding="utf-8").write(str(text)); files.append(name + ".md")
+        if copy and os.path.isfile(copy):
+            ext = os.path.splitext(copy)[1] or ".log"
+            with open(copy, "rb") as src, open(os.path.join(d, name + ext), "wb") as dst:
+                dst.write(src.read())
+            files.append(name + ext)
+        for suf, body in (extra or {}).items():
+            if body in (None, "", {}, []):
+                continue
+            fn = f"{name}.{suf}"
+            with open(os.path.join(d, fn), "w", encoding="utf-8") as f:
+                f.write(body if isinstance(body, str) else json.dumps(body, ensure_ascii=False, indent=1, default=str))
+            files.append(fn)
+        rec = {"at": TM.iso(), "item": k, "kind": kind, "files": files}
+        rec.update({x: v for x, v in (meta or {}).items() if v not in (None, "", [], {})})
+        with open(idx, "a", encoding="utf-8") as f:
+            f.write(json.dumps(rec, ensure_ascii=False, default=str) + "\n")
+        return d
+    except OSError as e:
+        print(f"运行记录没存进去（{k} {kind}）：{e}", file=sys.stderr)
+        return None
+
+
+def read_runs(k, code=None):
+    """一件的运行记录索引（只读）。"""
+    p = os.path.join(runs_root(code) or "", _runs_key(k), "index.jsonl")
+    out = []
+    if os.path.exists(p):
+        for ln in open(p, encoding="utf-8"):
+            try:
+                out.append(json.loads(ln))
+            except ValueError:
+                continue
+    return out
+
+
+def cmd_runs(a):
+    """evo -p X runs [件号] [--json]：没给件号列出有记录的件；给了列这件的每份记录（路径可直接打开）。只读，不抢锁。"""
+    root = runs_root(CODE)
+    if not a.key:
+        keys = sorted(x for x in os.listdir(root) if os.path.isfile(os.path.join(root, x, "index.jsonl"))) if os.path.isdir(root) else []
+        rows = [{"key": x, "records": len(read_runs(x, CODE))} for x in keys]
+        if a.json:
+            print(json.dumps({"schema_version": APP_SCHEMA_VERSION, "project": CODE, "root": root, "items": rows}, ensure_ascii=False)); return
+        print(f"运行记录：{root}" + ("" if rows else "（还没有）"))
+        for r in rows:
+            print(f"  {r['key']:<16} {r['records']} 份")
+        return
+    recs = read_runs(a.key, CODE); d = os.path.join(root, _runs_key(a.key))
+    if a.json:
+        print(json.dumps({"schema_version": APP_SCHEMA_VERSION, "project": CODE, "key": a.key, "dir": d, "records": recs}, ensure_ascii=False)); return
+    if not recs:
+        sys.exit(f"{a.key} 没有运行记录（{d}）")
+    print(f"【{a.key}】运行记录 {d}（时间线：evo -p {CODE} log {a.key}）")
+    for r in recs:
+        extra = {x: v for x, v in r.items() if x not in ("at", "item", "kind", "files")}
+        print(f"  {r['at'][5:16].replace('T', ' ')}  {r['kind']:<14} {', '.join(r.get('files') or [])}  "
+              + (json.dumps(extra, ensure_ascii=False)[:160] if extra else ""))
+
+
 def track_states(s):
     """存盘时顺带：哪件换了状态就记 state_since（「卡太久」用）并往时间线写一条 state 事件。"""
     for k, it in (s.get("items") or {}).items():
@@ -930,6 +1118,26 @@ def spec_head(role, it):
     """任务书开头：项目目标一行，接着（只对碰界面的件）「UI 规范」块，（只对碰后端路径的件）「架构规范」块。"""
     # 第十八轮：UI / 架构规范块来自功能包（prompt.head 槽位，按 key 排序：10-ui、20-arch）；功能关着就没有
     return goal_head() + self_head(it) + "".join(fn(role, it) or "" for _, _, fn in hook("prompt.head"))
+
+
+# 第二十二轮：施工任务书开头固定的角色声明（《Context 与 Loop》：执行器读到主脑的派发手册，把活又派出去空转 90 分钟）
+BUILDER_DECL = "【角色】你是执行者，只做本任务，不要再派活、不要拆分给其他 agent。\n\n"
+# 决策岗专属段落的标记：施工 / 验收 / 复盘的岗位说明里出现这些，说明 prompt 配错成了决策岗规则
+DECIDER_MARKS = ("# 决策岗", "动作只有这七个", '{"decisions"', "新 issue 分拣")
+
+
+def build_spec(it, tail=""):
+    """施工任务书 = 角色声明 + 项目目标 / 预设块 + 施工岗规则 + 件的说明（+ 返工原因等）。只拼施工要的，不拼决策岗规则。"""
+    return BUILDER_DECL + spec_head("build", it) + role_prompt("build") + it["spec"] + tail
+
+
+def verify_spec(it, tail=""):
+    return spec_head("verify", it) + role_prompt("verify") + it["spec"] + tail
+
+
+def with_decl(spec):
+    """老状态里存的施工任务书（第二十二轮前）没有角色声明：重派时补上。"""
+    return spec if spec.startswith(BUILDER_DECL) else BUILDER_DECL + spec
 
 
 def notify(kind, title, body="", item=None, gate=None, **data):
@@ -1032,12 +1240,23 @@ def scan_terms(text):
 
 
 # ---------- 登记 ----------
+ROLE_FILES = {"build": "roles/builder.md", "verify": "roles/verifier.md", "decide": "roles/decider.md", "retro": "roles/retro.md"}
+
+
 def role_prompt(role):
-    """岗位说明。{KIT} 换成本机套件目录：工人没装 ponytail skill 时按这个路径读 vendor/ 里的固定副本。"""
+    """岗位说明。{KIT} 换成本机套件目录：工人没装 ponytail skill 时按这个路径读 vendor/ 里的固定副本。
+    第二十二轮：非决策岗的 prompt 里读到决策岗专属段落（配置把 build 指到了 decider.md 之类）→ 不用它，改用套件自带的本岗规则。"""
     p = CFG["roles"][role].get("prompt")
     if not (p and os.path.exists(os.path.join(KIT, p))):
         return ""
-    return open(os.path.join(KIT, p), encoding="utf-8").read().replace("{KIT}", KIT) + "\n\n"
+    text = open(os.path.join(KIT, p), encoding="utf-8").read()
+    if role != "decide" and any(m in text for m in DECIDER_MARKS):
+        dflt = ROLE_FILES.get(role)
+        print(f"岗位 {role} 的 prompt（{p}）里有决策岗专属规则，不给{role}；改用 {dflt}", file=sys.stderr)
+        text = open(os.path.join(KIT, dflt), encoding="utf-8").read() if dflt and dflt != p and os.path.exists(os.path.join(KIT, dflt)) else ""
+        if any(m in text for m in DECIDER_MARKS):
+            text = ""
+    return (text.replace("{KIT}", KIT) + "\n\n") if text else ""
 
 
 def other_projects_load():
@@ -1099,8 +1318,8 @@ def add_item(s, a):
     if owner_only:
         a.ui = True; a.product = True
         spec += f"老板闸门: 是（碰到受保护路径 {'、'.join(owner_only)}；决策岗不能批）\n"
-    probe = {"ui": a.ui, "scope": scope}
-    bspec, vspec = spec_head("build", probe) + role_prompt("build") + spec, spec_head("verify", probe) + role_prompt("verify") + spec
+    probe = {"ui": a.ui, "scope": scope, "spec": spec}
+    bspec, vspec = build_spec(probe), verify_spec(probe)
     b = EX.task_create(c, f"{key} 施工", bspec, deps)
     v = EX.task_create(c, f"{key} 验收", vspec, [b])
     m = EX.task_create(c, f"{key} 合并", "由接棒器合并", [v])
@@ -1139,6 +1358,8 @@ def start_worker(s, key, it, role):
     tid = it["build" if role == "build" else "verify"]
     h, did = launch(c, it["worktree"], f"{key}-{role}", rc, model, tid, role=role, key=key, it=it)
     it["dispatch"][role] = {"id": did, "terminal": h, "since": time.time(), "model": model, "fallback": fb, "tool": R.tool_of(rc)}
+    trail(key, f"{role}-task-r{it.get('round', 0)}", text=it.get(f"{role}_spec") or "",
+          meta={"role": role, "round": it.get("round", 0), "dispatch": did, "model": model, "tool": R.tool_of(rc)})
     if role == "build":
         it["build_model"] = model
     if EX.name == "orca":                              # 第二十轮：Multica 的 exec 在 launch 里写（issue / agent）
@@ -1190,6 +1411,8 @@ def do_merge(s, key, it):
     t = CFG.get("test_cmd")
     if t:
         rc, logf, reds = run_suite(t, it["worktree"], key)
+        trail(key, "premerge-test", copy=logf, meta={"rc": rc, "reds": reds[:3], "cmd": t,
+                                                       "sha": git(it["worktree"], "rev-parse", "HEAD", check=False)})
         if rc:
             # 第十七轮 L-05：先看主线本身（不含本件）红不红；主线红就不算本件的返工
             red = None if it.get("fixes_main") else main_baseline_red(s)
@@ -1270,12 +1493,56 @@ def do_push(s):
     r = run_cmd(pc, cwd=repo, shell=True, timeout=tmo("push"))
     if r.returncode:
         return fail(("推送超时：" if r.returncode == 124 else "") + (r.stdout + r.stderr)[-200:])
-    head = git(repo, "rev-parse", "HEAD"); s["push_fail"] = 0; s.pop("push_next", None)
+    head = git(repo, "rev-parse", "HEAD")
+    ok, rsha = remote_confirm(repo, mb, head)           # 第二十二轮：推没推上去问远端，不信本地输出
+    if not ok:
+        return fail("推送命令退出码 0，但远端没有这个提交：" + rsha)
+    s["push_fail"] = 0; s.pop("push_next", None)
     for k in pend:
         it = s["items"][k]; it["state"] = "merged"; it["pushed"] = head
-        tl(k, "push", sha=head)
+        tl(k, "push", sha=head, remote_sha=rsha if rsha != head else None)
+        trail(k, "push", meta={"sha": head, "remote": push_remote(), "remote_sha": rsha})
         log(s, f"{k} 已推送到 GitHub（{head[:8]}）")
         gh_comment(it, f"已验收、合并并推送到主线（{head[:8]}），等上线批次。")
+
+
+def push_remote():
+    """推送到哪个远端：项目配置 push_remote；没写就从 push_cmd 里的 `git push <远端>` 认；都没有用 origin。"""
+    if CFG.get("push_remote"):
+        return str(CFG["push_remote"])
+    try:
+        toks = shlex.split(CFG.get("push_cmd") or "")
+    except ValueError:
+        toks = []
+    for i, t in enumerate(toks):
+        if t == "push" and any(os.path.basename(x) == "git" for x in toks[:i]):
+            for x in toks[i + 1:]:
+                if x in ("&&", ";", "|", "||"):
+                    break
+                if not x.startswith("-"):
+                    return x
+            break
+    return "origin"
+
+
+def remote_confirm(repo, branch, sha):
+    """问远端（git ls-remote）refs/heads/<branch> 是不是 sha，或已经包含它（别人在我们之后又推了）。返回 (确认没有, 远端提交号或原因)。
+    项目配置 push_verify: false 时不问（自定义推送脚本推到别处的老配置）。"""
+    if CFG.get("push_verify") is False:
+        return True, sha
+    rem = push_remote()
+    r = run_cmd(["git", "-C", repo, "ls-remote", rem, f"refs/heads/{branch}"], timeout=tmo("git_net"))
+    if r.returncode:
+        return False, f"问远端 {rem} 失败：" + (r.stderr or "").strip()[-150:]
+    rsha = (r.stdout.split() or [""])[0]
+    if not rsha:
+        return False, f"远端 {rem} 上没有分支 {branch}"
+    if rsha == sha:
+        return True, rsha
+    f = run_cmd(["git", "-C", repo, "fetch", "-q", rem, f"refs/heads/{branch}"], timeout=tmo("git_net"))
+    if f.returncode == 0 and run_cmd(["git", "-C", repo, "merge-base", "--is-ancestor", sha, rsha], timeout=tmo("git")).returncode == 0:
+        return True, rsha
+    return False, f"远端 {rem}/{branch} 是 {rsha[:8]}，不含本地 {sha[:8]}"
 
 
 def main_baseline_red(s):
@@ -1349,9 +1616,28 @@ def run_suite(cmd, cwd, tag):
         r = run_cmd(cmd, cwd=cwd, shell=True, timeout=tmo("test"))      # 第十七轮：测试卡住不再占着整机测试锁
     open(logf, "w", encoding="utf-8").write(r.stdout + r.stderr)
     reds = [l for l in (r.stdout + r.stderr).splitlines() if re.search(r"FAIL|Error|failed|✗", l)][:5]
-    if r.returncode == 124:
+    rc = r.returncode
+    if rc == 124:
         reds = [f"测试超时（{int(tmo('test') / 60)} 分钟），算不绿"] + reds[:4]
-    return r.returncode, logf, reds
+    elif rc == 0 and suite_all_skipped(r.stdout + r.stderr):
+        rc = 1; reds = ["测试一个都没真跑（全部跳过 / no tests ran），跳过不算通过"] + reds[:4]
+    return rc, logf, reds
+
+
+def suite_all_skipped(out):
+    """第二十二轮：退出码 0 但其实一个测试都没跑（pytest 全部 skipped / deselected、no tests ran；unittest Ran 0 或全跳过）。"""
+    tail = (out or "")[-6000:]
+    if re.search(r"\bno tests ran\b|\bNO TESTS RAN\b", tail):
+        return True
+    sums = re.findall(r"^[=\s]*((?:\d+ [a-z]+(?:, )?)+) in [\d.]+s", tail, re.M)
+    if sums:
+        last = sums[-1]
+        return not re.search(r"\d+ (passed|xpassed|xfailed|failed|errors?)\b", last) and bool(re.search(r"\d+ (skipped|deselected)", last))
+    ran = re.findall(r"^Ran (\d+) tests?", tail, re.M)
+    if ran:
+        sk = re.findall(r"skipped=(\d+)", tail)
+        return int(ran[-1]) == 0 or (bool(sk) and int(sk[-1]) >= int(ran[-1]))
+    return False
 
 
 def cleanup(it):
@@ -1379,8 +1665,8 @@ def gh_close(it):
 def rework(s, k, it, why):
     """开一轮返工：新施工 + 新验收，把原因（含老板原话）写进任务说明。"""
     c = coord(s)
-    it["build_spec"] = spec_head("build", it) + role_prompt("build") + it["spec"] + f"\n返工原因：{why}\n提交信息里原样带上这句原因。"
-    it["verify_spec"] = spec_head("verify", it) + role_prompt("verify") + it["spec"] + f"\n本轮返工原因：{why}"
+    it["build_spec"] = build_spec(it, f"\n返工原因：{why}\n提交信息里原样带上这句原因。")
+    it["verify_spec"] = verify_spec(it) + f"\n本轮返工原因：{why}"
     nb = EX.task_create(c, f"{k} 返工{it['round']}", it["build_spec"])
     nv = EX.task_create(c, f"{k} 复验{it['round']}", it["verify_spec"], [nb])
     it["build"], it["verify"] = nb, nv
@@ -1427,23 +1713,41 @@ def parse_report(body):
 
 
 def in_scope(path, scope):
-    """scope 为空、「.」或「*」表示整个仓库；另有 scope_allow（默认 artifacts/，证据目录）任何件都可以写。"""
+    """scope 为空、「.」或「*」表示整个仓库；另有 scope_allow（默认 artifacts/，证据目录）任何件都可以写。
+    第二十二轮：一条 scope 只认「这个文件」或「这个目录下」（web 不再算进 website/）；带 .. 或绝对路径的一律不算在范围内。"""
     allow = list(scope) + list(CFG.get("scope_allow", ["artifacts/"]))
+    p = path[2:] if path.startswith("./") else path
+    if not p or p.startswith("/") or ".." in p.split("/"):
+        return False
     if any(x.strip() in ("", ".", "./", "*") for x in scope) or not scope:
         return True
-    p = path[2:] if path.startswith("./") else path
-    return any(p == x.rstrip("/") or p.startswith(x.rstrip("/") + "/") or (not x.endswith("/") and p.startswith(x)) for x in allow)
+    return any(p == x.rstrip("/") or p.startswith(x.rstrip("/") + "/") for x in (y.strip() for y in allow) if x.rstrip("/"))
+
+
+UNKNOWN_CHANGES = "（evo 读不出这件改了哪些文件：{}；读不出不算在范围内）"
+
+
+def changed_files(it):
+    """本件相对主线改了哪些文件。返回 (文件列表, 读不出的原因)；读不出时列表为 None——调用方不能把「没读到」当成「没改到别处」。"""
+    wt = it.get("worktree")
+    if not wt or not os.path.isdir(wt):
+        return None, f"工作区不在（{wt or '没有'}）"
+    b = run_cmd(["git", "-C", wt, "merge-base", CFG["main_branch"], "HEAD"], timeout=tmo("git"))
+    base = b.stdout.strip()
+    if b.returncode or not base:
+        return None, "找不到和主线的分叉点：" + (b.stderr or "").strip()[-120:]
+    d = run_cmd(["git", "-C", wt, "diff", "--name-only", base, "HEAD"], timeout=tmo("git"))
+    if d.returncode:
+        return None, "git diff 失败：" + (d.stderr or "").strip()[-120:]
+    return [f for f in d.stdout.splitlines() if f.strip()], None
 
 
 def out_of_scope(it):
-    wt = it.get("worktree")
-    if not wt:
-        return []
-    base = git(wt, "merge-base", CFG["main_branch"], "HEAD", check=False)
-    if not base:
-        return []
-    files = git(wt, "diff", "--name-only", base, "HEAD", check=False).splitlines()
-    return [f for f in files if f and not in_scope(f, it.get("scope") or [])]
+    """越出范围的文件；读不出改动时返回一条说明（第二十二轮：以前读不出返回空表，等于「没越界」放行）。"""
+    files, err = changed_files(it)
+    if err:
+        return [UNKNOWN_CHANGES.format(err)]
+    return [f for f in files if not in_scope(f, it.get("scope") or [])]
 
 
 def guard_git(s):
@@ -1480,6 +1784,18 @@ def build_reject(s, k, it, why):
         rework(s, k, it, why)
 
 
+def report_red(rep):
+    """施工报告本身说没过的地方（纯函数，金丝雀也用）：返回原因，或 None。"""
+    if rep["status"] == "blocked":
+        return "报告说卡住了：" + rep["summary"]
+    if rep["status"] == "in_progress":
+        return "报告说没做完：" + ("；".join(map(str, rep["unfinished"])) or rep["summary"])
+    red = [t["command"] for t in rep["tests"] if t["result"] == "failed"]
+    if red:
+        return "报告里有没通过的测试：" + "；".join(red)
+    return None
+
+
 def check_delivery(s, k, it, body):
     """施工说交了：先看交卷格式，再看报告内容，最后看改动是否越界。返回 True 表示可以送验收。"""
     rep, err = parse_report(body)
@@ -1493,11 +1809,9 @@ def check_delivery(s, k, it, body):
         if rep["status"] == "blocked":
             it["state"] = "asking"; it["ask"] = rep["summary"] + ("；" + "；".join(map(str, rep["unfinished"])) if rep["unfinished"] else "")
             log(s, f"{k} 施工报告卡住：{it['ask'][:60]} → 交决策岗"); return False
-        if rep["status"] == "in_progress":
-            build_reject(s, k, it, "报告说没做完：" + ("；".join(map(str, rep["unfinished"])) or rep["summary"])); return False
-        red = [t["command"] for t in rep["tests"] if t["result"] == "failed"]
+        red = report_red(rep)
         if red:
-            build_reject(s, k, it, "报告里有没通过的测试：" + "；".join(red)); return False
+            build_reject(s, k, it, red); return False
     why = protected_delivery_check(s, k, it) or \
         next((r for r in (fn(s, k, it) for _, _, fn in hook("delivery.check")) if r), None)   # 第十八轮：功能包的交卷检查
     if why:
@@ -1622,12 +1936,12 @@ def requeue_rate_limited(s, k, it, role, line):
     note = "\n（上一次因订阅额度用完中断；工作区里已有的改动接着做，不要从头来）"
     if role == "build":
         nb = EX.task_create(c, f"{k} 施工（额度恢复后续做）",
-                            it.get("build_spec", spec_head("build", it) + role_prompt("build") + it["spec"]) + note)
-        nv = EX.task_create(c, f"{k} 验收", it.get("verify_spec", spec_head("verify", it) + role_prompt("verify") + it["spec"]), [nb])
+                            with_decl(it.get("build_spec") or build_spec(it)) + note)
+        nv = EX.task_create(c, f"{k} 验收", it.get("verify_spec", verify_spec(it)), [nb])
         it["build"], it["verify"] = nb, nv; it["state"] = "queued"
     else:
         nv = EX.task_create(c, f"{k} 验收（额度恢复后重验）",
-                            it.get("verify_spec", spec_head("verify", it) + role_prompt("verify") + it["spec"]), [it["build"]])
+                            it.get("verify_spec", verify_spec(it)), [it["build"]])
         it["verify"] = nv; it["state"] = "built"
     it.pop("stalled", None); it.pop("rl_probe", None)
     it["rate_waits"] = it.get("rate_waits", 0) + 1
@@ -1894,8 +2208,9 @@ def decider_wake(s, T):
     lines.append("\n每件的决定写在最后一条 worker_done 正文的 ```json 块里，格式见岗位规则【接口】一节"
                  "（retry / rework / drop / split / ask_owner / answer / propose），接棒器自动执行；外部来报在 issue 上补标签。")
     c = coord(s)
-    tid = EX.task_create(c, f"{CODE} 决策批次 {TM.local().strftime('%m-%d %H:%M')}",
-                         goal_head() + role_prompt("decide") + "\n".join(lines))
+    dspec = goal_head() + role_prompt("decide") + "\n".join(lines)
+    tid = EX.task_create(c, f"{CODE} 决策批次 {TM.local().strftime('%m-%d %H:%M')}", dspec)
+    trail("_decide", "task", text=dspec, meta={"task": tid, "items": list(wait)})
     models = rc.get("models") or [None]
     h, did = launch(c, CFG["repo"], f"{CODE}-decide", rc, models[0], tid, role="decide")
     s["decide"] = {"task": tid, "dispatch": did, "terminal": h, "last": TM.now(), "since": time.time(), "done": False, "fallback": dfb,
@@ -2175,6 +2490,7 @@ def handle_msg(s, m, by_task):
             worker_end(s, it, role)
             tl(k, "report", role=role, outcome=outcome, dispatch=(it["dispatch"].get(role) or {}).get("id"),
                body=(m.get("body") or "")[:2000])
+        archive_report(k, it, role, typ, outcome, m)
     if typ == "worker_done" and role == "build" and outcome not in (None, "succeeded"):
         # 施工自己报失败：算一轮返工
         it["round"] += 1
@@ -2193,7 +2509,7 @@ def handle_msg(s, m, by_task):
         elif check_delivery(s, k, it, m.get("body") or ""):
             it["state"] = "built"; log(s, f"{k} 施工交付 → 自动接验收")
     elif typ == "worker_done" and role == "verify":
-        if outcome == "succeeded":
+        if verify_ok(outcome):
             it["state"] = "verified"; it["verified_sha"] = git(it["worktree"], "rev-parse", "HEAD")
             emit("verify.passed", item=k, sha=it["verified_sha"])
             it["verified_patch"] = patch_id(it["worktree"])
@@ -2220,6 +2536,19 @@ def handle_msg(s, m, by_task):
         log(s, f"{k} 提问/上报：{it['ask']} → 交决策岗")
 
 
+def archive_report(k, it, role, typ, outcome, m):
+    """第二十二轮：施工 / 验收这次交卷的原件进 runs/<件号>/：交卷全文、终端（或 Multica run）尾部、Multica run 记录。"""
+    d = it["dispatch"].get(role) or {}; ex = m.get("exec") or {}
+    try:
+        tail = terminal_tail(d.get("terminal")) if d.get("terminal") else ""
+    except Exception:
+        tail = ""
+    trail(k, f"{role}-r{it.get('round', 0)}", text=m.get("body") or "",
+          meta={"role": role, "type": typ, "outcome": outcome, "round": it.get("round", 0), "dispatch": d.get("id"), "model": d.get("model"),
+                "tool": d.get("tool"), "issue": ex.get("issue"), "branch": ex.get("branch"), "run": ex.get("run")},
+          extra={"terminal.txt": tail[-200000:] if tail else None, "run.json": ex.get("record")})
+
+
 def decider_done(s, dec, m, typ, outcome):
     """决策岗批次回报：记用量；额度中断就整批重叫；否则读决定 JSON 并执行。"""
     text = f"{m.get('subject') or ''}\n{m.get('body') or ''}"
@@ -2234,6 +2563,7 @@ def decider_done(s, dec, m, typ, outcome):
         return log(s, "决策岗批次因额度中断")
     log(s, "决策岗批次做完")
     s["decide_timeouts"] = 0
+    trail("_decide", "batch", text=m.get("body") or "", meta={"task": dec.get("task"), "items": dec.get("items"), "outcome": outcome})
     apply_decisions(s, m.get("body") or "")
 
 
@@ -2448,12 +2778,12 @@ def restart_worker(s, k, it, role):
     EX.task_update(c, old, "failed", "worker gone, restarted")
     note = "\n（上一个工人进程意外退出，接棒器已自动重启一次；工作区里已有的改动接着做，不要从头来）"
     if role == "build":
-        nb = EX.task_create(c, f"{k} 施工（工人重启）", it.get("build_spec", spec_head("build", it) + role_prompt("build") + it["spec"]) + note)
-        nv = EX.task_create(c, f"{k} 验收", it.get("verify_spec", spec_head("verify", it) + role_prompt("verify") + it["spec"]), [nb])
+        nb = EX.task_create(c, f"{k} 施工（工人重启）", with_decl(it.get("build_spec") or build_spec(it)) + note)
+        nv = EX.task_create(c, f"{k} 验收", it.get("verify_spec", verify_spec(it)), [nb])
         it["build"], it["verify"] = nb, nv; tid = it["build"]
     else:
         nv = EX.task_create(c, f"{k} 验收（工人重启）",
-                            it.get("verify_spec", spec_head("verify", it) + role_prompt("verify") + it["spec"]) + note, [it["build"]])
+                            it.get("verify_spec", verify_spec(it)) + note, [it["build"]])
         it["verify"] = nv; tid = it["verify"]
     model = d.get("model")
     h, did = launch(c, it["worktree"], f"{k}-{role}", rc, model, tid, role=role, key=k, it=it)
@@ -2557,6 +2887,7 @@ def apply_decisions(s, body):
             log(s, f"{k} 碰到受保护路径，决策岗的答复改成转老板定")
             act = "ask_owner"; note = "决策岗想这样答复（受保护的件，要老板定）：" + note
         tl(k, "decision", action=act, note=note[:1000], state=it["state"])
+        trail(k, f"decide-{act}", text=note, meta={"action": act, "state": it["state"], "batch": "runs/_decide/"})
         try:
             DECIDE_DO[act](s, k, it, note, d)
         except SystemExit as e:                          # 例如拆分的子件标题不合规：这条不执行，别的照做
@@ -2769,8 +3100,8 @@ def feedback_item(s, k, it, words, source):
     elif kind == "do":
         close_gate(s, k, it, gid, "do", words)
         EX.task_update(c, it["build"], "completed", "superseded by feedback")
-        it["build_spec"] = spec_head("build", it) + role_prompt("build") + it["spec"]
-        it["verify_spec"] = spec_head("verify", it) + role_prompt("verify") + it["spec"]
+        it["build_spec"] = build_spec(it)
+        it["verify_spec"] = verify_spec(it)
         nb = EX.task_create(c, f"{k} 施工", it["build_spec"], it.get("after"))
         nv = EX.task_create(c, f"{k} 验收", it["verify_spec"], [nb])
         it["build"], it["verify"] = nb, nv
@@ -4259,6 +4590,8 @@ if __name__ == "__main__":
     x = sp.add_parser("feedback"); x.add_argument("words"); x.add_argument("--item", help="对某件补反馈（作废它等你的旧闸门）")
     x.add_argument("--source", help=argparse.SUPPRESS)
     x = sp.add_parser("log"); x.add_argument("key"); x.add_argument("--json", action="store_true"); x.add_argument("--diff", action="store_true")
+    x = sp.add_parser("runs", help="第二十二轮：永久运行记录（runs/<件号>/）"); x.add_argument("key", nargs="?"); x.add_argument("--json", action="store_true")
+    sp.add_parser("canary", help="第二十二轮：给判据喂已知不合格的样例，有一条被判通过就报").add_argument("--json", action="store_true")
     x = sp.add_parser("goal"); x.add_argument("action", nargs="?", choices=["show", "set", "clear"]); x.add_argument("text", nargs="*")
     x = sp.add_parser("suite"); x.add_argument("command", nargs=argparse.REMAINDER)
     sp.add_parser("retro")
@@ -4293,8 +4626,9 @@ if __name__ == "__main__":
                 x = sp.add_parser(nm, help=f"（功能 {f.id} 关着）"); x.add_argument("rest", nargs=argparse.REMAINDER)
                 FEATURE_CMDS[nm] = (feature_off_stub(f, nm), True)
     a = p.parse_args()
-    if a.cmd in ("feature", "watch", "selfcheck", "self-upgrade"):
-        sys.exit({"feature": cmd_feature, "watch": cmd_watch, "selfcheck": cmd_selfcheck, "self-upgrade": cmd_self_upgrade}[a.cmd](a) or 0)
+    if a.cmd in ("feature", "watch", "selfcheck", "self-upgrade", "canary"):
+        sys.exit({"feature": cmd_feature, "watch": cmd_watch, "selfcheck": cmd_selfcheck, "self-upgrade": cmd_self_upgrade,
+                  "canary": cmd_canary}[a.cmd](a) or 0)
     if a.cmd in FEATURE_CMDS and FEATURE_CMDS[a.cmd][1]:
         sys.exit(FEATURE_CMDS[a.cmd][0](a) or 0)
     if not HAS_PROJECT and a.cmd not in ("new", "import", "projects", "status", "run", "suite", "panel", "notify-test", "bot", "watchdog"):
@@ -4302,5 +4636,5 @@ if __name__ == "__main__":
     if a.cmd in FEATURE_CMDS:
         sys.exit(FEATURE_CMDS[a.cmd][0](a) or 0)
     {"panel": cmd_panel, "new": cmd_new, "import": cmd_import, "projects": cmd_projects, "once": cmd_once, "add": cmd_add, "tick": cmd_tick, "run": cmd_run, "status": cmd_status, "approve": cmd_approve, "ship": cmd_ship, "retry": cmd_retry, "drop": cmd_drop, "resume": cmd_resume, "feedback": cmd_feedback, "suite": cmd_suite, "retro": cmd_retro,
-     "notify-test": cmd_notify_test, "watchdog": cmd_watchdog, "log": cmd_log,
+     "notify-test": cmd_notify_test, "watchdog": cmd_watchdog, "log": cmd_log, "runs": cmd_runs,
      "goal": cmd_goal, "relocate": cmd_relocate, "claim": cmd_claim}[a.cmd](a)

@@ -242,7 +242,22 @@ CI：kit-tests run 39561803019（提交 ed7832b）全套绿；两个待定项锁
 - **冷启动审查提示词**：docs/claude-cold-audit-prompt.md，老板在 Mac 上全新克隆后贴给 Claude Code（fable / opus 档）：只读代码和测试，不先读 docs / notes / roles / README 各轮，产出「从零怎么设计」「现有代码最偏离的 10 处」「该保留的」「propose 格式的提议」「哪里手写了现成工具早就做好的东西」，另加死代码扫描（拿不准的动态引用标「待核实」不删）和可选的规则体检方案；写到 `~/tmp/CLAUDE-AUDIT-1.md`。附订阅后 Claude Code 的设置步骤（用 `CLAUDE_CONFIG_DIR` 另开一份干净配置，绕开 magpie 对 `~/.claude/settings.json` 的接管）。
 - **补：额度账号分开算**（`kit/tests/test_round21_accounts.py` 7 个，全套 348 个：345 过、3 跳过）：账号 = 显式 `account` → 显式 `tool` → 命令里真正跑的程序（跳过 `env`、env 的选项和 `KEY=VAL`，`env … claude` 不再算成 `env`）。Pro 决策岗写 `account: claude-pro`、magpie 岗位写 `magpie`，额度暂停各停各的，决策岗有备用就切备用。`evo team set` 新增 `--account` / `--fallback-account`（`auto` = 去掉）/ `--cmd`，命令见 docs/claude-pro-native-setup.md 3.6。老配置不写这些字段时行为不变。
 
+## 第二十二轮：吸收《Context 与 Loop》1–6、14 条（均有自动测试，`kit/tests/test_round22.py` 16 个、`test_round22_sizes.py` 3 个、`test_round22_lessons.py` 5 个；来源和条目见 docs/context-and-loop-takeaways.md）
+- **永久运行记录**（第 1 条）：每件一个目录 `~/.evoloop/projects/<代号>/runs/<件号>/`（跟着 `EVO_HOME` 走），`index.jsonl` 一行一份原件：每次派工的任务书（`build-task-r0`、`verify-task-r0`）、施工 / 验收交卷全文（`build-r0`、`verify-r0`，带 outcome、模型、Multica issue / 分支 / run 号）、工人终端（或 Multica run）尾部 `*.terminal.txt`、Multica 整条 run 记录 `*.run.json`、合并前测试日志 `premerge-test`、推送确认 `push`（本地提交 + 远端提交）、决策岗对这件的决定 `decide-<动作>`；决策批次的任务书和交卷全文在 `runs/_decide/`。evo 任何地方都不删它（合并、不做、清工作区都不碰）。时间线 `state/timeline.jsonl` 不变，照旧记「发生了什么」，runs 只放原件，不重复记事件。新命令 `evo -p X runs [件号] [--json]`（只读，带 schema_version 1）。
+- **金丝雀件**（第 2 + 14 条）：`evo canary [--json]` 给 9 个判据（验收结论 verdict、验收回报 outcome、in_scope、out_of_scope、交卷 parse_report / report_red、全量测试结果、看效果闸门 look_approved、decisions 解析）喂 29 条已知不合格的样例（必须判不过）和 7 条对照（必须放行）；判错一条就退出码 1、列出是哪条。`evo selfcheck` 也跑一遍（自升级切过去后判据坏了会回退）。测试里用「先考考官」三变体（改一个常量 / 换一个分支 / 边界挪一位）故意改坏判据，确认金丝雀能报出来。
+- **跳过绝不算通过**（第 2 条，查了一遍代码路径，修了这几处）：
+  - 验收结论：json 里 verdict 不是 pass（skipped、空、不认识）一律不通过；以前不认识的会退回去看正文，正文有「验收通过」就过了（「未验收通过」也会命中）。没 json 时正文出现 不通过 / 未通过 / 跳过 / 未验收 / FAIL / SKIP / skipped / not run 就不通过。
+  - 范围：读不出这件改了哪些文件（工作区不在、找不到分叉点、git diff 失败）以前返回空表 = 没越界放行，现在算越界打回；受保护路径检查同理（以前读不出就跳过）。
+  - 全量测试退出码 0 但一个没真跑（pytest 全部 skipped / deselected、no tests ran，unittest Ran 0 或全跳过）算不绿。
+- **规则注入上限**（第 3 条）：`test_round22_sizes.py` 量最胖的一份任务书（目标写满 200 字 + evo 自维护规矩 + UI 预设 + 架构预设 + Multica 交卷尾巴）。实测 / 上限（UTF-8 字节）：施工 13158 / 15800，验收 11211 / 13500，决策批次（一件时）6617 / 8000；岗位文件 builder 4409 / 5300、verifier 4334 / 5200、decider 5326 / 6400、retro 2109 / 2550。超了测试报「删一条再加一条」，不要调上限。
+- **施工只拿施工的东西**（第 4 条）：每份施工任务书第一行固定是「【角色】你是执行者，只做本任务，不要再派活、不要拆分给其他 agent。」（新登记、返工、补反馈、额度恢复续做、工人重启、换执行端重建都走同一个 `build_spec()`；老状态里存的旧任务书重派时自动补上）。施工 / 验收 / 复盘的 prompt 里读到决策岗专属段落（配置把 build 指到了 decider.md 之类）就不用它，改用套件自带的本岗规则并打一行提示。测试查所有派出去的施工任务书都不含决策岗段落。
+- **错题本关单标准**（第 5 条）：条目新增可选字段 `Mechanism: <kind> — <指向>`，kind 按强弱 code / test / script / gate / hook > static > rule > review。LESSONS.md 新增「已关单」一节，只有 code～static 级、写了指向的条目能放进去（`lessons.py lint` 查）；`lessons.py stats` 列出还没机制的条数。复盘岗规则和 docs/lessons-system.md 写明「机制上不可能再发生才算关」。
+- **推送问远端**（第 6 条）：推送命令退出码 0 后再 `git ls-remote <远端> refs/heads/<主分支>`，远端是本地提交（或已经包含它）才标「已合并」；否则按推送失败退避重试。远端名取项目配置 `push_remote`，没写就从 `push_cmd` 里的 `git push <远端>` 认，都没有用 origin。远端租约 `refs/evo/owner/<机器>` 推完也问一次远端。
+- **埋雷（可选）**：验收岗规则加「任务书写了 `埋雷: 是` 时，信任全绿前给新测试喂三个必须失败的变体」；决策岗规则加一句什么件值得写。不是每件都要。
+- **对老配置的影响**：① scope 一条只认「这个文件」或「这个目录下」，`web` 不再算进 `website/`、`webhooks/`；带 `..` 或绝对路径的改动一律算越界。② 推送命令不真推到 git 远端的老配置（自定义脚本推到别处）会一直停在「推送中」——在项目配置写 `"push_verify": false` 恢复老行为，或写 `push_remote`。③ test_cmd 一个测试都没有的项目合并会被拦（算主线红）。④ 施工任务书开头多一行角色声明（看任务书开头做断言的脚本要改）。`status --json` 等 App 接口没改，schema_version 仍是 1；时间线 `push` 事件多一个可选字段 `remote_sha`（远端已在本地提交之后又前进时才有）。
+
 ## 只能在 Mac mini 上验的
+- 第二十二轮：真 GitHub 远端（走代理）`git ls-remote` 的耗时是否在 `timeouts.git_net` 内；runs/ 目录长期增长的体积（只增不删，需要时老板手动归档）；真 dsh / claude 工人读到首行角色声明后不再派活。
 - 第二十一轮：真 Claude（Pro 订阅）当决策岗时能否稳定交 decisions JSON、会不会用 propose；Multica 的「决策-Claude」agent 怎么指到 Pro 那份配置（见 docs/claude-cold-audit-prompt.md 末节）。
 - 第二十轮（Air，EV）：照 docs/multica-backend.md 第 6 节走一遍：README 小任务跑通、故意验收不过返工一次、决策-Claude 被叫醒并执行 json、停掉 daemon 后推一次再恢复、Multica 网页上的状态和面板一致。顺带确认：成员留言会不会叫醒 agent，返工是不是复用同一条分支，`issue_url` 模板对不对。
 - 第十八轮：真机 `install.sh --apply` 后 `current` 软链、launchd 常驻跑 current、看门狗 `com.evoloop.guard` 每分钟一次；真 `evo self-upgrade` 等一轮结束再切、观察期内杀掉常驻后看门狗 10 分钟内切回；两台真 Mac（Air + mini）同一项目的远端租约互斥、GitHub 接受推 `refs/evo/owner/*`；mini 的 magpie 分组前缀 `model_prefix` 派工是否认得。

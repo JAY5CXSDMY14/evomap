@@ -83,6 +83,11 @@
 ### 2.1c `evo -p <代号> log <件号> --json`（每件时间线）
 读 `~/.evoloop/projects/<代号>/state/timeline.jsonl`（只追加，一行一个事件）。每行 `{"at", "item", "event", …}`，`event` 取 `add` `dispatch` `report` `gate_open` `gate_approve` `gate_reject` `gate_superseded` `feedback` `rework` `merge` `push` `ship` `deploy_failed` `restart` `decision` `drop` `state` `no_live_path` `live_again` `fallback_on` `fallback_off` `model_blocked`（第十四轮；`dispatch` 另带 `tool` `account` `fallback`）、`proposal` `proposal_skipped`（第二十一轮：决策岗 propose 登记 / 因限流或重名跳过；跳过时 `item` 可能是 `-`）；打回/补充反馈的原话在 `words`，合并、推送带 `sha`。`--diff` 输出这件的改动（工作区还在看分支，合并后看合并提交）。不抢锁，只读。
 
+### 2.1d `evo -p <代号> runs [件号] --json`（永久运行记录，第二十二轮）
+读 `~/.evoloop/projects/<代号>/runs/<件号>/index.jsonl`（只增不删）。不带件号：`{"schema_version": 1, "project", "root", "items": [{"key", "records"}]}`；带件号：`{"schema_version": 1, "project", "key", "dir", "records": [{"at", "item", "kind", "files", …}]}`。`kind` 取 `build-task-r<轮>` `verify-task-r<轮>`（派工时的任务书）、`build-r<轮>` `verify-r<轮>`（交卷全文，另带 `role` `outcome` `dispatch` `model` `tool` `issue` `branch` `run`）、`premerge-test`（合并前测试日志，`rc` `reds` `sha`）、`push`（`sha` `remote` `remote_sha`）、`decide-<动作>`；决策批次在件号 `_decide` 下（`task` `batch`）。`files` 是同目录下的文件名。以后可能新增 kind，读的一方遇到不认识的要忽略。时间线 `push` 事件多一个可选字段 `remote_sha`。
+
+`evo canary --json`（第二十二轮）：判据金丝雀，`{"schema_version": 1, "ok", "total", "canaries", "wrong": [说明], "rows": [{"check", "sample", "expect", "judged", "ok", "error"}]}`，判错时退出码 1。
+
 不带 `-p` 的 `evo status` 是多项目总览（纯文本，不是稳定接口）；要多项目就对每个代号各跑一次 `--json`（`evo projects` 列代号）。
 
 ### 2.1b `~/.evoloop/heartbeat.json`（心跳）

@@ -6,17 +6,24 @@
   python3 scripts/lessons.py promote   [--file LESSONS.md] [--threshold 3]  列出该升级的条目
   python3 scripts/lessons.py stats     [--file LESSONS.md]   概况
 
-只解析「活跃教训」一节中以 '### L-' 开头的条目。
+只解析「活跃教训」「已关单」两节中以 '### L-' 开头的条目。
+关单标准（第二十二轮）：机制上不可能再发生才算关——Mechanism 写 code/test/script/gate/hook/static + 指向；只有 rule/review 的不算关。
 """
 import argparse, re, subprocess, sys
 from dataclasses import dataclass, field
 
 ENTRY = re.compile(r"^### (L-\d{4}) (.+)$")
-FIELD = re.compile(r"^- \*\*(Why|Evidence|Do|Done right|Seen|Category)\*\*:\s*(.*)$")
+FIELD = re.compile(r"^- \*\*(Why|Evidence|Do|Done right|Seen|Category|Mechanism)\*\*:\s*(.*)$")
 SEEN = re.compile(r"^(\d+)×\s*\(([^)]*)\)")
 DATE = re.compile(r"\d{4}-\d{2}-\d{2}")
 SHA = re.compile(r"`([0-9a-f]{7,40})`")
 REQUIRED = ("Why", "Evidence", "Seen", "Category")
+# 第二十二轮：关单标准——不是「修了」，而是「机制上不可能再发生」。Mechanism: `<kind> — <指向：路径 / `sha` / #issue>`
+# 强弱：代码结构（code/test/script/gate/hook）> 静态检查（static）> 规则/技能（rule）> 靠人审（review）
+MECH_STRONG = ("code", "test", "script", "gate", "hook", "static")
+MECH_KINDS = MECH_STRONG + ("rule", "review")
+MECH = re.compile(r"^([a-z]+)\s*(?:[—–:-]+\s*(.*))?$")
+CLOSED = "已关单"
 
 
 @dataclass
@@ -25,6 +32,13 @@ class Lesson:
     title: str
     line: int
     fields: dict = field(default_factory=dict)
+    closed: bool = False
+
+    @property
+    def mechanism(self):
+        """(kind, 指向)；没写返回 (None, "")。"""
+        m = MECH.match(self.fields.get("Mechanism", "").strip())
+        return (m.group(1), (m.group(2) or "").strip()) if m else (None, "")
 
     @property
     def seen_dates(self):
@@ -42,11 +56,11 @@ def parse(path):
             continue
         if line.startswith("## "):
             section = line[3:].strip(); cur = None; continue
-        if section != "活跃教训":
+        if section not in ("活跃教训", CLOSED):
             continue
         m = ENTRY.match(line)
         if m:
-            cur = Lesson(m.group(1), m.group(2).strip(), i); lessons.append(cur); continue
+            cur = Lesson(m.group(1), m.group(2).strip(), i, closed=section == CLOSED); lessons.append(cur); continue
         if line.startswith("### "):     # 分类小标题（### 2. 修一类不修一例）：后面的字段不再算进上一条
             cur = None; continue
         f = FIELD.match(line)
@@ -74,6 +88,14 @@ def lint(lessons):
             errs.append(f"{where}: Evidence needs a `sha` or #issue")
         if len(l.title) < 6 or l.title.startswith(("注意", "小心")):
             errs.append(f"{where}: title should be an actionable imperative rule")
+        kind, ptr = l.mechanism
+        if l.fields.get("Mechanism") and kind not in MECH_KINDS:
+            errs.append(f"{where}: **Mechanism** must start with one of {'/'.join(MECH_KINDS)}")
+        elif kind in MECH_STRONG and not ptr:
+            errs.append(f"{where}: Mechanism {kind} needs a pointer (path, `sha` or #issue)")
+        if l.closed and (kind not in MECH_STRONG or not ptr):
+            errs.append(f"{where}: closed lessons need a mechanical Mechanism ({'/'.join(MECH_STRONG)} + pointer); "
+                        "rule/review only is not closed")
     return errs
 
 
@@ -100,17 +122,22 @@ def main():
     elif a.cmd == "verify":
         errs = verify(lessons)
     elif a.cmd == "promote":
-        c = [l for l in lessons if len(l.seen_dates) >= a.threshold]
+        c = [l for l in lessons if not l.closed and len(l.seen_dates) >= a.threshold]
         for l in c:
             print(f"{l.id} Seen {len(l.seen_dates)}× ({', '.join(l.seen_dates)}): {l.title}")
         if not c: print(f"no lesson seen on ≥{a.threshold} distinct days")
         return 0
     else:
+        act = [l for l in lessons if not l.closed]
         cats = {}
-        for l in lessons: cats[l.fields.get("Category", "?")] = cats.get(l.fields.get("Category", "?"), 0) + 1
-        print(f"active lessons: {len(lessons)}")
+        for l in act: cats[l.fields.get("Category", "?")] = cats.get(l.fields.get("Category", "?"), 0) + 1
+        print(f"active lessons: {len(act)}" + (f", closed: {len(lessons) - len(act)}" if len(act) != len(lessons) else ""))
+        mk = {}
+        for l in act: mk[l.mechanism[0] or "none"] = mk.get(l.mechanism[0] or "none", 0) + 1
+        print("mechanism: " + ", ".join(f"{k} {v}" for k, v in sorted(mk.items(), key=lambda x: -x[1])))
+        print(f"not yet mechanical: {sum(1 for l in act if l.mechanism[0] not in MECH_STRONG)}")
         for k, v in sorted(cats.items(), key=lambda x: -x[1]): print(f"  {k}: {v}")
-        near = [l for l in lessons if len(l.seen_dates) == a.threshold - 1]
+        near = [l for l in act if len(l.seen_dates) == a.threshold - 1]
         if near: print("one sighting from promotion: " + ", ".join(l.id for l in near))
         return 0
     for e in errs: print("✗", e)

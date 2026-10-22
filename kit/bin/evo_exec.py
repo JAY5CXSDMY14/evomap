@@ -724,7 +724,8 @@ class MulticaExecutor(Executor):
             d["outcome"] = outcome
             msgs.append({"id": f"mx:{d['id']}", "type": typ, "task_id": d["task"], "subject": f"{d['role']} {outcome}" if outcome else None,
                          "body": body, "payload": {"outcome": outcome, "taskId": d["task"]},
-                         "exec": {"issue": d["issue"], "branch": p.get("branch"), "work_dir": p.get("work_dir"), "run": run.get("id")}})
+                         "exec": {"issue": d["issue"], "branch": p.get("branch"), "work_dir": p.get("work_dir"), "run": run.get("id"),
+                                  "record": run or None}})   # 第二十二轮：整条 run 记录进 runs/<件号>/ 永久留存
             batch.append(d["id"])
         if batch:
             L["pending_ack"] = sorted(set(L.get("pending_ack") or []) | set(batch))
@@ -811,22 +812,27 @@ class MulticaExecutor(Executor):
         return self.issue_url.format(app_url=self.app_url, identifier=h, project=self.project, workspace=self.workspace)
 
 
+VERDICT_PASS = ("pass", "passed", "ok", "succeeded", "通过")
+# 第二十二轮：「跳过」绝不能算「通过」——字样里带这些的，一律按不通过
+VERDICT_NEG_TEXT = r"验收不通过|不通过|未通过|没通过|没有通过|打回|跳过|未验收|没验收|\bFAIL|\bSKIP|\bskipped\b|\bnot[ _]run\b"
+
+
 def verdict(body):
-    """验收结论：```json {"verdict": "pass"|"fail"}``` 优先；没有就认「验收通过 / 不通过」字样；都没有算不通过。"""
+    """验收结论：最后一个带 verdict 的 ```json {"verdict": "pass"|"fail"}``` 说了算，pass 以外（fail / skipped / 空 / 不认识）一律不通过；
+    没有 json 才看字样：出现不通过 / 跳过 / 未跑之类就不通过，只有「验收通过」或 PASS 才通过；都没有算不通过。"""
     for raw in reversed(re.findall(r"```(?:json)?\s*(\{.*?\})\s*```", body or "", re.S)):
         try:
             j = json.loads(raw)
         except ValueError:
             continue
-        v = str(j.get("verdict") or j.get("result") or j.get("outcome") or "").lower()
-        if v in ("pass", "passed", "ok", "succeeded", "通过"):
-            return True
-        if v in ("fail", "failed", "reject", "不通过", "打回"):
-            return False
+        if not isinstance(j, dict) or not any(x in j for x in ("verdict", "result", "outcome")):
+            continue
+        v = str(j.get("verdict") or j.get("result") or j.get("outcome") or "").strip().lower()
+        return v in VERDICT_PASS
     t = body or ""
-    if re.search(r"验收不通过|不通过|打回|\bFAIL", t):
+    if re.search(VERDICT_NEG_TEXT, t):
         return False
-    return bool(re.search(r"验收通过|\bPASS", t))
+    return bool(re.search(r"验收通过|\bPASS\b", t))
 
 
 def _find_key(o, key):

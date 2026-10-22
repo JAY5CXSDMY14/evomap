@@ -114,3 +114,13 @@
 - 我定的：备用的账号不继承主卡的 account（fallback_rc 原本就不继承），Pro 决策岗的备用要写 `--fallback-tool claude`，否则备用会沿用主卡那条带 CLAUDE_CONFIG_DIR 的 Pro 命令。
 - evo team set 加 --account / --fallback-account（auto = 去掉）/ --cmd；面板 POST /api/team 不收 --cmd（不让网页写任意命令），合约不动。
 - native_claude 标记、自动清环境变量、拒绝 --bare、auth status 健康检查（docs/claude-pro-native-setup.md 4.1 其余、4.2、4.4、4.5）还没做。
+
+## 2026-10-23 05:40 第二十二轮：《Context 与 Loop》1–6、14 条（老板批，14 并入 2）
+- 永久运行记录 runs/<件号>/（任务书、交卷全文、终端尾部、Multica run.json、合并前测试日志、推送确认、决定；决策批次在 runs/_decide/），只增不删；时间线不动，不重复记事件。新命令 `evo -p X runs [件号] [--json]`。
+- 金丝雀：`evo canary`（9 个判据、29 条必须判不过 + 7 条对照），selfcheck 也跑。测试用三变体（改常量 / 换分支 / 挪边界）改坏判据确认能报出来。
+- 跳过 ≠ 通过，修了：verdict 不认识 / skipped 以前退回看正文（「未验收通过」也算过）；out_of_scope / 受保护路径检查读不出改动以前当没越界；全量测试全跳过以前算绿。
+- 注入上限（UTF-8 字节，实测×1.2）：施工 15800、验收 13500、决策 8000；岗位文件各有一档。超了「删一条再加一条」。
+- 施工任务书首行固定角色声明（统一走 build_spec()）；非决策岗 prompt 里读到决策岗段落就换回套件自带规则。
+- 错题本 Mechanism 字段 + 「已关单」一节（只有 code～static 级带指向才能关）。
+- 推送 / 远端租约用 git ls-remote 确认；远端名 push_remote → push_cmd 里认 → origin；`push_verify: false` 可关。
+- 我定的（保守）：scope 只认文件或目录（web 不再含 website/），带 .. / 绝对路径算越界；not_run 的测试不拦交卷（施工岗规则允许只改文档时不跑，验收岗照旧重跑）；验收正文里「未跑」不当作不通过（验收岗规则要求写未跑的检查），只认「跳过」类字样。

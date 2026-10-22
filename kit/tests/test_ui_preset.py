@@ -101,7 +101,7 @@ def test_ui_block_only_for_items_touching_ui_and_after_goal(loop):
     loop.ok("-p", "AB", "add", "--kind", "feat", "--title", "新增上架表单组件", "--scope", "app/src/components/")  # ui 路径，没打 look
     st = loop.state("AB")["items"]
     b = st[K]["build_spec"]
-    assert b.startswith("项目目标：让布艺店主十分钟上架一款新品\n\nUI 规范（预设 web-react")
+    assert b.startswith("【角色】你是执行者，只做本任务，不要再派活、不要拆分给其他 agent。\n\n" + "项目目标：让布艺店主十分钟上架一款新品\n\nUI 规范（预设 web-react")   # 第二十二轮：角色声明在最前
     assert b.index("UI 规范（预设") < b.index("施工岗") and "lucide-react" in b.split("施工岗")[0] and "shadcn" in b
     v = st[K]["verify_spec"]
     assert "UI 规范检查（预设 web-react" in v and "evo -p AB ui check" in v and "建议另开 issue" in v and v.index("UI 规范检查（预设") < v.index("验收岗")
@@ -118,7 +118,7 @@ def test_swiftui_block_for_views_scope(loop):
     loop.project("AB", ui_preset="swiftui")
     loop.ok("-p", "AB", "add", "--kind", "ux", "--title", "调整行情页布局", "--scope", "App/Sources/App/Views/")
     b = loop.item("AB")["build_spec"]
-    assert b.startswith("UI 规范（预设 swiftui") and "SF Symbols" in b and "lottie-ios" in b and "老板批准" in b
+    assert b.startswith("【角色】你是执行者，只做本任务，不要再派活、不要拆分给其他 agent。\n\n" + "UI 规范（预设 swiftui") and "SF Symbols" in b and "lottie-ios" in b and "老板批准" in b
 
 
 # ---------- 4 交卷时的依赖检查 ----------

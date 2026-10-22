@@ -25,6 +25,9 @@
 | Done right | 否 | 正面案例，同样带 sha |
 | Seen | 是 | `N× (日期, 日期…)`；N = 不同日期数，同一天出现多次只算一次 |
 | Category | 是 | 见下方分类 |
+| Mechanism | 否（关单时必填） | `<kind> — <指向>`，kind ∈ code / test / script / gate / hook / static / rule / review；code～static 级要写指向（路径、`sha` 或 #issue）。第二十二轮新增 |
+
+**关单标准（第二十二轮）**：一条教训不是「修了」就关，而是**机制上不可能再发生**才关。强弱顺序：代码结构（code / test / script / gate / hook）> 静态检查（static）> 规则/技能（rule）> 靠人审（review）。只有 code～static 级、写了指向的条目才能挪进 LESSONS.md 的「已关单」一节，`lessons.py lint` 会查；只写进规则文字或靠人看的，留在活跃教训里继续计次。`lessons.py stats` 会列出还没有机制的条目数（not yet mechanical）。
 
 ## 2. 分类（可按项目调整）
 

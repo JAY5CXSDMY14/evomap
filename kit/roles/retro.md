@@ -8,12 +8,13 @@
 - 老板的原话（打回、feedback）原样引用，不改写。
 
 ## 【接口】
-- 条目格式：`### L-xxxx`，字段 Why / Evidence / Do / Done right / Seen / Category（`lessons.py` 按这个校验）。
+- 条目格式：`### L-xxxx`，字段 Why / Evidence / Do / Done right / Seen / Category，可选 Mechanism（`lessons.py` 按这个校验）。
+- 关单标准：一条教训只有**机制上不可能再发生**才算关，「修了」不算。Mechanism 写 `<kind> — <指向>`，kind 按强弱：代码结构 > 静态检查 > 规则/技能 > 靠人审（code / test / script / gate / hook > static > rule > review）。只有 code～static 级且写了指向（路径、`sha` 或 #issue）的才能挪进「已关单」；只写进规则文字（rule）或靠人看（review）的留在活跃教训里。
 - `python3 <kit>/bin/lessons.py lint --file <错题本>` 必须通过。
 - 提交信息第一行：`docs(lessons): MM-DD 夜间错题本 新增N 累计M 升级K`。
 
 ## 【现状】这是当前做法，不是定论；觉得错题本该换个办法记，在结论里写一句
 - 错题本不存在时从 kit 的 templates/project/docs/LESSONS.md 建一份；第一次顺便把 `协作契约/坑册.md` 已有的坑和最近 10 天合并记录里的返工整理进去当种子。
-- 每个事件问一句：第一次为什么没做对？哪条规矩本可以拦住？主要记修完又返工的、不该合的、验证太薄的；做对的记 Done right。规则写成能检查的一句话。
+- 每个事件问一句：第一次为什么没做对？哪个测试 / 脚本 / 闸门 / hook 本可以拦住？能沉淀成代码的在结论里提一件给决策岗，别只加一句规则。主要记修完又返工的、不该合的、验证太薄的；做对的记 Done right。规则写成能检查的一句话。
 - 已有同类条目：Evidence 追加件号 / 提交号，今天日期不在 Seen 里就 N+1 并加日期；没有就新增。
 - 该升级的条目（3 个不同日期出现过）搬进规范文件「来自复盘的硬标准」一节，错题本里留一行指向。

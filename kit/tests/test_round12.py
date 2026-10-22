@@ -313,7 +313,8 @@ def test_goal_prepended_to_every_spec(loop):
     ws = loop.workers()
     assert len(ws) == 4                                                       # 施工、验收（不过）、返工、复验
     for w in ws:
-        assert w["spec"].startswith("项目目标：让布艺店主十分钟上架一款新品\n"), w["spec"][:80]
+        decl = "【角色】你是执行者，只做本任务，不要再派活、不要拆分给其他 agent。\n\n" if w["role"] == "build" else ""     # 第二十二轮：施工任务书最前面是角色声明
+        assert w["spec"].startswith(decl + "项目目标：让布艺店主十分钟上架一款新品\n"), w["spec"][:80]
     assert loop.evo("-p", "AB", "goal", "set", "第一行\n第二行\n第三行").returncode != 0
     assert loop.evo("-p", "AB", "goal", "set", "长" * 201).returncode != 0
     loop.env["EVO_AGENT"] = "muse"

@@ -136,7 +136,7 @@ def test_arch_block_only_for_backend_scope_and_after_goal_and_ui(loop):
     loop.ok("-p", "AB", "add", "--kind", "feat", "--title", "加一张迁移", "--scope", "migrations/")       # 迁移目录也算后端
     st = loop.state("AB")["items"]
     b, v = st[K]["build_spec"], st[K]["verify_spec"]
-    assert b.startswith("项目目标：让布艺店主十分钟上架一款新品\n\n架构规范（预设 python-fastapi")
+    assert b.startswith("【角色】你是执行者，只做本任务，不要再派活、不要拆分给其他 agent。\n\n" + "项目目标：让布艺店主十分钟上架一款新品\n\n架构规范（预设 python-fastapi")   # 第二十二轮：角色声明在最前
     assert b.index("架构规范（预设") < b.index("施工岗")
     head = b.split("施工岗")[0]
     assert "源码根 api/" in head and "按类型平铺" in head and "不新开目录" in head and "→" in head and "madr" in head and "{KIT}" not in head
