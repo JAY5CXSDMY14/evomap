@@ -3,7 +3,7 @@
   "api": "^1",
   "version": "1.0.0",
   "name": "每件上限",
-  "sub": "返工 / 派工次数 / 累计小时到了就暂停，问老板继续还是不做",
+  "sub": "返工 / 派工次数 / 累计小时到了就暂停，问老板还做不做",
   "essential": true,
   "requires": ["state", "orca"],
   "provides": ["caps"],
@@ -18,7 +18,7 @@
     "type": "object",
     "x-order": ["decider_reworks", "item_hard_runs", "item_hard_hours"],
     "properties": {
-      "decider_reworks": {"type": "integer", "title": "决策岗指导返工最多几次", "description": "到了转老板「继续 / 不做」；0 = 不限", "minimum": 0, "maximum": 50, "default": 2},
+      "decider_reworks": {"type": "integer", "title": "决策岗指导返工最多几次", "description": "到了转老板「做不做」卡；0 = 不限", "minimum": 0, "maximum": 50, "default": 2},
       "item_hard_runs": {"type": "integer", "title": "一件最多派工几次", "description": "施工 + 验收都算；到了暂停等老板；0 = 不限", "minimum": 0, "maximum": 1000, "default": 12},
       "item_hard_hours": {"type": "number", "title": "一件工人最多累计几小时", "description": "到了暂停等老板；0 = 不限", "minimum": 0, "maximum": 1000, "default": 6}
     }

@@ -398,7 +398,7 @@ def test_drop_voids_owner_ask_gate(loop):
     _plant_owner_ask(loop, "MB", K)
     loop.ok("-p", "MB", "drop", K, "测试")
     s = loop.state("MB")
-    assert "mg_72" not in (s.get("owner_asks") or {}) and "mg_72" in s["superseded_gates"]
+    assert "mg_72" not in (s.get("owner_asks") or {}) and "mg_72" not in (s.get("do_gates") or {}) and "mg_72" in s["superseded_gates"]
     st = json.loads(loop.ok("-p", "MB", "status", "--json").stdout)
     assert "mg_72" not in [g["id"] for g in st["gates"]]
     assert loop.evo("-p", "MB", "approve", "mg_72", "同意").returncode != 0

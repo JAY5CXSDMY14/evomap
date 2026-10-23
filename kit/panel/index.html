@@ -171,7 +171,7 @@ async function refresh(){
       <div class="row" style="margin-top:8px"><button class="btn ghost" onclick="saveGoal()">保存</button><span class="others">留空 = 清掉；下一份任务书起生效</span></div></div>
     <h2>模型（本项目）</h2><div class="card" id="models"><span class="others">读取中…</span></div>
     <h2>每件上限</h2><div class="card settings">${LIMIT_KEYS.map(([k,t]) => `<div class="row"><span style="flex:1">${t}</span><input type="number" min="0" step="1" id="lim_${k}" value="${esc((data.limits||{})[k] ?? "")}" style="width:80px"></div>`).join("")}
-      <div class="row" style="margin-top:8px"><button class="btn ghost" onclick="saveLimits()">保存</button><span class="others">0 = 关；到了就暂停这件，推「继续还是不做」</span></div></div>
+      <div class="row" style="margin-top:8px"><button class="btn ghost" onclick="saveLimits()">保存</button><span class="others">0 = 关；到了就暂停这件，推「还做不做」</span></div></div>
     <h2>用量</h2><div class="card others">${roles || "还没有派过工"}${tok ? `<br>token（magpie）：${Object.entries(tok.by_model||{}).map(([m,n]) => esc(m)+" "+n).join(" · ")}${tok.project?`；本项目 ${tok.project}`:""}` : ""}</div>
     <h2>最近动静</h2><div class="others" style="margin:-4px 0 6px">上次转动：${data.last_tick ? esc(data.last_tick.slice(5,16).replace("T"," ")) : "还没转过"}</div><div class="card log">${esc((data.log||[]).slice().reverse().join("\n")) || "（无）"}</div>`;
   loadModels(cur);

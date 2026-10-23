@@ -431,10 +431,10 @@ def test_item_run_cap_pauses_and_asks_continue_or_drop(loop):
     it = st["items"][K]
     assert it.get("hold") and it["usage"]["runs"] == 2             # 施工 1 + 验收 1，返工那一次不再派
     g = next(g for g in loop.status_json("AB")["gates"] if g["id"] == it["hold"])
-    assert g["kind"] == "budget" and g["options"] == ["继续", "不做"] and "已派工 2 次还没完" in g["question"]
-    assert any("继续还是不做" in e["title"] for e in loop.outbox() if e["kind"] == "gate_waiting")
+    assert g["kind"] == "do" and g["reason"] == "budget" and g["options"] == ["做", "不做"] and "已派工 2 次还没完" in g["question"]
+    assert any("还做吗" in e["title"] for e in loop.outbox() if e["kind"] == "gate_waiting")
     assert next(i for i in loop.status_json("AB")["items"] if i["key"] == K)["waiting"] == "owner_budget"
-    loop.ok("-p", "AB", "approve", it["hold"], "继续")
+    loop.ok("-p", "AB", "approve", it["hold"], "做")
     st = loop.run_until("AB", state_is("merged"))
     assert st["items"][K]["budget_base"]["runs"] == 2
 
@@ -447,7 +447,7 @@ def test_item_hours_cap_and_drop(loop):
     loop.tick("AB"); time.sleep(0.1); loop.tick("AB")
     it = loop.item("AB")
     assert it.get("hold")
-    assert any("已烧" in e["title"] and "继续还是不做" in e["title"] for e in loop.outbox())
+    assert any("已烧" in e["title"] and "还做吗" in e["title"] for e in loop.outbox())
     loop.ok("-p", "AB", "approve", it["hold"], "不做")
     assert loop.item("AB")["state"] == "dropped"
 

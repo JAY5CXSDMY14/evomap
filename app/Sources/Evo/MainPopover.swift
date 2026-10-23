@@ -357,8 +357,6 @@ struct GateCardView: View {
         case "look": return "eye"
         case "do": return "questionmark.circle"
         case "ship": return "paperplane"
-        case "external": return "envelope.badge"
-        case "ask": return "bubble.left"
         default: return "circle.dashed"
         }
     }

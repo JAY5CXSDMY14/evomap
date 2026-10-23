@@ -56,7 +56,7 @@ App 还会跑这些**写**命令（输出是给人看的文字，不是接口）
 | `generated_at` / `last_tick` | string?（ISO 8601） | 是 / 是 | 生成时间 / 上次接棒一轮的时间（从没转过为 null） |
 | `count` | {状态: 整数} | 是 | 按内部状态计数（`building`、`built`、`verifying`、`merged`…） |
 | `stuck` | 整数 | 是 | 疑似卡住 + 交决策岗 + 有提问 |
-| `gates[]` | 对象列表 | 是 | 等老板点头的闸门：`id` string、`question` string?、`options` [string]、`kind` = `do`/`look`/`ship`/`external`/`ask`/`budget`/`other`、`item` string?、`waiting_since` string?；第十七轮可选 `confirm` bool（Orca 端被点了放行类结果、要在 evo 入口再确认，试运行）、`orca_choice` string? |
+| `gates[]` | 对象列表 | 是 | 等老板点头的闸门：`id` string、`question` string?、`options` [string]、`kind` = `do`/`look`/`ship`/`other`（第二十五轮 #26 起；老 evo 还会出 `external`/`ask`/`budget`，App 一律按 `do` 读）、可选 `reason` = `item`/`decider`/`external`/`budget`（第二十五轮新增）、`item` string?、`waiting_since` string?；第十七轮可选 `confirm` bool（Orca 端被点了放行类结果、要在 evo 入口再确认，试运行）、`orca_choice` string? |
 | `items[]` | 对象列表 | 是 | 每件：`key`、`title`、`state`（中文）、`raw`（内部状态）必有；`kind`、`waiting`、`stalled`、`look`、`round`、`manual_checks`、`state_since`、`no_live_path`、`look_gate`、`usage` 可选 |
 | `log` | [string] | 是 | 最近 15 条动静 |
 | `roles` | 列表 | 可选 | 岗位状态 `{role, name, status, label, items, why, until}` |

@@ -194,9 +194,10 @@ def pull_reports(s, trusted):
             if red and not ok:
                 c = K.coord(s)
                 tid = K.EX.task_create(c, f"外部请求 #{n}", "等老板定（红线）")
-                g = {"gate": {"id": K.EX.gate_create(c, tid, f"外部请求碰红线（{'、'.join(red)}）#{n}：{rep['title'][:40]}",
-                                                     ["同意交决策岗", "拒绝"])}}
-                s.setdefault("ext_gates", {})[g["gate"]["id"]] = {"task": tid, "report": rep, "red": red, "key": f"#{n}"}
+                # 第二十五轮（#26）：做不做卡，问题里写清碰了哪条红线；做 = 交决策岗安排，不做 = 在 issue 上回绝
+                g = {"gate": {"id": K.EX.gate_create(c, tid, f"做不做：外部请求 #{n} 碰红线（{'、'.join(red)}）：{rep['title'][:40]}"
+                                                     "——做 = 交决策岗安排", K.GATE_OPTIONS["do"])}}
+                s.setdefault("do_gates", {})[g["gate"]["id"]] = {"task": tid, "report": rep, "red": red, "key": f"#{n}", "why": "external"}
                 K.log(s, f"外部来报 #{n} 碰红线（{'、'.join(red)}），等老板定")
                 K.notify("redline_request", "外部请求碰红线，等你定", f"#{n} {rep['title']}", gate=g["gate"]["id"], issue=n, red=red)
             else:

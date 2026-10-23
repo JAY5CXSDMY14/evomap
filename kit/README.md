@@ -127,7 +127,7 @@ Telegram 环境变量改名 `EVO_TG_TOKEN` / `EVO_TG_CHAT`，旧名 `TUBU_TG_TOK
 - **git 共享配置守卫**：每轮先查主仓库 `.git/config`，发现 `core.worktree` 被写入或 `core.bare=true` 就复原并记一笔；复原后主目录 git 仍指向别处 → 项目暂停推送，等 `evo resume`。`git_guard: false` 可关。
 
 ## 第十轮：闸路补齐 + 少找你 + 停了能知道（均有自动测试，共 120 个）
-- **决策岗的决定自动执行**：决策岗在 worker_done 正文交 ```json `{"decisions":[…]}`（格式见 `roles/decider.md`【接口】一节）。`retry` 从断点继续（没断点就带说明返工）；`rework` 带说明返工、轮次清零；`drop` 不做并清理；`split` 原件不做、登记子件（`parent` 记父件）；`ask_owner` 建「同意 / 不同意」老板闸门并立刻推送，老板答了作为【新】件回到下一批；`answer` 回答施工提问；`propose`（第二十一轮）登记一件架构提议，停在老板「做不做」闸门后。没交 JSON 或格式不对只记日志，件留到下一批。
+- **决策岗的决定自动执行**：决策岗在 worker_done 正文交 ```json `{"decisions":[…]}`（格式见 `roles/decider.md`【接口】一节）。`retry` 从断点继续（没断点就带说明返工）；`rework` 带说明返工、轮次清零；`drop` 不做并清理；`split` 原件不做、登记子件（`parent` 记父件）；`ask_owner` 建老板闸门并立刻推送（第二十五轮起是「做 / 不做」卡），老板答了作为【新】件回到下一批；`answer` 回答施工提问；`propose`（第二十一轮）登记一件架构提议，停在老板「做不做」闸门后。没交 JSON 或格式不对只记日志，件留到下一批。
 - **施工提问有人答**：Orca 目前没有回复工人的命令，`deliver_answer()` 先用兜底——带着「决策岗答复：…」开一轮返工（不扣轮次，原工作区接着做）。以后 Orca 支持回复，只换这一个函数。
 - **pull 不再每轮刷屏**：`autopilot:ready` 但缺 `scope:` / `type:` 标签或标题不合规的 issue，按「issue 号 + 原因」只交决策岗一次（`pull_flagged`），补好后下轮自动登记。
 - **先上线再标记**：点「上线」先跑 `deploy_cmd`，成功才标已上线、留言并 `gh issue close`；失败件留在可收菜、清掉上线闸门、推送 `deploy_failed`（上线失败）。点「再等等」也清闸门，下次重新攒批。
@@ -209,7 +209,7 @@ CI（提交 771cd41）：kit-tests run 39554195257 全套 272 个全绿（`-n au
 - **L-08 决策岗卡住重叫**：一批超过 `limits.decide_timeout_minutes`（默认 45）没交、或工人进程没了 → 关终端、任务标失败、时间线 `decider_timeout`、下一轮重叫（这批的外部来报还回收件箱）；连续 2 次推「决策岗连续卡住」。另修：决策岗返工后再交决策岗算【新】（以前同一轮次号会被当成已交过，不再叫）。
 - **L-20 拉 issue 出错不拖垮整轮**：gh 出错、限流、输出不是 JSON 只记次数，这一轮合并、推送、心跳照做；连续 3 轮推 `intake_down`（认得出登录失效就写「gh 登录失效，在这台 Mac 上跑 gh auth login」），恢复记 `intake_up`。
 - **老板决定② evo 专用克隆**：`evo import/new` 有 origin 时默认在 `~/.evoloop/repos/<代号>` 克隆一份（本地克隆，origin 改成工作副本的 GitHub 地址，main 对齐 origin/main），配置写 `clone: true`；合并、推送、Orca 工作区、协调和决策岗终端都只在克隆里。`repo` 仍是老板的工作副本，只作只读参考 / 克隆来源，evo 不再 checkout、合并、推送它。克隆被删了下一轮自动重建。已登记的项目 `evo -p TB relocate`（有件在工作区里就拒绝，等合并完；`--force` 硬迁，这些件重做）。`--in-place` 保留老做法。`projects --json` 加 `work_repo`。profiles（tubu、st）已加 `clone: true` 和 `git_env`；`install.sh` 结尾会点名还没切的项目。
-- **老板决定③ 每件上限**：`limits.decider_reworks`（默认 2）：决策岗已指导返工 2 次，第 3 次不执行，转老板「继续 / 不做」闸门（点继续就照决策岗那条说明返工、计数清零）；`limits.item_hard_runs`（默认 12）/ `item_hard_hours`（默认 6）：一件派工到 12 次或工人累计 6 小时 → 不再派工（正在跑的不打断），推「TB-FIX-012 已烧 6 小时还没完，继续还是不做？」；继续 = 从现在起重新计数，不做 = 这件不做。0 = 关。改法：`evo [-p 代号] limits [set 键=值 …] [--json]`、面板项目页「每件上限」（`POST /api/limits`）。闸门 kind 是 `budget`，件的 `waiting` 是 `owner_budget`。App 设置页这轮没加（见下）。
+- **老板决定③ 每件上限**：`limits.decider_reworks`（默认 2）：决策岗已指导返工 2 次，第 3 次不执行，转老板「继续 / 不做」闸门（第二十五轮起是「做 / 不做」卡；点继续就照决策岗那条说明返工、计数清零）；`limits.item_hard_runs`（默认 12）/ `item_hard_hours`（默认 6）：一件派工到 12 次或工人累计 6 小时 → 不再派工（正在跑的不打断），推「TB-FIX-012 已烧 6 小时还没完，继续还是不做？」；继续 = 从现在起重新计数，不做 = 这件不做。0 = 关。改法：`evo [-p 代号] limits [set 键=值 …] [--json]`、面板项目页「每件上限」（`POST /api/limits`）。闸门 kind 是 `budget`（第二十五轮起是 `do`、`reason` = `budget`），件的 `waiting` 是 `owner_budget`。App 设置页这轮没加（见下）。
 
 ## 第十八轮：模块化（内核 + 功能包）+ 自维护 + 多机器（均有自动测试，`kit/tests/test_round18.py` 25 个；说明见 docs/architecture.md、docs/self-maintenance.md、docs/multi-machine.md）
 CI：kit-tests run 39561803019（提交 ed7832b）全套绿；两个待定项锁进测试后 run 39564269038（提交 90543c7）全套 297 个全绿（8 分钟）。本地全套 294 过、3 跳过（Linux 沙箱）。
@@ -260,6 +260,9 @@ CI：kit-tests run 39561803019（提交 ed7832b）全套绿；两个待定项锁
 - #20 删 v1 副本：根目录 `prompts/`、`scripts/`（含 v1 `install.sh`）、`templates/`、`profiles/` 和 v1 专用文档 `docs/loop.md`、`orchestration.md`、`adoption.md`；根 README 改成只讲 evo；项目模板 `docs/code-standards.md` 的 PR / Reviewer 改成施工 / 验收岗、evo 合并、不走 PR。`evo new`、`kit/install.sh` 不读这些，不受影响。旧名 `tubu` 软链和 `~/.tubu` 回退没动（要先确认老项目都迁完）。
 - #21 HTML 不进仓库：删 `docs/` 下 26 个渲染 html（约 3.6MB），只留 `docs/loop-overview.html`；`.gitignore` 挡 `docs/**/*.html`；指向 html 的链接改指 `.md`。讲解页 `.md` 为源，html 按需用 answer-me-with-html 生成。没改 git 历史。
 - #16 删插件系统（推翻第十六轮「留插件接口」）：删 `bin/evo_plugin.py`、`features/plugins`、`plugins/example-hello`、`schemas/` 里 card / plugin-list / plugin-manifest / plugin-run、`docs/plugins.md`；`evo plugin` 子命令、插件通知渠道、`SELF_PROTECTED` 里的 evo_plugin.py 和插件环境白名单一起没了。`feature list --json` 的 `third_party` 字段留着、恒为 null（合约只加不删）。版本范围匹配只剩 `evo_rt.py` 一份。App 删 `Plugins.swift` / `PluginViews.swift` 和侧栏插件组、输入框 `/命令`、件按钮、设置里的插件开关；`JSONValue` / `CardTone` 挪到 `EvoCore/JSONValue.swift`，接口横幅 `ContractBanner` 挪到 `MainWindow.swift`。以后加功能直接进 evo，通知渠道走 `notify-webhook`。
+
+## 第二十五轮：架构减法续（老板 10-23 15:09 批；`kit/tests/test_round25.py`）
+- #26 老板卡只剩三类：做不做（`do`）/ 看效果（`look`）/ 上线（`ship`）。决策岗转老板（红线）、外部来报碰红线、每件上限到了都开「做不做」卡，问题里写清来由，选项统一「做 / 不做」；三张表 `owner_asks` / `ext_gates` / `budget_gates` 并成一张 `do_gates`（`why` = decider / external / budget）。老状态读的时候自动并表、一张不丢；老卡的「同意 / 继续 / 同意交决策岗」= 做，「不同意 / 拒绝」= 不做。`status --json` 的 `kind` 只出 do / look / ship / other，新增 `reason`；App 把老 evo 的 ask / external / budget 按 do 读。EV 受保护路径（决策岗的 `answer` 自动改 `ask_owner`）照旧，只是卡变成做不做。
 
 ## 只能在 Mac mini 上验的
 - 第二十二轮：真 GitHub 远端（走代理）`git ls-remote` 的耗时是否在 `timeouts.git_net` 内；runs/ 目录长期增长的体积（只增不删，需要时老板手动归档）；真 dsh / claude 工人读到首行角色声明后不再派活。

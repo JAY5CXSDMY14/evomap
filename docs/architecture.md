@@ -56,7 +56,7 @@ kit/features/<id>/
   "api": "^1",
   "version": "1.0.0",
   "name": "每件上限",
-  "sub": "返工 / 派工次数 / 累计小时到了就暂停，问老板继续还是不做",
+  "sub": "返工 / 派工次数 / 累计小时到了就暂停，问老板还做不做",
   "essential": true,
   "requires": ["state", "orca"],
   "provides": ["caps"],

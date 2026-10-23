@@ -62,7 +62,8 @@ final class StatusDocTests: XCTestCase {
         XCTAssertTrue(d.gates[0].confirm)
         XCTAssertEqual(d.gates[0].orcaChoice, "上线")
         XCTAssertFalse(d.gates[1].confirm)
-        XCTAssertEqual(d.gates[1].kindLabel, "上限")
+        XCTAssertEqual(d.gates[1].kindLabel, "做不做")         // 第二十五轮：老的 budget 按做不做读
+        XCTAssertEqual(d.gates[1].kind, "do")
         let row = ProjectRow(ProjectSnapshot(code: "TB", doc: d))
         XCTAssertEqual(row.roleLine, "暂停：状态文件损坏，已挪到 x")
         XCTAssertNil(row.error)
@@ -293,7 +294,8 @@ final class ViewModelTests: XCTestCase {
         XCTAssertFalse(cards[1].rejectAsksWords)
         XCTAssertEqual(cards[2].title, "菜单栏换成弹窗")          // 带轮次前缀
         XCTAssertEqual(cards[3].approveChoice, "上线"); XCTAssertEqual(cards[3].rejectChoice, "再等等")
-        XCTAssertEqual(cards[4].approveChoice, "同意交决策岗")    // 没给 options 用种类默认
+        XCTAssertEqual(cards[4].approveChoice, "做")              // 老 evo 的 external 按做不做读，没给 options 用种类默认
+        XCTAssertEqual(cards[4].kind, "do")
         XCTAssertEqual(cards[4].title, "外部请求")
         XCTAssertEqual(GateCard.cards([try snap("status_tb.json")], hidden: ["TB/gate_12"]).map(\.gateID), ["gate_13"])
         XCTAssertEqual(GateCard.cleanTitle("看效果："), "看效果：")

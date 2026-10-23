@@ -81,11 +81,10 @@ public struct GateCard: Identifiable, Equatable, Sendable {
     public var waitingSince: Date?
 
     /// 「打回」时要不要让老板写原话（看效果打回原话会进返工说明，最有用）。
-    public var rejectAsksWords: Bool { kind == "look" || kind == "ask" || kind == "external" }
+    public var rejectAsksWords: Bool { kind == "look" }
 
     public static let defaultChoices: [String: (String, String)] = [
         "do": ("做", "不做"), "look": ("通过", "打回"), "ship": ("上线", "再等等"),
-        "ask": ("同意", "不同意"), "external": ("同意交决策岗", "拒绝"),
     ]
 
     public init(project: String, projectName: String, gate g: StatusDoc.Gate) {

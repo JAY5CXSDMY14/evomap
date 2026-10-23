@@ -89,11 +89,19 @@ public struct StatusDoc: Decodable, Equatable, Sendable {
             id = try c.decode(String.self, forKey: .id)
             question = try c.decodeIfPresent(String.self, forKey: .question)
             options = (try? c.decodeIfPresent([String].self, forKey: .options)) ?? []
-            kind = try c.decodeIfPresent(String.self, forKey: .kind)
+            kind = Self.normalizeKind(try c.decodeIfPresent(String.self, forKey: .kind))
             item = try c.decodeIfPresent(String.self, forKey: .item)
             waitingSince = try c.decodeIfPresent(String.self, forKey: .waitingSince)
             confirm = (try? c.decodeIfPresent(Bool.self, forKey: .confirm)) ?? false
             orcaChoice = try? c.decodeIfPresent(String.self, forKey: .orcaChoice)
+        }
+
+        /// 第二十五轮（#26）：老板卡只有三类。老 evo 输出的 ask / external / budget 一律按「做不做」读。
+        public static func normalizeKind(_ k: String?) -> String? {
+            switch k {
+            case "ask", "external", "budget": return "do"
+            default: return k
+            }
         }
 
         /// 给人看的种类名。
@@ -102,9 +110,6 @@ public struct StatusDoc: Decodable, Equatable, Sendable {
             case "do": return "做不做"
             case "look": return "看效果"
             case "ship": return "上线"
-            case "external": return "外部请求"
-            case "ask": return "提问"
-            case "budget": return "上限"
             default: return "待定"
             }
         }

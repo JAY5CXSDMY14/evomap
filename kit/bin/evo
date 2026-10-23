@@ -841,9 +841,26 @@ def exec_blank(backend="orca"):
     return {"backend": backend, "issue": None, "agent": None, "branch": None}
 
 
+def merge_do_gates(s):
+    """第二十五轮（#26）：老板卡只剩三类（做不做 / 看效果 / 上线）。老状态里的三张表——决策岗转老板（owner_asks）、
+    外部来报碰红线（ext_gates）、每件上限到了（budget_gates）——并进一张 do_gates，原来是哪种记在 why 里。
+    幂等，读状态时（含只读的 status）都跑；一张卡都不丢。"""
+    dg = s.get("do_gates")
+    for box, why in DO_GATE_BOXES:
+        old = s.pop(box, None)
+        if not old:
+            continue
+        dg = s.setdefault("do_gates", {})
+        for gid, v in old.items():
+            if isinstance(v, dict) and gid not in dg:
+                dg[gid] = {**v, "why": why, **({"note": v["why"]} if box == "budget_gates" and v.get("why") and "note" not in v else {})}
+    return s
+
+
 def migrate_state(s):
     """1 → 2：每件加 exec {backend, issue, agent, branch}；老件都是 Orca 派的，Orca 的任务号 / 派工 / 终端记进 exec.legacy。
-    只加字段，老字段原样留着（Orca 后端照旧用）。"""
+    只加字段，老字段原样留着（Orca 后端照旧用）。第二十五轮起每次读都把老的三张闸门表并进 do_gates（merge_do_gates）。"""
+    merge_do_gates(s)
     if (s.get("schema_version") or 1) >= STATE_SCHEMA_VERSION:
         return s
     for it in (s.get("items") or {}).values():
@@ -2171,8 +2188,9 @@ def check_gates(s, gates):
             pushed.append(gid)
             opts = g.get("options")
             opts = json.loads(opts) if isinstance(opts, str) else (opts or ["通过", "打回"])
-            key = look[gid][0] if gid in look else owner.get(gid) or (s.get("ext_gates") or {}).get(gid, {}).get("key") \
-                or (s.get("owner_asks") or {}).get(gid, {}).get("key")
+            key = look[gid][0] if gid in look else owner.get(gid) or (s.get("do_gates") or {}).get(gid, {}).get("key")
+            if gid in (s.get("do_gates") or {}):
+                opts = GATE_OPTIONS["do"]                # 第二十五轮：老卡在执行端里可能还是「同意 / 继续」，按钮统一成做 / 不做
             notify("gate_waiting", f"等你点头：{g.get('question')}", f"已等 {int((TM.now() - since[gid]) / 60)} 分钟。"
                    + f" 面板或 evo -p {CODE} approve {gid} …", item=key, gate=gid, options=opts)
     for gid in list(since):
@@ -2860,14 +2878,13 @@ def void_item_gates(s, k, it):
     for gid in {it["gates"].get("look"), it["gates"].get("do"), it.get("ship_gate")} - {None}:
         EX.gate_resolve(coord(s), gid, "作废")
         s.setdefault("superseded_gates", {})[gid] = {"item": k, "why": "这件已标为不做"}
-    # 10-23 Air：EV-CHORE-001 不做后，决策岗转老板的提问 mg_72 还挂着。转老板的提问、每件上限的闸门一并作废。
-    for box in ("owner_asks", "budget_gates"):
-        for gid in [g for g, v in (s.get(box) or {}).items() if v.get("key") == k]:
-            v = s[box].pop(gid)
-            EX.gate_resolve(coord(s), gid, "作废")
-            if box == "owner_asks" and v.get("task"):
-                EX.task_update(coord(s), v["task"], "completed")
-            s.setdefault("superseded_gates", {})[gid] = {"item": k, "why": "这件已标为不做"}
+    # 10-23 Air：EV-CHORE-001 不做后，决策岗转老板的提问 mg_72 还挂着。这件身上的其它做不做卡（转老板、上限到了）一并作废。
+    for gid in [g for g, v in (s.get("do_gates") or {}).items() if v.get("key") == k]:
+        v = s["do_gates"].pop(gid)
+        EX.gate_resolve(coord(s), gid, "作废")
+        if v.get("why") == "decider" and v.get("task"):
+            EX.task_update(coord(s), v["task"], "completed")
+        s.setdefault("superseded_gates", {})[gid] = {"item": k, "why": "这件已标为不做"}
     tidy_closed(it, s, k)
 
 
@@ -2894,9 +2911,9 @@ def tidy_closed(it, s=None, k=None):
             sup.setdefault(it["ship_gate"], {"item": k, "why": "这件已标为不做"})
             it["ship_gate"] = None; hit = True
         if s is not None and k:                          # 10-23 Air：老版本 drop 留下的转老板提问 / 上限闸门（mg_72）
-            for box in ("owner_asks", "budget_gates"):
-                for gid in [g for g, v in (s.get(box) or {}).items() if v.get("key") == k]:
-                    s[box].pop(gid); sup.setdefault(gid, {"item": k, "why": "这件已标为不做"}); hit = True
+            merge_do_gates(s)
+            for gid in [g for g, v in (s.get("do_gates") or {}).items() if v.get("key") == k]:
+                s["do_gates"].pop(gid); sup.setdefault(gid, {"item": k, "why": "这件已标为不做"}); hit = True
     return hit
 
 
@@ -3031,14 +3048,16 @@ def decide_split(s, k, it, note, d):
 
 
 def decide_ask_owner(s, k, it, note, d=None):
-    """转老板：建一个老板闸门（同意/不同意），立刻推送；老板定了再交回决策岗。"""
+    """转老板（只用于红线：删数据、改线上、花钱、对外发）：建一张「做不做」卡，问题里写清决策岗要你定什么，立刻推送；
+    老板定了（做 / 不做 + 原话）再交回决策岗。第二十五轮（#26）起不再有单独的「同意 / 不同意」类。"""
     c = coord(s)
     tid = EX.task_create(c, f"{k} 决策岗转老板", note or it["title"])
-    gid = EX.gate_create(c, tid, f"{k} {it['title']}：{note or '决策岗请你定'}"[:200], ["同意", "不同意"])
-    s.setdefault("owner_asks", {})[gid] = {"key": k, "task": tid, "note": note}
+    q = f"做不做：{k} {it['title']}——决策岗请你定：{note or '（没写）'}"[:200]
+    gid = EX.gate_create(c, tid, q, GATE_OPTIONS["do"])
+    s.setdefault("do_gates", {})[gid] = {"key": k, "task": tid, "note": note, "why": "decider"}
     s.setdefault("gate_since", {})[gid] = TM.now(); s.setdefault("gate_pushed", []).append(gid)   # 已推过，5 分钟提醒不再重复
     log(s, f"{k} 决策岗转老板：{note[:60]}")
-    notify("gate_waiting", f"决策岗请你定：{it['title']}", note, item=k, gate=gid, options=["同意", "不同意"])
+    notify("gate_waiting", f"做不做：{it['title']}（决策岗请你定）", note, item=k, gate=gid, options=GATE_OPTIONS["do"])
 
 
 def decide_answer(s, k, it, note, d=None):
@@ -3220,7 +3239,7 @@ def live_path(s, k, it, T, pend):
         m = ts("merge")
         return None if m in ("ready", "pending", "blocked") else ("task_dead", f"合并任务是「{m or '找不到'}」，合并不了")
     if st in ("escalated", "asking"):
-        if any(a.get("key") == k and g in pend for g, a in (s.get("owner_asks") or {}).items()):
+        if any(a.get("key") == k and a.get("why") == "decider" and g in pend for g, a in (s.get("do_gates") or {}).items()):
             return None                                 # 决策岗转老板，老板还没答
         if not ((CFG.get("roles") or {}).get("decide") or {}).get("cmd") and EX.name != "multica":
             return ("no_decider", "交决策岗了，但没配置决策岗命令：只能你手动处理（evo retry / 改配置）")
@@ -3378,6 +3397,7 @@ def read_state_ro(code=None):
         s = json.load(open(p, encoding="utf-8"))
     except (OSError, ValueError, TypeError):
         return {"items": {}}
+    merge_do_gates(s)                                    # 第二十五轮：老的三张闸门表在内存里并成 do_gates
     for k, it in (s.get("items") or {}).items():        # 只在内存里清已收尾件的残留标记，不写盘
         if isinstance(it, dict) and it.get("gates") is not None:
             tidy_closed(it, s, k)
@@ -4152,7 +4172,7 @@ APP_SCHEMA_VERSION = 1      # 第十六轮：给 App 的 --json 统一带这个�
 def state_name(it):
     w = waiting_reason(it)
     return {"window": "等窗口", "rate_limit": "等额度", "model_blocked": "等换模型", "magpie_down": "等 magpie",
-            "owner_budget": "等你定：继续还是不做", "main_red": "等主线修绿"}.get(w) or NAMES.get(it["state"], it["state"])
+            "owner_budget": "等你定：还做不做", "main_red": "等主线修绿"}.get(w) or NAMES.get(it["state"], it["state"])
 
 
 def exec_doc(it):
@@ -4174,21 +4194,22 @@ def status_doc(s, pend):
     gates = []
     dead = {gid for k, it in s["items"].items() if it["state"] == "dropped"
             for gid in (it["gates"].get("look"), it["gates"].get("do"), it.get("ship_gate")) if gid}
-    dead |= {gid for box in ("owner_asks", "budget_gates") for gid, v in (s.get(box) or {}).items()
-             if s["items"].get(v.get("key"), {}).get("state") == "dropped"}   # 老版本 drop 留下的转老板提问（mg_72）
+    dead |= {gid for gid, v in (s.get("do_gates") or {}).items()
+             if v.get("why") != "external" and s["items"].get(v.get("key"), {}).get("state") == "dropped"}   # 老版本 drop 留下的转老板提问（mg_72）
     for g in pend:
         if g["id"] in dead or g["id"] in (s.get("superseded_gates") or {}):
             continue                                    # 不做的件 / 作废的闸门不再摆到老板面前
         opts = json.loads(g["options"]) if isinstance(g.get("options"), str) else g.get("options")
         gid = g["id"]
-        kind = ("look" if gid in look else "do" if any(it["gates"].get("do") == gid for it in s["items"].values())
-                else "ship" if any(it.get("ship_gate") == gid for it in s["items"].values())
-                else "external" if gid in (s.get("ext_gates") or {}) else "ask" if gid in (s.get("owner_asks") or {})
-                else "budget" if gid in (s.get("budget_gates") or {}) else "other")
+        dg = (s.get("do_gates") or {}).get(gid)
+        kind = ("look" if gid in look else "do" if dg or any(it["gates"].get("do") == gid for it in s["items"].values())
+                else "ship" if any(it.get("ship_gate") == gid for it in s["items"].values()) else "other")
+        if dg:
+            opts = GATE_OPTIONS["do"]                    # 第二十五轮：老卡在执行端里的选项可能是「同意 / 继续」，统一成做 / 不做
         since = (s.get("gate_since") or {}).get(gid)
         gates.append({"id": gid, "question": g.get("question"), "options": opts, "kind": kind,
-                      "item": look.get(gid) or owner.get(gid) or (s.get("ext_gates") or {}).get(gid, {}).get("key")
-                      or (s.get("owner_asks") or {}).get(gid, {}).get("key") or (s.get("budget_gates") or {}).get(gid, {}).get("key"),
+                      "reason": (dg or {}).get("why") or ("item" if kind in ("do", "look", "ship") else None),   # 第二十五轮新增（只加字段）
+                      "item": look.get(gid) or owner.get(gid) or (dg or {}).get("key"),
                       "waiting_since": TM.iso(since) if since else None})
     gates += [g for g in confirm_gates_doc(s) if g["id"] not in {x["id"] for x in gates}]
     rl = [{"role": r, "until": TM.iso(e["until"]), "since": TM.iso(e.get("since")), "why": e.get("why"), "account": e.get("account"),
@@ -4254,28 +4275,32 @@ def gate_owner(s, gid):
             return k, "do"
         if gid == it.get("ship_gate"):
             return k, "ship"
-    ask = (s.get("owner_asks") or {}).get(gid)
-    if ask:
-        return ask.get("key"), "ask"
+    dg = (s.get("do_gates") or {}).get(gid)
+    if dg:
+        return dg.get("key"), "do"
     return None, None
 
 
-NEG_CHOICES = ("打回", "不做", "不同意", "再等等", "拒绝")
-CONFIRM_VERB = {"look": "通过", "do": "开工", "ship": "上线", "ask": "同意", "external": "同意", "budget": "继续"}
-GATE_OPTIONS = {"look": ["通过", "打回"], "do": ["做", "不做"], "ship": ["上线", "再等等"], "ask": ["同意", "不同意"],
-                "external": ["同意交决策岗", "拒绝"], "budget": ["继续", "不做"]}
+# 第二十五轮（#26）：老板卡只有三类。决策岗转老板 / 外部来报碰红线 / 每件上限到了都是「做不做」卡（do_gates，why 记来由）。
+GATE_KINDS = ("do", "look", "ship")
+DO_GATE_BOXES = (("owner_asks", "decider"), ("ext_gates", "external"), ("budget_gates", "budget"))   # 老状态里的三张表 → why
+LEGACY_GATE_KIND = {"ask": "do", "external": "do", "budget": "do"}          # 老 status / confirm_gates 里的类别名 → 新类别
+NEG_CHOICES = ("打回", "不做", "不同意", "再等等", "拒绝")                    # 老卡的「不同意 / 拒绝」照旧认，等同不做
+CONFIRM_VERB = {"look": "通过", "do": "开工", "ship": "上线"}
+GATE_OPTIONS = {"look": ["通过", "打回"], "do": ["做", "不做"], "ship": ["上线", "再等等"]}
 
 
 def gate_kind(s, gid):
-    """闸门属于哪件、哪一类：look / do / ship / ask / external / budget；不认识返回 (None, None)。"""
-    k, kind = gate_owner(s, gid)
-    if kind:
-        return k, kind
-    if gid in (s.get("ext_gates") or {}):
-        return s["ext_gates"][gid].get("key"), "external"
-    if gid in (s.get("budget_gates") or {}):
-        return s["budget_gates"][gid].get("key"), "budget"
-    return None, None
+    """闸门属于哪件、哪一类：look / do / ship；不认识返回 (None, None)。"""
+    return gate_owner(s, gid)
+
+
+def gate_reason(s, gid):
+    """做不做卡的来由：item（件自己的做不做）/ decider（决策岗转老板）/ external（外部来报碰红线）/ budget（上限到了）；不是做不做卡 None。"""
+    dg = (s.get("do_gates") or {}).get(gid)
+    if dg:
+        return dg.get("why") or "decider"
+    return "item" if gate_owner(s, gid)[1] == "do" else None
 
 
 def mark_evo_resolved(s, gid):
@@ -4302,21 +4327,23 @@ def apply_gate(s, gid, choice, why=None, source="evo"):
     bad = choice in NEG_CHOICES
     for k1 in ([x for x, it in s["items"].items() if it.get("ship_gate") == gid] if kind0 == "ship" else [k0] if k0 else []):
         tl(k1, "gate_reject" if bad else "gate_approve", kind=kind0, gate=gid, choice=choice, words=why, source=source)
-    ext = (s.get("ext_gates") or {}).pop(gid, None)
-    if ext:                                             # 外部来报里的红线请求：老板定
-        EX.task_update(coord(s), ext["task"], "completed")
-        if choice.startswith("同意"):
-            s.setdefault("decide_inbox", []).append({**ext["report"], "note": f"【老板已同意（红线：{'、'.join(ext['red'])}）】"
-                                                     + (f"老板原话：{why}" if why else "")})
-        if svc("github"):
-            svc("github").issue_comment(ext["report"]["issue"],
-                                        "老板已同意，交决策岗安排。" if choice.startswith("同意") else "老板没有同意这项请求" + (f"：{why}" if why else "。"))
-    ask = (s.get("owner_asks") or {}).pop(gid, None)
-    if ask:                                             # 决策岗转来的事：老板定了，交回决策岗（下一批标【新】）
-        owner_answered(s, ask, choice, why)
-    bud = (s.get("budget_gates") or {}).pop(gid, None)
-    if bud and svc("caps"):                             # 第十七轮：每件上限到了，老板定继续还是不做（功能包 item-caps）
-        svc("caps").answered(s, bud, choice, why)
+    dg = (s.get("do_gates") or {}).pop(gid, None)
+    if dg:                                              # 第二十五轮：做不做卡（决策岗转老板 / 外部来报碰红线 / 上限到了）
+        go = "做" if not bad else "不做"                # 老卡的「同意 / 继续 / 同意交决策岗」= 做，「不同意 / 拒绝」= 不做
+        r = dg.get("why") or "decider"
+        if r == "external":                             # 外部来报里的红线请求：做 = 交决策岗安排
+            EX.task_update(coord(s), dg["task"], "completed")
+            if go == "做":
+                s.setdefault("decide_inbox", []).append({**dg["report"], "note": f"【老板已同意（红线：{'、'.join(dg['red'])}）】"
+                                                        + (f"老板原话：{why}" if why else "")})
+            if svc("github"):
+                svc("github").issue_comment(dg["report"]["issue"],
+                                            "老板已同意，交决策岗安排。" if go == "做" else "老板没有同意这项请求" + (f"：{why}" if why else "。"))
+        elif r == "budget":                             # 第十七轮：每件上限到了，老板定还做不做（功能包 item-caps）
+            if svc("caps"):
+                svc("caps").answered(s, dg, go, why)
+        else:                                           # 决策岗转来的事：老板定了，交回决策岗（下一批标【新】）
+            owner_answered(s, dg, go, why)
     for k, it in s["items"].items():
         if gid == it["gates"].get("do") and choice == "不做":
             EX.task_update(coord(s), it["build"], "failed")
@@ -4371,8 +4398,10 @@ def confirm_gates_doc(s):
     """在 Orca 端被点了「通过 / 上线 / 做 / 同意 / 继续」、等老板在 evo 入口确认的闸门（status --json 的 gates 里带 confirm: true）。"""
     out = []
     for gid, c in (s.get("confirm_gates") or {}).items():
-        out.append({"id": gid, "question": c.get("question"), "options": c.get("options") or GATE_OPTIONS.get(c.get("kind"), ["通过", "打回"]),
-                    "kind": c.get("kind"), "item": c.get("item"), "waiting_since": TM.iso(c["at"]) if c.get("at") else None,
+        kind = LEGACY_GATE_KIND.get(c.get("kind"), c.get("kind"))     # 第二十五轮：老的 ask / external / budget 都按做不做显示
+        opts = GATE_OPTIONS["do"] if kind == "do" else (c.get("options") or GATE_OPTIONS.get(kind, ["通过", "打回"]))
+        out.append({"id": gid, "question": c.get("question"), "options": opts,
+                    "kind": kind, "item": c.get("item"), "waiting_since": TM.iso(c["at"]) if c.get("at") else None,
                     "confirm": True, "orca_choice": c.get("choice")})
     return out
 

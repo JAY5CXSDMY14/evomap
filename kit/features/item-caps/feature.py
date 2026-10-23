@@ -1,6 +1,7 @@
 """功能包 item-caps：每件上限（第十七轮老板决定③，第十八轮从内核搬出来）。
 
-三个上限（0 = 关）：决策岗指导返工最多几次、一件最多派工几次、一件工人最多累计几小时；到了就暂停这件、开「继续 / 不做」老板闸门。
+三个上限（0 = 关）：决策岗指导返工最多几次、一件最多派工几次、一件工人最多累计几小时；到了就暂停这件、开一张「做不做」老板卡
+（第二十五轮 #26 起不再有单独的「继续 / 不做」类，卡在内核的 do_gates 里，why = budget）。
 贡献：服务 caps（内核在决策岗返工、老板答闸门时用）、每轮检查（tick.after_dispatch）、status 的 limits、子命令 `evo limits`、
 设置（App 设置页按 settings schema 自动画表单）。在用：有开着的上限闸门时关不掉（关了闸门就没人接）。
 """
@@ -48,24 +49,24 @@ def cap_value(key):
 
 
 def open_budget_gate(s, k, it, why, rework=None):
-    """上限到了：这件不再派工，建「继续 / 不做」老板闸门并立刻推送。rework：决策岗想要的返工说明，老板点继续就照它返工。"""
+    """上限到了：这件不再派工，建「做不做」老板卡并立刻推送。rework：决策岗想要的返工说明，老板点做就照它返工。"""
     if it.get("hold"):
         return it["hold"]
     c = K.coord(s)
     tid = K.EX.task_create(c, f"{k} 上限到了", why)
-    q = f"{k} {it['title']}：{why}，继续还是不做？"[:200]
-    gid = K.EX.gate_create(c, tid, q, ["继续", "不做"])
-    s.setdefault("budget_gates", {})[gid] = {"key": k, "task": tid, "why": why, "rework": rework, "at": TM.now()}
+    q = f"做不做：{k} {it['title']}——{why}，还做吗？"[:200]
+    gid = K.EX.gate_create(c, tid, q, K.GATE_OPTIONS["do"])
+    s.setdefault("do_gates", {})[gid] = {"key": k, "task": tid, "why": "budget", "note": why, "rework": rework, "at": TM.now()}
     it["hold"] = gid
     s.setdefault("gate_since", {})[gid] = TM.now(); s.setdefault("gate_pushed", []).append(gid)     # 已推过，5 分钟提醒不重复
-    K.tl(k, "gate_open", kind="budget", gate=gid, question=q)
-    K.log(s, f"{k} {why}：暂停，等老板定继续还是不做")
-    K.notify("gate_waiting", f"{k} {why}，继续还是不做？", it["title"], item=k, gate=gid, options=["继续", "不做"])
+    K.tl(k, "gate_open", kind="do", reason="budget", gate=gid, question=q)
+    K.log(s, f"{k} {why}：暂停，等老板定还做不做")
+    K.notify("gate_waiting", f"做不做：{k} {why}，还做吗？", it["title"], item=k, gate=gid, options=K.GATE_OPTIONS["do"])
     return gid
 
 
 def budget_answered(s, bud, choice, why):
-    """老板答了上限闸门：继续 → 从现在起重新计数（决策岗那条照它的说明返工）；不做 → 这件不做。"""
+    """老板答了上限卡：做 → 从现在起重新计数（决策岗那条照它的说明返工）；不做 → 这件不做。"""
     K.EX.task_update(K.coord(s), bud["task"], "completed")
     k = bud["key"]; it = s["items"].get(k)
     if not it:
@@ -79,11 +80,11 @@ def budget_answered(s, bud, choice, why):
     if bud.get("rework") is not None:
         it["decider_reworks"] = 0
         K.decide_rework(s, k, it, (bud["rework"] or "换个方案再做") + (f"\n老板：{why}" if why else ""), force=True)
-    K.log(s, f"{k} 老板点了继续：上限从现在起重新计数")
+    K.log(s, f"{k} 老板点了做：上限从现在起重新计数")
 
 
 def check_budget(s):
-    """每轮：派工次数或工人累计小时到了上限（item_hard_runs / item_hard_hours，0 = 关）→ 暂停这件，推「继续还是不做」。"""
+    """每轮：派工次数或工人累计小时到了上限（item_hard_runs / item_hard_hours，0 = 关）→ 暂停这件，推「还做吗」。"""
     mr, mh = cap("item_hard_runs"), cap("item_hard_hours")
     if not mr and not mh:
         return
@@ -91,7 +92,7 @@ def check_budget(s):
         if it.get("hold") and it["state"] in K.QUIET_STATES + ("pushing",):
             # 在跑的那次已经把活干完了（或者不做了）：上限闸门作废
             K.EX.gate_resolve(K.coord(s), it["hold"], "作废（已完成）")
-            K.mark_evo_resolved(s, it["hold"]); (s.get("budget_gates") or {}).pop(it["hold"], None); it.pop("hold")
+            K.mark_evo_resolved(s, it["hold"]); (s.get("do_gates") or {}).pop(it["hold"], None); it.pop("hold")
             continue
         if it["state"] in K.QUIET_STATES + ("pushing",) or it.get("hold"):
             continue
@@ -184,7 +185,8 @@ def in_use(k, config):
             st = json.load(open(p, encoding="utf-8"))
         except (OSError, ValueError):
             continue
-        n += len(st.get("budget_gates") or {})
+        n += len(st.get("budget_gates") or {})          # 老状态（第二十五轮前）
+        n += sum(1 for v in (st.get("do_gates") or {}).values() if isinstance(v, dict) and v.get("why") == "budget")
     return n
 
 

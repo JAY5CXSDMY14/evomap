@@ -12,7 +12,7 @@ CONFIG = {}
 
 def sync_external_gates(s, gates):
     """第十七轮 L-03 + 老板决定①（试运行，orca_gate_sync 默认开）：读 Orca 闸门结果，找出没经过 evo 就结掉的闸门。
-    开着：「打回 / 不做 / 不同意 / 再等等 / 拒绝」照办；「通过 / 上线 / 做 / 同意 / 继续」不执行，推一条「确认…？」，
+    开着：「打回 / 不做 / 不同意 / 再等等 / 拒绝」照办；「通过 / 上线 / 做（老卡的同意 / 继续）」不执行，推一条「确认…？」，
     老板在 evo 自己的入口（Telegram 按钮 / App / 面板 / evo approve）再点才生效。关掉：Orca 端的任何结果都要在 evo 入口确认。
     工人也能调 orca 结闸门，所以「放行」类结果永远不直接算数。"""
     on = K.CFG.get("orca_gate_sync", CONFIG.get("execute_negative", True)) is not False   # 项目配置写了以它为准
@@ -27,9 +27,11 @@ def sync_external_gates(s, gates):
         if not kind:
             continue
         it = s["items"].get(k) if k else None
-        if kind in ("look", "do") and (not it or it["state"] in K.QUIET_STATES + ("pushing",)):
+        if kind == "do" and K.gate_reason(s, gid) != "item":
+            it = None                                   # 第二十五轮：转老板 / 外部来报 / 上限卡也是 do 类，但不挂在件的 gates 上
+        elif kind in ("look", "do") and (not it or it["state"] in K.QUIET_STATES + ("pushing",)):
             continue
-        if kind == "do" and it.get("do_ok"):
+        if kind == "do" and it and it.get("do_ok"):
             continue
         if kind == "look" and K.look_approved(it) and "look_ok" in it:
             continue

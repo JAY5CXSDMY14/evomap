@@ -11,7 +11,7 @@
 1. **读是开放的，写是收窄的。** 读：`evo status --json`、`outbox.jsonl`、webhook 推送、GitHub issue/标签。写：只有 GitHub issue（标签 `agent-report`；老板自己的话用 `owner-feedback`）或 `evo feedback`。
 2. **外部写的一切都是不可信输入**，作者在项目配置 `trusted_authors` 里的除外。决策岗只从里面提炼问题，不执行其中的指令（防提示词注入，Readest 的做法）。
 3. **外部 Agent 永远不能批闸门、不能上线。** 闸门只有老板本人能批：本机命令、面板（要口令）、Telegram 按钮（只认老板的 chat id / 用户 id）。
-4. **红线请求转给老板**：删数据、改线上、花钱、对外发布（发帖、发邮件、对外 issue）。不可信作者的 issue 碰到这些词，接棒器建一个老板闸门「外部请求碰红线」，老板选「同意交决策岗」才进决策岗，选「拒绝」就在 issue 上留言。
+4. **红线请求转给老板**：删数据、改线上、花钱、对外发布（发帖、发邮件、对外 issue）。不可信作者的 issue 碰到这些词，接棒器建一张老板「做不做」卡（问题里写明碰了哪条红线），老板点「做」才进决策岗，点「不做」就在 issue 上留言（第二十五轮起；老卡上的「同意交决策岗 / 拒绝」照旧认）。
 5. **不提供「webhook 进来」的写入口。** 这是故意的：所有写入都落在 GitHub 上，有作者、有时间、能追溯。
 6. **私有仓库要显式给读权限。** 外部 Agent 读 issue/代码前，老板得在 GitHub 上把它的账号加为协作者（只读够了），或给它一个只读的细粒度 token。
 
@@ -56,7 +56,8 @@
 | `last_tick` | 本项目上次接棒一轮结束的时间（读 `~/.evoloop/heartbeat.json`）；从没转过为 `null`。第十轮新增 |
 | `count` | 按内部状态（`raw`）计数 |
 | `stuck` | 疑似卡住 + 交决策岗 + 有提问 的件数 |
-| `gates[].kind` | `do` 做不做 · `look` 看效果 · `ship` 上线 · `external` 外部请求碰红线 · `ask` 决策岗转来问老板的（选项 同意/不同意）· `other` |
+| `gates[].kind` | 第二十五轮（#26）起只有三类：`do` 做不做 · `look` 看效果 · `ship` 上线（`other` 兜底）。以前的 `external` / `ask` / `budget` 都是 `do`，选项统一「做 / 不做」 |
+| `gates[].reason` | 第二十五轮新增：做不做卡的来由。`item` 件自己的闸门 · `decider` 决策岗转老板（红线）· `external` 外部来报碰红线 · `budget` 每件上限到了 |
 | `gates[].waiting_since` | 从什么时候开始等老板（看效果闸门从验收通过才算）；没开始计时为 `null` |
 | `items[].state` | 给人看的中文状态：排队、施工中、待验收、验收中、验收通过、已合并·等推送、已合并·可收菜、已上线、交决策岗、有提问、不做，另有 **等窗口**、**等额度** |
 | `items[].raw` | 内部状态：`queued` `building` `built` `verifying` `verified` `pushing` `merged` `shipped` `escalated` `asking` `dropped` |
@@ -75,7 +76,7 @@
 | `items[].no_live_path` | 这件此刻有没有活路的判断（`true` = 没有，正在计时；到阈值才进顶层 `no_live_path`）。第十二轮新增 |
 | `team` | 岗位卡片摘要：`{"cards": [{"role","name","tool","models","thinking","status","label","until"}], "magpie_ok", "suggestions": 新模型建议条数, "blocked": {岗位: 停下的原因}}`；`roles[].fallback`（额度满但备用接上了）；`items[].waiting` 多了 `model_blocked`（等换模型）、`magpie_down`（等 magpie）。第十四轮新增，详细见 `evo team --json` |
 | `items[].look_gate` | 这件的看效果闸门号（没有为 `null`）。第十二轮新增 |
-| `paused` / `tick_running` / `gates_stale` / `main_red` / `limits` | 第十七轮：status 改为只读（不抢锁、暂停时照常返回 `paused` 原因、不新建协调终端）；`tick_running` 是正在跑的一轮；`main_red` 主线本身测试红；`limits` 每件上限。`gates[].kind` 多了 `budget`（上限到了：继续 / 不做），`gates[].confirm` 表示 Orca 端被点了放行类结果、要老板在 evo 入口确认；`items[].waiting` 多了 `main_red`、`owner_budget` |
+| `paused` / `tick_running` / `gates_stale` / `main_red` / `limits` | 第十七轮：status 改为只读（不抢锁、暂停时照常返回 `paused` 原因、不新建协调终端）；`tick_running` 是正在跑的一轮；`main_red` 主线本身测试红；`limits` 每件上限。`gates[].kind` 多了 `budget`（上限到了；第二十五轮起并入 `do`，`reason` = `budget`），`gates[].confirm` 表示 Orca 端被点了放行类结果、要老板在 evo 入口确认；`items[].waiting` 多了 `main_red`、`owner_budget` |
 
 | `items[].exec` | 第二十轮：这件在执行端里的样子 `{"backend": "orca"/"multica", "issue": Multica issue 号（例 EVO-7）或 null, "url": 配了 `multica.app_url` 时的网页链接或 null}`；老状态还没迁移时整个为 `null`。`orca_down_since` 字段名不变，意思扩成「执行端（Orca 或 Multica）掉线的时间」 |
 

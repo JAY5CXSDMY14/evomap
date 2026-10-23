@@ -250,11 +250,19 @@
               "do",
               "look",
               "ship",
-              "external",
-              "ask",
-              "budget",
               "other"
-            ]
+            ],
+            "description": "第二十五轮（#26）：老板卡只有三类。以前的 external / ask / budget 现在都是 do，来由看 reason"
+          },
+          "reason": {
+            "enum": [
+              "item",
+              "decider",
+              "external",
+              "budget",
+              null
+            ],
+            "description": "第二十五轮新增：item = 件自己的闸门；decider = 决策岗转老板（红线）；external = 外部来报碰红线；budget = 每件上限到了"
           },
           "item": {
             "type": [

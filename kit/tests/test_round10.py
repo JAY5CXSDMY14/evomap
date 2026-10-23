@@ -94,11 +94,12 @@ def test_decider_split_with_bad_child_title_keeps_original(loop):
 def test_decider_ask_owner_gate_then_answer_goes_back(loop):
     escalate_by_verify_fail(loop, decisions({"item": K, "action": "ask_owner", "note": "要不要清掉旧的验证码记录"}))
     loop.tick("AB")
-    gates = [g for g in loop.status_json("AB")["gates"] if g["kind"] == "ask"]
-    assert len(gates) == 1 and gates[0]["item"] == K and gates[0]["options"] == ["同意", "不同意"]
+    gates = [g for g in loop.status_json("AB")["gates"] if g.get("reason") == "decider"]
+    assert len(gates) == 1 and gates[0]["item"] == K and gates[0]["kind"] == "do" and gates[0]["options"] == ["做", "不做"]
+    assert "要不要清掉旧的验证码记录" in gates[0]["question"]
     sent = [m for m in loop.telegram_sent() if "决策岗请你定" in m["text"]]
     assert len(sent) == 1 and "reply_markup" in sent[0]
-    loop.ok("-p", "AB", "approve", gates[0]["id"], "不同意", "旧记录要留着")
+    loop.ok("-p", "AB", "approve", gates[0]["id"], "不做", "旧记录要留着")
     it = loop.item("AB")
     assert "老板答复" in it["ask"] and "旧记录要留着" in it["ask"]
     loop.env["EVO_NOW"] = "2026-10-20T12:31:00+08:00"
