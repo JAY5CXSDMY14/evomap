@@ -30,4 +30,4 @@ fi
 if echo "$out" | grep -qiE 'SyntaxError|ImportError|ModuleNotFoundError|cannot find|undefined:|build failed|no tests ran|collected 0 items|skipped'; then
   echo "! 失败看起来是编译/导入错误或被跳过——按标准这不算有效的 Red check，请检查失败信息是否指向错误行为"; exit 1
 fi
-echo "✓ RED CHECK OK: 旧代码下测试失败（rc=$rc）。把上面的失败信息贴进 commit 的 Red: 行"; exit 0
+echo "✓ RED CHECK OK: 旧代码下测试失败（rc=${rc}）。把上面的失败信息贴进 commit 的 Red: 行"; exit 0

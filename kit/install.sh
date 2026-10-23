@@ -54,13 +54,13 @@ else
   warn "没有 orca 命令：装 Orca 后在 设置 → CLI 里安装命令行（安装第三方工具需老板同意）"
 fi
 if curl -s -m 3 "$MAGPIE/v1/models" >/dev/null 2>&1; then
-  ok "magpie 网关在跑（$MAGPIE）"
+  ok "magpie 网关在跑（${MAGPIE}）"
   # 施工/验收模型（可以是 magpie 组名）在不在 magpie 列表里、两边有没有重叠：只警告，不拦安装
   if command -v python3 >/dev/null && [ -f "$EVO_DIR/config.json" ]; then
     python3 "$KIT/bin/evo" models 2>&1 || true
   fi
 else
-  warn "magpie 网关没响应（$MAGPIE）：岗位用到模型时才需要"
+  warn "magpie 网关没响应（${MAGPIE}）：岗位用到模型时才需要"
 fi
 for a in dsh claude codex; do command -v $a >/dev/null && ok "$a 已装" || info "$a 未装（岗位表用到才需要）"; done
 
@@ -121,13 +121,13 @@ if [ $DEV = 0 ]; then
     basename "$(readlink "$EVO_DIR/current")" > "$EVO_DIR/releases/PREVIOUS"
   fi
   python3 -c 'import os,sys; t=sys.argv[1]+".new"; os.path.lexists(t) and os.remove(t); os.symlink(sys.argv[2], t); os.replace(t, sys.argv[1])' \
-    "$EVO_DIR/current" "releases/$VER" && ok "current → releases/$VER（上一版记在 releases/PREVIOUS）"
+    "$EVO_DIR/current" "releases/$VER" && ok "current → releases/${VER}（上一版记在 releases/PREVIOUS）"
   RUN_KIT="$EVO_DIR/current"
   # 看门狗：拷到 guard/（不在 releases 里，自升级碰不到它）
   mkdir -p "$EVO_DIR/guard"; cp "$KIT/selfmaint/evo-guard.sh" "$EVO_DIR/guard/evo-guard.sh"; chmod 755 "$EVO_DIR/guard/evo-guard.sh"
   ok "看门狗脚本 $EVO_DIR/guard/evo-guard.sh"
 else
-  info "--dev：常驻进程直接跑 $KIT（不建 releases，不装看门狗）"
+  info "--dev：常驻进程直接跑 ${KIT}（不建 releases，不装看门狗）"
 fi
 if [ -f "$EVO_DIR/config.json" ]; then
   ok "全局配置已有，不覆盖"
@@ -214,7 +214,7 @@ for cfg in "${EVO_HOME:-$HOME/.evoloop/projects}"/*/config.json; do
   [ -f "$cfg" ] || continue
   code=$(basename "$(dirname "$cfg")")
   if ! grep -q '"clone": *true' "$cfg"; then
-    info "$code 还在你的工作副本里合并：$KIT/bin/evo -p $code relocate 切到 ~/.evoloop/repos/$code（之后 evo 不碰你的副本）"
+    info "$code 还在你的工作副本里合并：$KIT/bin/evo -p $code relocate 切到 ~/.evoloop/repos/${code}（之后 evo 不碰你的副本）"
   fi
 done
 echo "完成。下一步登记项目（安装脚本不登记项目）："

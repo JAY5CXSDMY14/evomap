@@ -7,7 +7,7 @@ head=$(gh pr view "$PR" --json headRefOid -q .headRefOid)
 [[ "$head" == "$SHA"* ]] || { echo "✗ PR head 已变为 ${head:0:8}，与审过的 ${SHA:0:8} 不同 → 重新 review" >&2; exit 1; }
 short=${SHA:0:7}
 gh pr view "$PR" --json comments,reviews -q '[.comments[].body, .reviews[].body][]' | grep -q "Reviewed \`$short" \
-  || { echo "✗ 没有找到 \"Reviewed \`$short…\" 的 Review 评论。先写记录，再合并" >&2; exit 1; }
+  || { echo "✗ 没有找到 \"Reviewed \`${short}…\" 的 Review 评论。先写记录，再合并" >&2; exit 1; }
 gh pr view "$PR" --json comments,reviews -q '[.comments[].body, .reviews[].body][]' | grep -q "Not run" \
   || echo "! Review 评论里没有 Not run 一行——如果确实全部跑了，写 'Not run: none'"
 # squash 的提交信息必须自己写：默认信息会列出分支里所有 commit（含合进来的 main），

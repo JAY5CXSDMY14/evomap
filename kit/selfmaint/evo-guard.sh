@@ -52,8 +52,8 @@ fi
 
 PREV=$(cat "$PREVF" 2>/dev/null)
 if [ -z "$PREV" ] || [ ! -f "$EVO_DIR/releases/$PREV/bin/evo" ]; then
-  say "要回退但找不到上一版（PREVIOUS=$PREV）：$why"
-  MSG="evo 自升级出问题且没法回退：$why（找不到上一版），请手动处理"
+  say "要回退但找不到上一版（PREVIOUS=${PREV}）：$why"
+  MSG="evo 自升级出问题且没法回退：${why}（找不到上一版），请手动处理"
 else
   # 原子地换软链（mv 到一个指向目录的软链上会挪进目录里，所以用 os.replace）
   "$PY" -c 'import os,sys; t=sys.argv[1]+".guard"; os.path.lexists(t) and os.remove(t); os.symlink(sys.argv[2], t); os.replace(t, sys.argv[1])' "$CUR" "releases/$PREV"
@@ -62,8 +62,8 @@ import json, sys, time
 p = sys.argv[1]; d = json.load(open(p)); d.update(state="rolled_back", why=sys.argv[2], rolled_back_at=time.time())
 json.dump(d, open(p, "w"), ensure_ascii=False)
 PYEOF
-  say "已回退到 $PREV：$why"
-  MSG="evo 自升级到 $TO 失败（$why），看门狗已切回上一版 $PREV"
+  say "已回退到 ${PREV}：$why"
+  MSG="evo 自升级到 $TO 失败（${why}），看门狗已切回上一版 $PREV"
   if [ "$(uname)" = Darwin ]; then
     launchctl kickstart -k "gui/$(id -u)/com.evoloop.autopilot" >/dev/null 2>&1 || true
   fi

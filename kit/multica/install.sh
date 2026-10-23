@@ -41,7 +41,7 @@ if [ $UNINST = 1 ]; then
 fi
 if [ $UNINSTALL = 1 ]; then
   case "$ROOT" in */multica) ;; *) echo "  ✗ ROOT=$ROOT 不像本脚本的目录（要以 /multica 结尾），不删"; exit 1 ;; esac
-  if [ $YES = 0 ]; then echo "会卸 $LABEL、删 $PLIST、删整个 $ROOT、删钥匙串 $KC_SVC。确认请加 --yes"; exit 1; fi
+  if [ $YES = 0 ]; then echo "会卸 ${LABEL}、删 ${PLIST}、删整个 ${ROOT}、删钥匙串 ${KC_SVC}。确认请加 --yes"; exit 1; fi
   launchctl bootout "gui/$(id -u)/$LABEL" 2>/dev/null && ok "已卸 $LABEL" || info "$LABEL 没在跑"
   rm -f "$PLIST"; rm -rf "$ROOT" && ok "已删 $ROOT"
   security delete-generic-password -s "$KC_SVC" >/dev/null 2>&1 && ok "已删钥匙串 $KC_SVC" || true
@@ -76,10 +76,10 @@ curl -s -m 3 -o /dev/null -w '%{http_code}' http://127.0.0.1:3425/v1/models -H "
 RUNTIME_REPO=${MULTICA_DSH_RUNTIME_REPO:-https://github.com/multica-ai/dsh-multica-runtime}
 RTSRC=${MULTICA_DSH_RUNTIME_PATH:-$ROOT/src/dsh-multica-runtime}
 SRC_OWNED=0; [ -z "${MULTICA_DSH_RUNTIME_PATH:-}" ] && SRC_OWNED=1
-if [ -f "$RTSRC/package.json" ]; then ok "dsh-runtime 源码：$RTSRC（$(git -C "$RTSRC" rev-parse --short HEAD 2>/dev/null || echo 非 git)）"
+if [ -f "$RTSRC/package.json" ]; then ok "dsh-runtime 源码：${RTSRC}（$(git -C "$RTSRC" rev-parse --short HEAD 2>/dev/null || echo 非 git)）"
   if [ -d "$RTSRC/.git" ]; then
     REMOTE=$(git -C "$RTSRC" ls-remote origin HEAD 2>/dev/null | cut -c1-7); LOCAL=$(git -C "$RTSRC" rev-parse --short=7 HEAD 2>/dev/null)
-    if [ -n "$REMOTE" ] && [ "$REMOTE" != "$LOCAL" ]; then warn "源码落后上游（本地 $LOCAL，上游 $REMOTE）：加 --update-src 更新后重建"; fi
+    if [ -n "$REMOTE" ] && [ "$REMOTE" != "$LOCAL" ]; then warn "源码落后上游（本地 ${LOCAL}，上游 ${REMOTE}）：加 --update-src 更新后重建"; fi
   fi
 elif [ -n "${MULTICA_DSH_RUNTIME_PATH:-}" ]; then bad "MULTICA_DSH_RUNTIME_PATH=$RTSRC 里没有 package.json"
 else info "dsh-runtime 源码还没有，--apply 会 git clone $RUNTIME_REPO → $RTSRC"; command -v git >/dev/null || bad "没有 git"; fi
@@ -95,16 +95,16 @@ if [ $APPLY = 0 ]; then echo; [ $HARD = 0 ] && echo "检查完毕，可以 --app
 echo "== 4. 安装"
 STAGE="准备目录"
 on_fail(){ rc=$?; [ $rc = 0 ] && return
-  echo; echo "✗ 安装停在「$STAGE」（退出码 $rc）。已经建好的东西："
+  echo; echo "✗ 安装停在「${STAGE}」（退出码 ${rc}）。已经建好的东西："
   for d in "$BIN" "$DSHPKG" "$DSHHOME" "$LOGS" "$ROOT/vendor" "$ROOT/src"; do [ -e "$d" ] && echo "  · $d"; done
   [ -d "$DSHPKG" ] && [ ! -x "$DSHPKG/node_modules/.bin/dsh" ] && echo "  · $DSHPKG/node_modules 不完整"
   echo "下一步：看上面 ✗ 指的日志（$LOGS/），修好后直接再跑 --apply，会接着装；想从头来：bash $0 --uninstall --yes"
   echo "旧的 LaunchAgent / 正在跑的 daemon 没有动。"; }
 trap on_fail EXIT
 mkdir -p "$DSHPKG" "$BIN" "$DSHHOME/profiles/multica" "$LOGS"
-ln -sf "$NODE" "$BIN/node"; ok "$BIN/node → $NODE（避开带空格的路径）"
+ln -sf "$NODE" "$BIN/node"; ok "$BIN/node → ${NODE}（避开带空格的路径）"
 export PATH="$BIN:$PATH"   # 之后 npm 的 #!/usr/bin/env node 也落到 Node 22
-info "npm: $NPM（运行在 $(node -v)）"
+info "npm: ${NPM}（运行在 $(node -v)）"
 # 4a. dsh-runtime：不在 npm 上 → 源码构建后打成 tarball（不用 file: 目录引用，免得源码目录被删就坏）
 mkdir -p "$ROOT/vendor" "$(dirname "$RTSRC")"
 STAGE="dsh-runtime 源码"
@@ -113,7 +113,7 @@ if [ $UPDSRC = 1 ] && [ -d "$RTSRC/.git" ]; then
     OLD=$(git -C "$RTSRC" rev-parse --short HEAD)
     git -C "$RTSRC" pull --ff-only >>"$LOGS/runtime-build.log" 2>&1 || { bad "git pull --ff-only 失败（本地有改动？），看 $LOGS/runtime-build.log"; exit 1; }
     NEW=$(git -C "$RTSRC" rev-parse --short HEAD)
-    [ "$OLD" != "$NEW" ] && { rm -rf "$RTSRC/node_modules"; ok "源码 $OLD → $NEW，重新装依赖"; } || ok "源码已是最新 $NEW"
+    [ "$OLD" != "$NEW" ] && { rm -rf "$RTSRC/node_modules"; ok "源码 $OLD → ${NEW}，重新装依赖"; } || ok "源码已是最新 $NEW"
   else warn "--update-src 只更新脚本自己 clone 的目录；MULTICA_DSH_RUNTIME_PATH 指向的你自己管"; fi
 fi
 if [ ! -f "$RTSRC/package.json" ]; then
@@ -179,7 +179,7 @@ STAGE="env / 启动脚本 / LaunchAgent"
 KEYLINE="MAGPIE_GATEWAY_KEY=$MAGKEY"
 if [ $KEYCHAIN = 1 ]; then
   security add-generic-password -U -a "$USER" -s "$KC_SVC" -w "$MAGKEY" >/dev/null 2>&1 \
-    && { KEYLINE="MAGPIE_KEY_FROM_KEYCHAIN=1"; ok "Magpie key 存进登录钥匙串 $KC_SVC，env 里不留明文"; } \
+    && { KEYLINE="MAGPIE_KEY_FROM_KEYCHAIN=1"; ok "Magpie key 存进登录钥匙串 ${KC_SVC}，env 里不留明文"; } \
     || warn "存钥匙串失败，key 还是写进 env（600）"
 fi
 umask 077
@@ -192,7 +192,7 @@ MULTICA_CODEX_PATH=$CODEX
 $KEYLINE
 PATH=$BIN:$DSHPKG/node_modules/.bin:$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin
 E
-chmod 600 "$ENVF"; ok "环境变量 → $ENVF（600）"
+chmod 600 "$ENVF"; ok "环境变量 → ${ENVF}（600）"
 umask 022
 cat > "$START" <<'S'
 #!/bin/bash
@@ -221,10 +221,10 @@ cat > "$PLIST" <<P
   <key>StandardErrorPath</key><string>$LOGS/daemon.err.log</string>
 </dict></plist>
 P
-ok "LaunchAgent → $PLIST（崩溃后 ${THROTTLE}s 重启；环境变量在 env 文件里，不进 plist）"
+ok "LaunchAgent → ${PLIST}（崩溃后 ${THROTTLE}s 重启；环境变量在 env 文件里，不进 plist）"
 trap - EXIT
 echo
-launchctl bootout "gui/$(id -u)/$LABEL" 2>/dev/null && info "已先卸掉旧的 $LABEL（要重新 bootstrap）"
+launchctl bootout "gui/$(id -u)/$LABEL" 2>/dev/null && info "已先卸掉旧的 ${LABEL}（要重新 bootstrap）"
 echo "装好了。接管前先停掉不归 launchd 管的 daemon：multica daemon stop（还在就 kill 那个 pid），确认 multica daemon status 不是 running，再："
 echo "  launchctl bootstrap gui/\$(id -u) $PLIST"
 echo "看日志：tail -f $LOGS/daemon.*.log ；查状态：multica daemon status ；multica runtime list"

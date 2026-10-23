@@ -9,7 +9,7 @@ runs=$(gh run list --commit "$SHA" --json status,conclusion,name -q '.[]|"\(.nam
 bad=0
 while IFS='|' read -r name status concl; do
   if [ "$status" != "completed" ]; then echo "✗ $name 未完成 ($status)"; bad=1
-  elif [ "$concl" != "success" ] && [ "$concl" != "skipped" ]; then echo "✗ $name = $concl（cancelled 也不算通过）"; bad=1
+  elif [ "$concl" != "success" ] && [ "$concl" != "skipped" ]; then echo "✗ $name = ${concl}（cancelled 也不算通过）"; bad=1
   else echo "✓ $name"; fi
 done <<<"$runs"
 [ $bad = 0 ] || exit 1

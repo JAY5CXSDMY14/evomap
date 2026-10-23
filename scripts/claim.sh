@@ -45,7 +45,7 @@ fi
 hits=$(git log origin/main --since="3 days ago" --format='%h %s' | grep -E "#${ISSUE}([^0-9]|$)" || true)
 [ -n "$hits" ] && { echo "! origin/main 上已有提到 #$ISSUE 的 commit："; echo "$hits"; echo "  确认不是重复修复后再继续（Ctrl-C 退出，回车继续）"; read -r _; }
 prs=$(gh pr list --state open --search "#$ISSUE" --json number,title -q '.[]|"#\(.number) \(.title)"')
-[ -n "$prs" ] && { echo "✗ 已有 open PR 处理 #$ISSUE："; echo "$prs"; exit 1; }
+[ -n "$prs" ] && { echo "✗ 已有 open PR 处理 #${ISSUE}："; echo "$prs"; exit 1; }
 
 title=$(gh issue view "$ISSUE" --json title -q .title)
 slug=$(echo "$title" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9]+/-/g;s/^-|-$//g' | cut -c1-30)
