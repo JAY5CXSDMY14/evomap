@@ -2934,7 +2934,7 @@ def check_stalls(s):
         # 额度用完的工人常常不回报、停在提示上：安静够久就看一眼终端尾部，连续两次同一提示且输出没再变才算
         if idle >= LIM.get("rate_limit_idle_minutes", 3):
             tail = terminal_tail(d["terminal"])
-            rl = TM.rate_limit_line(tail, tail=15)
+            rl = TM.rate_limit_line(tail, tail=15) or TM.upstream_line(tail, tail=15)   # #32：上游故障也走短暂停重排
             sig = rl and hashlib.md5(tail[-2000:].encode("utf-8")).hexdigest()   # 内置 hash 每个进程不同，不能用
             if rl and it.get("rl_probe") == sig:
                 requeue_rate_limited(s, k, it, "build" if it["state"] == "building" else "verify", rl)

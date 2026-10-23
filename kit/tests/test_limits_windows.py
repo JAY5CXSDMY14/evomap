@@ -232,3 +232,57 @@ def test_no_decide_role_configured_means_no_wake(loop):
     loop.run_until("AB", state_is("escalated"))
     loop.tick("AB")
     assert [w for w in loop.workers() if w["role"] == "decide"] == []
+
+
+# ---------- 10-23 #32 #33：上游故障（终端挂住）短暂停重排、只停出事的岗、重排不计入用量异常 ----------
+UP = 'API Error: 504 Post "https://api.artbloom.tech/v1/messages?beta=true": proxyconn'
+
+
+def test_upstream_seen_in_terminal_when_worker_hangs(loop):
+    loop.write_global({"limits": {"rate_limit_idle_minutes": 0, "usage_item_runs": 1}})
+    loop.env["FAKE_RL_TEXT"] = UP
+    loop.project("AB")
+    loop.plan(build=["ratelimit-hang"])
+    loop.add("AB")
+    loop.tick("AB")                                          # 派工；终端停在 504 上不回报；第一次只记下
+    assert loop.item("AB")["state"] == "building"
+    loop.tick("AB")                                          # 第二次同样的尾巴 → 上游故障，短暂停后原样重排
+    it = loop.item("AB")
+    assert it["state"] == "queued" and it["round"] == 0 and not it.get("stalled") and it["rate_waits"] == 1
+    roles = json.load(open(os.path.join(loop.root, "ratelimit.json")))["roles"]
+    assert roles["build"]["kind"] == "upstream" and not roles["build"]["guessed"]
+    assert "verify" not in roles                              # 同账号（同一个命令）的验收岗不连坐
+    assert any(e["kind"] == "upstream_down" for e in loop.outbox())
+    assert not any("疑似卡住" in l for l in loop.state("AB")["log"])
+    # 到点后再派工：派工 2 次，其中 1 次是上游重排 → 实际 1 次，不超过上限 1，不报用量异常
+    loop.env["EVO_NOW"] = "2026-10-20" + "T15:00:00+08:00"
+    loop.env.pop("FAKE_RL_TEXT")
+    loop.plan(build=["ok"])
+    loop.tick("AB")
+    it = loop.item("AB")
+    assert it["usage"]["runs"] == 2 and it["rate_waits"] == 1
+    assert not [m for m in loop.telegram_sent() if "用量异常" in m["text"]]
+
+
+def test_plain_output_in_hung_terminal_not_upstream(loop):
+    loop.write_global({"limits": {"rate_limit_idle_minutes": 0}})
+    loop.env["FAKE_RL_TEXT"] = "Running tests... 12 passed"
+    loop.project("AB")
+    loop.plan(build=["ratelimit-hang"])
+    loop.add("AB")
+    loop.tick("AB"); loop.tick("AB")
+    it = loop.item("AB")
+    assert it["state"] == "building" and not it.get("rate_waits")
+    assert not os.path.exists(os.path.join(loop.root, "ratelimit.json")) or \
+        not json.load(open(os.path.join(loop.root, "ratelimit.json")))["roles"]
+
+
+def test_quota_still_pauses_whole_account(loop):
+    loop.write_global({"limits": {"rate_limit_idle_minutes": 0}})
+    loop.env["FAKE_RL_TEXT"] = "API Error: 503 no auth available (last error: 429 rate limit, try again in 2 hours)"
+    loop.project("AB")
+    loop.plan(build=["ratelimit-hang"])
+    loop.add("AB")
+    loop.tick("AB"); loop.tick("AB")
+    roles = json.load(open(os.path.join(loop.root, "ratelimit.json")))["roles"]
+    assert roles["build"]["kind"] == "quota" and "verify" in roles   # 额度按账号一起停

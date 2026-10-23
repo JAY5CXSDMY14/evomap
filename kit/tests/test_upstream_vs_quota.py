@@ -30,9 +30,3 @@ def test_tg_env_from_launchd_plist(tmp_path, monkeypatch):
     assert N.env("EVO_TG_TOKEN") == "t1" and N.env("TUBU_TG_CHAT") == "c1"
     N._LAUNCHD_ENV = None
 
-
-def test_upstream_pause_only_that_role(tmp_path):
-    """上游故障只停出事的岗；同账号的别的岗不连坐。（源码级检查，完整流程在 pipeline 测试里）"""
-    src = open(os.path.join(os.path.dirname(__file__), "..", "bin", "evo"), encoding="utf-8").read()
-    assert "elif upstream:" in src and 'roles = [role]' in src
-    assert 'runs - it.get("rate_waits", 0)' in src
