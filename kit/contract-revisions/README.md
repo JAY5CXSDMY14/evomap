@@ -6,7 +6,7 @@
 
 ## 修订一 · 岗位不写死工具（01 全文）
 - 现：标题「三智能体」，条文点名 Codex / DSH / Claude Code / WorkBuddy。
-- 改：条文只写岗位（决策、施工、验收、审计、审查、中台）；谁担任写在 `kit/config.json` 与 `profiles/tubu/roles.yaml`。
+- 改：条文只写岗位（决策、施工、验收、审计、审查、中台）；谁担任写在 `kit/config.json` 与 evo 团队配置（`evo team set`）。
 - 为什么：换模型、换工具不必再修契约。
 
 ## 修订二 · 推进信号源（03 §6、§7；01 §3.5 第 4 条）

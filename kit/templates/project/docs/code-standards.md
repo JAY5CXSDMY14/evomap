@@ -1,7 +1,8 @@
 # Code Standards
 
-> Reviewer 逐条核对本文件。Builder 请求 review 前自查本文件。
-> 「来自复盘的硬标准」一节由夜审 Agent 维护：LESSONS.md 中 Seen 3× 的教训会被升级到这里。
+> 验收岗（evoloop `kit/roles/verifier.md`，和施工不同模型）逐条核对本文件；施工岗（`kit/roles/builder.md`）提请验收前自查本文件。
+> 不走 PR：验收通过后由 evo 在自己的克隆里合并、推 main。
+> 「来自复盘的硬标准」一节由复盘岗（`kit/roles/retro.md`）维护：docs/LESSONS.md 中 Seen 3× 的教训会被升级到这里。
 
 ## 1. 验收条件（合并或发布前必须展示全部）
 
@@ -16,10 +17,10 @@
 
 ## 2. 改动范围
 
-- 一个 commit / PR 只做一个目标；顺手发现的问题另开 Issue。
+- 一个 commit 只做一个目标；顺手发现的问题另开 Issue。
 - 修一类不修一例：grep 同类路径、同形态守卫、所有调用方，一起修或写明理由。
 - 改动必须在完整路径上成立：从用户输入追到最终结果（调用方、状态、副作用）。
-- 改了子系统的行为 / 状态 / 契约 → 同 PR 更新 `docs/subsystems/<name>.md`。
+- 改了子系统的行为 / 状态 / 契约 → 同一提交更新 `docs/subsystems/<name>.md`。
 - 不推翻 `AGENTS.md`「已拍板的产品决定」。
 
 ## 3. 测试
@@ -44,10 +45,9 @@
 
 ## 6. 合并
 
-- Reviewer 将 PR head 合到最新 main 后重跑检查，**只看 diff 不算 review**。
-- 先在 PR 上写 Review 评论（审过的 sha + 运行记录），再合并。
-- 合并命令：`gh pr merge <n> --squash --match-head-commit <reviewed-sha>`；Review 后 head 变化 → 重审。
-- PR 自己新增的测试失败、或 Review 列出的问题未解决 → 不合并。
+- 不走 PR。合并由 evo 做：验收通过（以及需要时老板「看效果」点头）后，evo 在自己的克隆里合到最新 main、跑测试、推送。
+- 验收岗在施工的工作区里重跑检查，**只看 diff 不算验收**；结论写明验收时的提交号，之后代码再变，这次验收作废。
+- 本件新增的测试失败、或验收列出的必须修没修完 → 不通过，evo 自动开返工。
 - Issue 不在合并时关闭；等报告人确认后关闭；报告人说没好 → 重开并标 `evo:regressed`。
 
 ## 7. 发布
@@ -75,10 +75,10 @@ Not run: <没跑的检查及原因>
 Known: 已知 flaky / 未覆盖的部分
 ```
 
-## 9. Review 评论模板
+## 9. 验收结论模板
 
 ```markdown
-Reviewed `<pr-head-sha>`, merged onto main `<main-sha>`. <Merging | Changes requested | Needs human>.
+验收 `<施工提交号>`（基于 main `<main-sha>`）。<通过 | 不通过 | 交决策岗>。
 
 **Harm check:** 改了哪些文件；是否新增网络请求、凭证读写、依赖、CI 变更、数据删除。
 

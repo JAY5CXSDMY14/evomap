@@ -5,7 +5,7 @@
 > **所有 Agent 改代码前必须读完本文件。**
 > 同一条教训在 3 个不同日期出现 → 升级进 `docs/code-standards.md`「来自复盘的硬标准」。
 > 关单标准：机制上不可能再发生才算关（Mechanism：code / test / script / gate / hook > static > rule > review）；只写进规则或靠人审的不算关。
-> 机制：evoloop/docs/lessons-system.md
+> 机制：evoloop 仓库 docs/lessons-system.md
 
 ## 复盘日志
 <!-- 最近 14 天，更早的移到 docs/lessons-archive/ -->

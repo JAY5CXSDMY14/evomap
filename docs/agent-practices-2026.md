@@ -224,7 +224,7 @@ Report gaps, not style preferences.
 - **对 evo 的用法**：
   - evo 的 builder↔verifier 回合设上限 3（超过就把事项退回 decider 重新拆）。
   - verifier 第 2 轮起只看增量 diff。
-  - 在 `docs/loop.md` 写明「agent 的通过不等于老板的批准」。
+  - 在 `docs/loop-overview.md` 写明「agent 的通过不等于老板的批准」。
   - 另建 `REVIEW.md`，写这个仓库里「失败长什么样」，限制吹毛求疵的条数，要求给文件和行号证据。
 - **可直接用的 REVIEW.md 骨架**（依文中要点）：
 

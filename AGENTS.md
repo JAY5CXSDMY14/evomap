@@ -22,7 +22,6 @@ evo 是一个通用的自动开发循环：老板说需求、拍板，evo 负责
 | `app/` | macOS App（SwiftUI），说明见 `app/README.md` |
 | `docs/` | 设计和说明。`.md` 是源，`.html` 是 answer-me-with-html 渲染出来给老板看的 |
 | `notes/` | `decisions.md`（决策记录，只追加）、审查分诊等工作笔记 |
-| `prompts/`、`scripts/`、`templates/`、`profiles/` | 第一版（v1）留下的文件，内核不读。删不删在 issue #20 里定，别顺手删 |
 
 ## 常用命令
 ```bash

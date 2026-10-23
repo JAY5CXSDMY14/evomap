@@ -15,7 +15,7 @@
 
 ## §0 岗位与担任者（V2.0 新增）
 
-岗位是固定的，担任者可替换。替换担任者只改 `kit/config.json` 与 `profiles/tubu/roles.yaml`，不修订本契约；模型统一经 magpie 指定。
+岗位是固定的，担任者可替换。替换担任者只改 `kit/config.json` 与 evo 团队配置（`evo team set`），不修订本契约；模型统一经 magpie 指定。
 
 | 岗位 | 当前担任者 | 本契约中的称呼 |
 |---|---|---|

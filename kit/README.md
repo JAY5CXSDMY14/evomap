@@ -256,6 +256,9 @@ CI：kit-tests run 39561803019（提交 ed7832b）全套绿；两个待定项锁
 - **埋雷（可选）**：验收岗规则加「任务书写了 `埋雷: 是` 时，信任全绿前给新测试喂三个必须失败的变体」；决策岗规则加一句什么件值得写。不是每件都要。
 - **对老配置的影响**：① scope 一条只认「这个文件」或「这个目录下」，`web` 不再算进 `website/`、`webhooks/`；带 `..` 或绝对路径的改动一律算越界。② 推送命令不真推到 git 远端的老配置（自定义脚本推到别处）会一直停在「推送中」——在项目配置写 `"push_verify": false` 恢复老行为，或写 `push_remote`。③ test_cmd 一个测试都没有的项目合并会被拦（算主线红）。④ 施工任务书开头多一行角色声明（看任务书开头做断言的脚本要改）。`status --json` 等 App 接口没改，schema_version 仍是 1；时间线 `push` 事件多一个可选字段 `remote_sha`（远端已在本地提交之后又前进时才有）。
 
+## 第二十四轮：架构减法（老板 10-23 15:09 批）
+- #20 删 v1 副本：根目录 `prompts/`、`scripts/`（含 v1 `install.sh`）、`templates/`、`profiles/` 和 v1 专用文档 `docs/loop.md`、`orchestration.md`、`adoption.md`；根 README 改成只讲 evo；项目模板 `docs/code-standards.md` 的 PR / Reviewer 改成施工 / 验收岗、evo 合并、不走 PR。`evo new`、`kit/install.sh` 不读这些，不受影响。旧名 `tubu` 软链和 `~/.tubu` 回退没动（要先确认老项目都迁完）。
+
 ## 只能在 Mac mini 上验的
 - 第二十二轮：真 GitHub 远端（走代理）`git ls-remote` 的耗时是否在 `timeouts.git_net` 内；runs/ 目录长期增长的体积（只增不删，需要时老板手动归档）；真 dsh / claude 工人读到首行角色声明后不再派活。
 - 第二十一轮：真 Claude（Pro 订阅）当决策岗时能否稳定交 decisions JSON、会不会用 propose；Multica 的「决策-Claude」agent 怎么指到 Pro 那份配置（见 docs/claude-cold-audit-prompt.md 末节）。

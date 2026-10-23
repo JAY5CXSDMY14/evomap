@@ -206,7 +206,7 @@ Reviewed `9bfed616`, merged onto main `238f0d92`, then onto main `8df15fd4`. Mer
 - 编排是**按渠道拆 loop**，每条 loop 内部自己走完分诊→实现→验证→合并→发布→回复。
 - 人的工作：方向、闸门，以及**每晚人工过 UI/UX**。
 - 两个前提常被忽略：**真实的多端复现环境**，以及**开发初期沉淀下来的产品决策与审美记忆**。
-- 仍未公开：loop 间隔、各 loop 是否用独立 worktree、jev 的具体配置。evoloop 对应的落地方案见 `docs/orchestration.md` 的 L0 档与 `prompts/loops/`。
+- 仍未公开：loop 间隔、各 loop 是否用独立 worktree、jev 的具体配置。evoloop 现在的落地方案见 `docs/loop-overview.md`（v1 的 L0 档 /loop 提示词已在第 24 轮删除）。
 
 ---
 
