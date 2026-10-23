@@ -135,3 +135,9 @@
 
 ## 2026-10-23 12:30 不做也作废转老板提问
 - Air：EV-CHORE-001 drop 后 mg_72（决策岗转老板）仍挂着。void_item_gates 只作废 look/do/ship；现在 owner_asks、budget_gates 一并作废，老版本残留在读状态时清掉。375 passed。
+
+## 2026-10-23 12:50 前台/秘书讨论（待老板拍板）
+- 老板想要：agent 当参谋（解释卡片、给建议），不审批；任何外部 agent 能提 issue 即可派活。
+- 参考 kkunkunya/virtual-bot-connect（Grok Bot 管家 + Multica 账本；bot 写入 via bot 不算批准）。Multica 自带 Chat 和 Telegram/飞书频道。
+- 提议：Multica 里加「秘书」agent（Claude Code + magpie sonnet），只读 `evo explain <卡号>`，不能批卡。等老板回复。
+- 43d4f40：blocked 不留话时提问写兜底说明。
