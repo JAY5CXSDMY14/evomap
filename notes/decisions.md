@@ -154,3 +154,13 @@
 - cf3d90a：根目录补 AGENTS.md（目录、命令、硬规则、已知的坑）和 CLAUDE.md（指路 + 审批边界）。
 - ac45cb7（#20 的一部分）：删根目录 templates/ 下与 kit/templates/project 完全相同的 AGENTS.md / CLAUDE.md（evo new 只读后者；v1 scripts/install.sh 改从后者拷）。项目模板路由改指 kit/roles/ 四个岗位规则、写明不走 PR；CLAUDE.md 改加载 docs/LESSONS.md。v1 的 prompts/、scripts/、templates/ 其余文件和 code-standards.md 里的 PR 字样留给 #20。
 - 待老板拍板（不变）：#15 额度满切备用、模型试用打分在 Multica 下删不删。
+
+## 2026-10-23 15:09 老板拍板架构减法 7 件（全部同意，按我的建议）
+- #12 批准只在 Telegram；网页面板保留为「看效果」截图页；App 冻结不再加功能（dmg 计划顺延）。
+- #16 删插件系统（推翻 10-21「留插件接口」；以后加功能直接进 evo）。
+- #15 删额度满自动切备用账号、新模型试用打分；换模型只在 magpie 改。施工≠验收保护保留（aeabdd1）。
+- #26 审批卡 6 类收成 3 类：做不做 / 看效果 / 上线。
+- #27 件号直接用 GitHub issue 号，不再另取 EV-FIX-001。
+- #21 HTML 讲解页不进仓库，只留 docs/loop-overview.html；其余按需生成。
+- #17 自带架构/UI 预设规则书换成各项目自己的 lint/CI。
+- 排期：第 24 轮 #20 v1 清理 + #21 + #16；第 25 轮 #26/#27/#12/#15/#17（等 evo 修完 #29–#31 再动，避免改同一文件）；#14 删 Orca 仍等土布迁 Multica。
