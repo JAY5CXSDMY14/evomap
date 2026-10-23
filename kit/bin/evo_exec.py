@@ -719,6 +719,8 @@ class MulticaExecutor(Executor):
             else:
                 typ, outcome = "worker_done", "succeeded" if rs in RUN_OK else "failed"
             body = p.get("report") or (run.get("error") or "")
+            if typ == "question" and not body.strip():   # 10-23 Air：EV-DOC-008 被标 blocked 没留话，提问显示成空
+                body = f"Multica issue {d['issue']} 被工人标成 blocked，没留说明；请看 issue 评论和 run 记录"
             if d["role"] == "verify" and typ == "worker_done" and outcome == "succeeded":
                 outcome = "succeeded" if verdict(body) else "failed"
             d["outcome"] = outcome

@@ -2556,7 +2556,7 @@ def handle_msg(s, m, by_task):
             else:
                 rework(s, k, it, "验收不通过：" + (m.get("body") or ""))
     elif typ in ("escalation", "question"):
-        it["state"] = "asking"; it["ask"] = m.get("subject") or m.get("body")
+        it["state"] = "asking"; it["ask"] = (m.get("subject") or m.get("body") or "").strip() or "工人上报了问题但没写内容"
         log(s, f"{k} 提问/上报：{it['ask']} → 交决策岗")
 
 
