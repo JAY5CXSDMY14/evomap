@@ -141,3 +141,10 @@
 - 参考 kkunkunya/virtual-bot-connect（Grok Bot 管家 + Multica 账本；bot 写入 via bot 不算批准）。Multica 自带 Chat 和 Telegram/飞书频道。
 - 提议：Multica 里加「秘书」agent（Claude Code + magpie sonnet），只读 `evo explain <卡号>`，不能批卡。等老板回复。
 - 43d4f40：blocked 不留话时提问写兜底说明。
+
+## 2026-10-21 audit + rounds 16–19 (moved from project skill 10-23)
+- Loop audit docs/loop-audit-2026-10 (7eb845a): 30 issues, 7 high (L-01 daemon lock, L-02 status lock, L-03 Orca-side gate bypass, L-04 bad message crash, L-05 red main blamed on items, L-06 no subprocess timeouts, L-07 git fetch no proxy).
+- Round 16 (f4b6a5b, 1e77dfc): schema_version'd JSON contract docs/app-contract; plugins ~/.evoloop/plugins; App 0.6.0. 老板: wanted magpie-style kernel + built-in feature plugins instead.
+- 老板 13:34 approved: Orca-side approve/ship 2nd confirm (TRIAL toggle); evo own clone ~/.evoloop/repos/<code>; caps 2 decider reworks / 12 dispatches / 6h.
+- Round 17 (771cd41, be70d9f): orca_gate_sync trial, relocate, evo limits, red main → OPS item. Round 18 (0671615): 12 features in kit/features, evo_rt/evo_bus, selfmaint guard, owner lease; known: guard spams "can't roll back" when no previous release. Round 19 (9e367e7..01faf05): App 0.8.0, async ProcessRunner, waiting-on-boss home, 100s freeze fixed; 2–8s hitches on CI VM need Instruments on real Mac.
+- Air = EV runner + staging, mini = TB production; Air uses mini's magpie via Remote magpie.
