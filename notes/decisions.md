@@ -148,3 +148,9 @@
 - 老板 13:34 approved: Orca-side approve/ship 2nd confirm (TRIAL toggle); evo own clone ~/.evoloop/repos/<code>; caps 2 decider reworks / 12 dispatches / 6h.
 - Round 17 (771cd41, be70d9f): orca_gate_sync trial, relocate, evo limits, red main → OPS item. Round 18 (0671615): 12 features in kit/features, evo_rt/evo_bus, selfmaint guard, owner lease; known: guard spams "can't roll back" when no previous release. Round 19 (9e367e7..01faf05): App 0.8.0, async ProcessRunner, waiting-on-boss home, 100s freeze fixed; 2–8s hitches on CI VM need Instruments on real Mac.
 - Air = EV runner + staging, mini = TB production; Air uses mini's magpie via Remote magpie.
+
+## 2026-10-23 14:40 第二十三轮（老板批）：补 Multica 撞模型保护、根目录 AGENTS/CLAUDE、删重复模板
+- aeabdd1（#15）：Multica 下每轮派工前读施工 / 验收 agent 的模型（agent list，没有再 agent get）。相同、两岗同一个 agent → 停派施工 / 验收并推 model_blocked；读不到 → 默认也停，项目配置 `multica.allow_unverified_models: true` 才放行。status 显示原因，`--json` 加 `model_guard`。magpie 组名展不开，名字不同按不同算（假设）。真机 agent JSON 的模型字段名待 Air 核实（docs/multica-backend.md 第 9 节）；dsh 若只靠环境变量设模型会被判读不到。
+- cf3d90a：根目录补 AGENTS.md（目录、命令、硬规则、已知的坑）和 CLAUDE.md（指路 + 审批边界）。
+- ac45cb7（#20 的一部分）：删根目录 templates/ 下与 kit/templates/project 完全相同的 AGENTS.md / CLAUDE.md（evo new 只读后者；v1 scripts/install.sh 改从后者拷）。项目模板路由改指 kit/roles/ 四个岗位规则、写明不走 PR；CLAUDE.md 改加载 docs/LESSONS.md。v1 的 prompts/、scripts/、templates/ 其余文件和 code-standards.md 里的 PR 字样留给 #20。
+- 待老板拍板（不变）：#15 额度满切备用、模型试用打分在 Multica 下删不删。
