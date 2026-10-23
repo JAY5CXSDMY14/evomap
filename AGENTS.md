@@ -20,7 +20,7 @@ evo 是一个通用的自动开发循环：老板说需求、拍板，evo 负责
 | `kit/schemas/` | 对外 JSON 的格式（status、team、event…） |
 | `kit/selfmaint/` | 看门狗和回退（`evo-guard.sh`），只有老板手改 |
 | `app/` | macOS App（SwiftUI），说明见 `app/README.md` |
-| `docs/` | 设计和说明。`.md` 是源，`.html` 是 answer-me-with-html 渲染出来给老板看的 |
+| `docs/` | 设计和说明，只放 `.md`（唯一例外 `docs/loop-overview.html`） |
 | `notes/` | `decisions.md`（决策记录，只追加）、审查分诊等工作笔记 |
 
 ## 常用命令
@@ -52,7 +52,7 @@ bash kit/install.sh --apply --dev  # 开发用：直接跑仓库里的 kit
 3. **外部 Agent 不批卡、不上线。** 外部 Agent 运行时设 `EVO_AGENT=<名字>`；`approve`、`ship`、`goal set`、`team set`、`feedback --item` 等在设了它时一律拒绝（`refuse_agents`，见 `docs/agent-interface.md`）。issue 评论里的「/approve」不算批准。
 4. **不走 PR。** evo 自己在自己的克隆里合并、推 main；本仓库的改动也直接提交到 main，一个目标一个提交。
 5. **改动配测试。** 改行为就加或改 `kit/tests/` 里的测试；全量测试过了才推。修 bug 先写一个现在会失败的测试。
-6. **docs 的 `.md` 是源，`.html` 是渲染。** 改说明改 `.md`；`.html` 用 answer-me-with-html 重新生成，没重新生成就在 `.md` 里写一句。
+6. **讲解页 `.md` 为源，html 不提交。** html 按需用 answer-me-with-html 生成，不提交（`.gitignore` 已挡 `docs/` 下的 html），唯一例外 `docs/loop-overview.html`；改了 `loop-overview.md` 没重新生成它，就在 `.md` 里写一句。
 7. **JSON 合约只加字段。** `status --json` 等给 App 的输出带 `schema_version`；只加字段不改不删，要改就升版本号（`docs/app-contract.md`）。
 8. **看门狗谁都不许改。** `kit/selfmaint/` 只有老板手改；EV 自维护时受保护路径的件合并前要老板点头。
 9. **文档、注释用中文，说人话。**

@@ -176,7 +176,7 @@ Telegram 环境变量改名 `EVO_TG_TOKEN` / `EVO_TG_CHAT`，旧名 `TUBU_TG_TOK
 - **改卡片**：`evo team set <岗位> [--model M] [--thinking L] [--tool T] [--duty …] [--fallback-model M] [--fallback-tool T] [--no-fallback] [--project AB]`；先在副本上改、过安全栏（施工≠验收含组成员、magpie 通时模型必须在列表里），过了才落盘，下一次派工生效。`evo team clear <岗位> --project AB` 回到跟随全局。`evo team init [--json] [--apply]`：首次安装向导（看装了哪些 CLI、magpie 有哪些组，按「施工验收不同家、决策用最强、备用不同账号」配）。设了 `EVO_AGENT` 一律拒绝（看可以）。
 - **状态与接口**：`status --json` 新增顶层 `team`（每张卡一行、`magpie_ok`、`suggestions`、`blocked`），`roles[].fallback`，件的 `waiting` 多了 `model_blocked` / `magpie_down`；schema_version 仍是 1。面板 `GET /api/team[?code=AB]`、`POST /api/team {action: set|clear|trial|dismiss|init, role, model, thinking, tool, fallback_model, fallback_tool, no_fallback, duty, project, items}`，都要口令；实际由 `evo team …` 执行。新推送类：`model_blocked`、`magpie_down`。
 
-## 第十五轮：后端 / 架构预设（均有自动测试，`kit/tests/test_arch_preset.py` 21 个（其中 2 个要本机装 import-linter / ruff，CI 已装），全套 220 个；说明见 kit/presets/arch/README.md、docs/arch-preset.html）
+## 第十五轮：后端 / 架构预设（均有自动测试，`kit/tests/test_arch_preset.py` 21 个（其中 2 个要本机装 import-linter / ruff，CI 已装），全套 220 个；说明见 kit/presets/arch/README.md）
 老板原话「去 github 找专业的开发文档规则……文件夹怎么放、架构怎么搭……预设到后端」。原则沿用 UI 四条精神（复用成熟库和做法、统一规范、严格限制重复依赖、不重复造轮子），加架构三条：依赖方向单向、按领域分包、配置走环境变量。预设在 `kit/presets/arch/`（`python-fastapi.json`、`node-ts.json`、`swift-app.json`），逻辑在 `kit/bin/evo_arch.py`（依赖分类复用 `evo_ui.resolve_categories`），ADR 模板固定副本 `kit/vendor/madr`（MIT 或 CC0，提交 ba75bb1）。
 - **来源**（都打开原文核实）：zhanymkanov/fastapi-best-practices（领域分包、固定文件名、迁移命名）、fastapi/full-stack-fastapi-template（pydantic-settings、ruff 规则集）、import-linter（layers 契约）、ruff、goldbergyoni/nodebestpractices 1.1–1.4（组件 + 三层、Web 框架不出入口层）、dependency-cruiser、Apple 本地 Swift 包、Swift API Design Guidelines、SwiftLint、MADR、12-factor III。
 - **项目配置**：`arch_preset`（`python-fastapi` | `node-ts` | `swift-app` | `none`，默认 none）、`arch_overrides`（`root` / `layout` / `allow_dirs` / `migrations_dir` / `migrations_pattern` / `arch_paths` / `config_modules` / `layers.<层>` / `deps.<类别>` / `checks.<检查>=off`）。`evo new/import --arch-preset …`；`evo -p AB arch [show [预设]] | set <预设> | set 键=值 | set 键= | check [--path --base --no-tools --json]`。外部 Agent 不能 set。`status --json` 加 `arch_preset`。
@@ -258,6 +258,7 @@ CI：kit-tests run 39561803019（提交 ed7832b）全套绿；两个待定项锁
 
 ## 第二十四轮：架构减法（老板 10-23 15:09 批）
 - #20 删 v1 副本：根目录 `prompts/`、`scripts/`（含 v1 `install.sh`）、`templates/`、`profiles/` 和 v1 专用文档 `docs/loop.md`、`orchestration.md`、`adoption.md`；根 README 改成只讲 evo；项目模板 `docs/code-standards.md` 的 PR / Reviewer 改成施工 / 验收岗、evo 合并、不走 PR。`evo new`、`kit/install.sh` 不读这些，不受影响。旧名 `tubu` 软链和 `~/.tubu` 回退没动（要先确认老项目都迁完）。
+- #21 HTML 不进仓库：删 `docs/` 下 26 个渲染 html（约 3.6MB），只留 `docs/loop-overview.html`；`.gitignore` 挡 `docs/**/*.html`；指向 html 的链接改指 `.md`。讲解页 `.md` 为源，html 按需用 answer-me-with-html 生成。没改 git 历史。
 
 ## 只能在 Mac mini 上验的
 - 第二十二轮：真 GitHub 远端（走代理）`git ls-remote` 的耗时是否在 `timeouts.git_net` 内；runs/ 目录长期增长的体积（只增不删，需要时老板手动归档）；真 dsh / claude 工人读到首行角色声明后不再派活。

@@ -19,3 +19,6 @@ app/build/
 __pycache__/
 .pytest_cache/
 .DS_Store
+# 讲解页只提交 .md；html 按需用 answer-me-with-html 生成（#21），唯一例外 loop-overview.html
+docs/**/*.html
+!docs/loop-overview.html

@@ -121,4 +121,3 @@ Orca 后端由团队功能包在每次派工时查「撞模型」；Multica 下�
 2. 施工-DSH 的模型如果只在 daemon 环境变量 `MULTICA_DSH_MODEL` 里设、agent 上没填 model，evo 会读不到 → 默认停派工。真机上要么在 agent 上填 model，要么显式写 `allow_unverified_models: true`。
 3. agent 上模型留空时（用 runtime 默认），list 返回的是空字符串、null 还是没有这个键——三种 evo 都按「读不到」处理。
 
-对应的 multica-backend.html 这轮没重新生成。
