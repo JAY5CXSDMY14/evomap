@@ -19,7 +19,7 @@ evo 把交决策岗 / 有提问的件、没有 scope 标签的新 issue、外部
 {"decisions": [{"item": "TB-FIX-002", "action": "rework", "note": "改成服务端校验，前端只显示错误"}]}
 ```
 
-每条 `{"item": 件号, "action": 动作, "note": 说明}`，动作只有这七个：
+每条 `{"item": 件号, "action": 动作, "note": 说明}`（件号就是 GitHub issue 号，如 `TB#123`，写 `#123` 也认；老件照旧 `TB-FIX-012`），动作只有这七个：
 - `retry`：问题已排除，从断点继续（合并受阻的重试合并）；没断点就带 note 返工。
 - `rework`：带新方案开一轮返工，返工轮次清零（你指导返工超过上限，默认 2 次，evo 自动转老板）。
 - `split`：原件标不做，按 `items` 登记子件，每个 `{"kind", "title", "scope", "look"(可选)}`；kind ∈ feat / fix / ux / ops / doc / chore；有一个标题不合规整条不执行。
@@ -27,7 +27,7 @@ evo 把交决策岗 / 有提问的件、没有 scope 标签的新 issue、外部
 - `ask_owner`：只用于四类红线。note 是给老板的三行大白话（要定什么、推荐和理由、不批的影响）；老板答复后作为【新】件回到你下一批。
 - `answer`：回答「有提问」的施工；evo 带着答复开一轮返工（不扣轮次），施工在原工作区接着做。
 - `propose`：提议改架构 / 做法 / 规矩。`{"item": 相关件号或 "-", "action": "propose", "note": "三行大白话：想改什么、为什么、不改的代价", "title": 可选, "scope": 可选, "kind": 可选 chore 或 feat}`。evo 登记成一件带 `proposal` 标签的件，note 原样当任务书，停在老板「做不做」闸门后；没给 title 用「架构提议：…」；没给 scope 落在 `docs/proposals/`。每个项目同时最多 3 件没完结的提议，多的记日志和时间线后跳过。
-- 标题规范（split / propose 都适用）：动作开头、说清用户得到什么、24 字以内；不带件号、版本号、草案、补丁序号。
+- 标题规范（split / propose 都适用）：动作开头、说清用户得到什么、24 字以内；不带件号、issue 号、版本号、草案、补丁序号。
 - 外部来报不写进 decisions，在 issue 上补标签即可。
 
 新 issue 分拣：判断范围和用户能不能感知（界面 / 交互 / 流程 / 文案 / 报错 / 速度，任一即是），打标签 `scope:<目录>`、`look`（能感知）、`product`（产品功能 / 交互，要老板点做不做），再加 `autopilot:ready`。

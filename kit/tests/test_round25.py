@@ -51,3 +51,75 @@ def test_status_schema_has_three_gate_kinds():
     props = schema["properties"]["gates"]["items"]["properties"]
     assert set(props["kind"]["enum"]) == {"do", "look", "ship", "other"}
     assert {"decider", "external", "budget"} <= set(props["reason"]["enum"])
+
+
+# ---------- #27 件号直接用 GitHub issue 号 ----------
+def _state_is(st):
+    return lambda s: all(it["state"] == st for it in s["items"].values())
+
+
+def test_issue_number_is_the_key_and_commands_accept_it(loop):
+    loop.project("AB")
+    loop.add("AB", extra=["--issue", "29"])
+    assert list(loop.state("AB")["items"]) == ["AB#29"]
+    loop.add("AB", "修复设置页保存失败", "api/", ["--issue", "#29"])       # 同一个 issue 再登记一件
+    assert list(loop.state("AB")["items"]) == ["AB#29", "AB#29-2"]
+    for ref in ("AB#29", "29", "#29", "ab#29"):
+        assert json.loads(loop.ok("-p", "AB", "log", ref, "--json").stdout)["key"] == "AB#29"
+    assert json.loads(loop.ok("-p", "AB", "runs", "29", "--json").stdout)["key"] == "AB#29"
+    loop.ok("-p", "AB", "drop", "#29", "测试")
+    assert loop.state("AB")["items"]["AB#29"]["state"] == "dropped"
+    assert loop.state("AB")["items"]["AB#29-2"]["state"] != "dropped"
+    assert not loop.state("AB").get("seq_kind")                          # 有 issue 的件不再取序号
+
+
+def test_issue_key_goes_through_the_whole_loop(loop):
+    """件号里带 #：工作区、分支、合并提交信息都要能走通（假 Orca）。"""
+    loop.project("AB")
+    loop.add("AB", extra=["--issue", "7"])
+    st = loop.run_until("AB", _state_is("merged"))
+    assert st["items"]["AB#7"]["merged_sha"]
+    msg = __import__("subprocess").run(["git", "-C", loop.repo("AB"), "log", "-1", "--format=%s", st["items"]["AB#7"]["merged_sha"]],
+                                        capture_output=True, text=True).stdout
+    assert "AB#7" in msg
+
+
+def test_issue_key_multica(loop):
+    loop.multica_project("MB")
+    loop.add("MB", extra=["--issue", "31"])
+    st = loop.run_until("MB", _state_is("merged"), n=10)
+    assert list(st["items"]) == ["MB#31"]
+
+
+def test_no_issue_falls_back_to_local_key_and_new_issue_flag(loop):
+    loop.project("AB", github_repo="o/r")
+    r = loop.add("AB")
+    assert list(loop.state("AB")["items"]) == ["AB-FIX-001"] and "本地件号" in r.stdout   # 没 issue：退回老格式
+    json.dump(41, open(os.path.join(loop.orca_dir, "gh_next_issue"), "w"))
+    loop.add("AB", "修复设置页保存失败", "api/", ["--new-issue"])
+    assert "AB#41" in loop.state("AB")["items"]
+    gh = open(os.path.join(loop.orca_dir, "gh.log"), encoding="utf-8").read()
+    assert "issue create -R o/r --title 修复设置页保存失败" in gh
+
+
+def test_old_keys_still_work_and_resolve_by_issue(loop):
+    """老件（TB-FIX-012 这种）原样可读可操作；挂着 issue 的老件用 issue 号也能找到。"""
+    loop.project("AB")
+    loop.add("AB")
+    sd = os.path.join(loop.projects, "AB", "state", "state.json")
+    s = loop.state("AB")
+    s["items"]["AB-FIX-001"]["issue"] = "12"                            # 第二十五轮前登记的、挂着 issue 12 的老件
+    json.dump(s, open(sd, "w", encoding="utf-8"), ensure_ascii=False)
+    assert json.loads(loop.ok("-p", "AB", "log", "AB-FIX-001", "--json").stdout)["key"] == "AB-FIX-001"
+    assert json.loads(loop.ok("-p", "AB", "log", "#12", "--json").stdout)["key"] == "AB-FIX-001"
+    loop.ok("-p", "AB", "feedback", "--item", "12", "按钮再大一点")
+    assert "按钮再大一点" in loop.item("AB")["spec"]
+    loop.ok("-p", "AB", "drop", "12")
+    assert loop.item("AB")["state"] == "dropped"
+
+
+def test_title_with_key_or_issue_number_rejected(loop):
+    loop.project("AB")
+    for t in ("AB-FIX-9 修复登录", "#29 修复登录", "AB#29 修复登录"):
+        r = loop.evo("-p", "AB", "add", "--kind", "fix", "--title", t, "--scope", "web/")
+        assert r.returncode != 0 and "issue 号" in (r.stderr + r.stdout)

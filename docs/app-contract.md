@@ -12,6 +12,8 @@ Evo.app 不读 evo 的内部文件，只跑 `evo … --json` 拿数据。这份�
 4. 没有 `schema_version` 的老输出（例如第十五轮之前的 `evo log --json`）按 1 处理。
 5. App 侧逻辑在 `app/Sources/EvoCore/Contract.swift`（`ContractCheck`），测试在 `app/Tests/EvoCoreTests/ContractTests.swift`。
 
+第二十五轮（老板 10-23 批，不升版本）：#26 `gates[].kind` 只出 `do`/`look`/`ship`/`other`，以前的 `external`/`ask`/`budget` 并进 `do`，新增可选 `reason`；#27 新件的件号是 `TB#123`（GitHub issue 号），老件号不变，所有接受件号的命令也接受 `123` / `#123`。老 App 读新输出不崩（kind 本来就认 do；件号本来就当字符串）。
+
 第二十四轮（#16）删了插件：`evo plugin list|run --json` 两个命令、`plugin-list` / `plugin-run` / `plugin-manifest` / `card` 四个 schema 一起没了（老板批准的删除，不升版本）。老 App 跑 `evo plugin list` 会失败，它本来就按「老 evo 没有插件」处理：不显示插件分组，不崩。`evo feature list --json` 的 `third_party` 字段留着、恒为 null。
 
 ## 二、App 调的命令一览
@@ -74,7 +76,7 @@ App 还会跑这些**写**命令（输出是给人看的文字，不是接口）
 
 | 字段 | 类型 | 必有 | 含义 |
 |---|---|---|---|
-| `key` | string | 是 | 件号 |
+| `key` | string | 是 | 件号。第二十五轮（#27）起新件是 `代号#issue 号`（`TB#123`，同一个 issue 第二件起 `TB#123-2`），没有 issue 的件和老件仍是 `TB-FIX-012`；App 把它当不透明字符串 |
 | `events[]` | 列表 | 是 | 时间线，每条 `{at, item, event, …}`，附加字段随 `event` 不同 |
 | `title`、`state`、`raw`、`goal` | string? | 是 | 现状 |
 | `report` | object? | 是 | 施工交卷（`summary`、`changes`、`tests`…） |

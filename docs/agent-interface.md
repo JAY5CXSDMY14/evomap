@@ -82,6 +82,8 @@
 
 第十二轮只加字段，`schema_version` 仍是 1。第二十轮同样只加字段。
 
+> 件号（第二十五轮 #27）：新件是 `代号#issue 号`（`TB#123`；同一个 issue 第二件起 `TB#123-2`），没有 issue 的件和老件是 `TB-FIX-012`。下面所有带 `<件号>` 的命令也接受 issue 号 `123` / `#123`。
+
 ### 2.1c `evo -p <代号> log <件号> --json`（每件时间线）
 读 `~/.evoloop/projects/<代号>/state/timeline.jsonl`（只追加，一行一个事件）。每行 `{"at", "item", "event", …}`，`event` 取 `add` `dispatch` `report` `gate_open` `gate_approve` `gate_reject` `gate_superseded` `feedback` `rework` `merge` `push` `ship` `deploy_failed` `restart` `decision` `drop` `state` `no_live_path` `live_again` `fallback_on` `fallback_off` `model_blocked`（第十四轮；`dispatch` 另带 `tool` `account` `fallback`）、`proposal` `proposal_skipped`（第二十一轮：决策岗 propose 登记 / 因限流或重名跳过；跳过时 `item` 可能是 `-`）；打回/补充反馈的原话在 `words`，合并、推送带 `sha`。`--diff` 输出这件的改动（工作区还在看分支，合并后看合并提交）。不抢锁，只读。
 

@@ -3,7 +3,8 @@
 第十七轮：$FAKE_ORCA_DIR/GH_FAIL 存在时一律报「gh auth login」退出 4；设了 HTTPS_PROXY 就记进 gh_env.log。
 issue list：有 $FAKE_ORCA_DIR/gh_issues.json 就按 --label 过滤返回，否则 []。
 api repos/.../issues/<n>/events：取 gh_events.json 里 "<n>" 的列表，否则 []。
-api repos/.../issues/<n>/comments：取 gh_comments.json 里 "<n>" 的列表，否则 []。其它命令什么都不输出。"""
+api repos/.../issues/<n>/comments：取 gh_comments.json 里 "<n>" 的列表，否则 []。issue create：有 $FAKE_ORCA_DIR/gh_next_issue（里面写个数字）就打印这个 issue 的链接（第二十五轮 evo add --new-issue）。
+其它命令什么都不输出。"""
 import json, os, sys
 D = os.environ["FAKE_ORCA_DIR"]
 a = sys.argv[1:]
@@ -27,3 +28,5 @@ elif a[:1] == ["api"] and a[1].endswith("/comments"):
 elif a[:1] == ["api"] and a[1].endswith("/events"):
     n = a[1].split("/")[-2]
     print(json.dumps((load("gh_events.json") or {}).get(n, [])))
+elif a[:2] == ["issue", "create"] and load("gh_next_issue") is not None:
+    print(f"https://github.com/o/r/issues/{load('gh_next_issue')}")

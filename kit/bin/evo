@@ -1099,6 +1099,7 @@ def cmd_runs(a):
         for r in rows:
             print(f"  {r['key']:<16} {r['records']} 份")
         return
+    a.key = resolve_key(read_state_ro(), a.key)         # 第二十五轮：给 issue 号（29 / #29）也认
     recs = read_runs(a.key, CODE); d = os.path.join(root, _runs_key(a.key))
     if a.json:
         print(json.dumps({"schema_version": APP_SCHEMA_VERSION, "project": CODE, "key": a.key, "dir": d, "records": recs}, ensure_ascii=False)); return
@@ -1295,13 +1296,70 @@ def check_title(t):
         return f"超过 24 字（{len(t)}）"
     if re.search(r"草案|呈审|原像|v\d|PATCH\d*|补丁\d|-[a-z]$|\.md$", t, re.I):
         return "带了版本/草案/补丁序号；这些记在件里，不进名字"
-    if re.match(r"^[A-Z]{2,}-", t):
-        return "不要把件号写进标题，件号自动生成"
+    if re.match(r"^[A-Z]{2,}-", t) or re.match(r"^([A-Z]{2,4})?#\d+", t):
+        return "不要把件号或 issue 号写进标题，件号自动取 issue 号"
     return None
 
 
 def cmd_add(a):
-    s = load(); add_item(s, a); save(s)
+    s = load()
+    if getattr(a, "parent", None):
+        a.parent = resolve_key(s, a.parent)
+    k = add_item(s, a); save(s)
+    print(f"已登记 {k}" + ("（没有 GitHub issue，用的本地件号；以后报这件说 " + k + "）" if not ISSUE_KEY_RE.match(k) else ""))
+
+
+# ---------- 第二十五轮（#27）：件号直接用 GitHub issue 号 ----------
+ISSUE_KEY_RE = re.compile(r"^[A-Z]{2,4}#\d+(-\d+)?$")            # 新件：EV#29；同一个 issue 拆出的第二件起 EV#29-2
+LEGACY_KEY_RE = re.compile(r"^[A-Z]{2,4}-[A-Z]+-\d{3,}$")          # 老件（和没有 issue 的件）：EV-FIX-001
+KEY_RE = re.compile(r"^[A-Z]{2,4}(-[A-Z]+-\d{3,}|#\d+(-\d+)?)$")
+
+
+def issue_num(v):
+    """'29' / '#29' / 'EV#29' / GitHub 链接 → '29'；读不出 None。"""
+    m = re.fullmatch(r"(?:[A-Za-z]{2,4})?#?(\d+)", str(v or "").strip()) or re.search(r"/issues/(\d+)$", str(v or "").strip())
+    return m.group(1) if m else None
+
+
+def new_item_key(s, issue, kind):
+    """新件的件号：有 GitHub issue 就是「代号#issue 号」（EV#29），同一个 issue 再登记（决策岗拆分、提议）依次 EV#29-2、-3…；
+    没有 issue（项目没配 GitHub、建 issue 失败、主线变红这类内部件）才退回老格式 EV-FIX-001（seq_kind 只给这种用）。"""
+    n = issue_num(issue)
+    if n:
+        base = f"{CODE}#{n}"
+        if base not in s["items"]:
+            return base
+        i = 2
+        while f"{base}-{i}" in s["items"]:
+            i += 1
+        return f"{base}-{i}"
+    s.setdefault("seq_kind", {}); s["seq_kind"][kind] = s["seq_kind"].get(kind, 0) + 1
+    return f"{CODE}-{kind.upper()}-{s['seq_kind'][kind]:03d}"
+
+
+def resolve_key(s, raw, items=None):
+    """命令里给的件号 → 状态里的件号。认：原样的件号（老件 EV-FIX-001 / 新件 EV#29）、issue 号（29、#29、ev#29）。
+    issue 号先找新件 EV#29，再找挂着这个 issue 的老件（只有一件没完结的才算）。找不到原样返回（调用方报「没有」）。"""
+    items = s.get("items") or {} if items is None else items
+    r = str(raw or "").strip()
+    if r in items:
+        return r
+    if r.upper() in items:
+        return r.upper()
+    n = issue_num(r)
+    if not n:
+        return r
+    if f"{CODE}#{n}" in items:
+        return f"{CODE}#{n}"
+    hit = [k for k, it in items.items() if str(it.get("issue") or "") == n]
+    live = [k for k in hit if items[k].get("state") not in ("merged", "shipped", "dropped")]
+    if len(hit) == 1:
+        return hit[0]
+    if len(live) == 1:
+        return live[0]
+    if len(hit) > 1:
+        raise SystemExit(f"issue #{n} 对应好几件：{'、'.join(hit)}，请写件号")
+    return r
 
 
 SCOPE_SEP = re.compile(r"[,，、;；\s]+")
@@ -1347,8 +1405,13 @@ def add_item(s, a):
             TM.parse_window(win, CFG.get("windows"))
         except ValueError as e:
             raise SystemExit(str(e))
-    s.setdefault("seq_kind", {}); s["seq_kind"][kind] = s["seq_kind"].get(kind, 0) + 1
-    key = f"{CODE}-{kind.upper()}-{s['seq_kind'][kind]:03d}"   # 例 TB-FIX-012；返工不换号，草案版本不进名字
+    if not issue_num(getattr(a, "issue", None)) and getattr(a, "new_issue", False) and svc("github") and CFG.get("github_repo"):
+        n = svc("github").create_issue(a.title, (a.spec or "") + f"\n\n（evo add 登记前自动开的 issue；件号就用这个 issue 号。scope: {','.join(scope)}）")
+        if n:
+            a.issue = n
+    if issue_num(getattr(a, "issue", None)):
+        a.issue = issue_num(a.issue)
+    key = new_item_key(s, getattr(a, "issue", None), kind)   # 第二十五轮（#27）：例 TB#123；没有 issue 才是老格式 TB-FIX-012；返工不换号
     # 冲突：范围重叠且还没合并的件，本件施工要等它合并
     deps = [it["merge"] for it in s["items"].values() if it["state"] not in ("merged", "shipped", "dropped") and overlap(scope, it["scope"])]
     spec = f"任务：{a.title}\nscope: {','.join(scope)}\n看效果: {'是（用户能感知）' if a.ui else '否'}\n" + \
@@ -2954,6 +3017,11 @@ def apply_decisions(s, body):
     for d in lst:
         k = (d or {}).get("item") if isinstance(d, dict) else None
         act = (d or {}).get("action") if isinstance(d, dict) else None
+        if k and k != "-":
+            try:
+                k = resolve_key(s, k)                    # 第二十五轮：决策岗写 #29 / EV#29 也认
+            except SystemExit:
+                pass
         it = s["items"].get(k) if k else None
         if act == "propose":                             # 第二十一轮：提议不挂在哪件上（item 可以是 "-"），单独处理
             note = str(d.get("note") or "").strip()
@@ -3386,8 +3454,8 @@ def _write_project_cfg(c):
 # ---------- 后端/架构预设（第十五轮，见 kit/presets/arch/README.md）----------
 
 
-# ---------- evo log <件号> ----------
-KEY_RE = re.compile(r"^[A-Z]{2,4}-[A-Z]+-\d{3,}$")
+# ---------- evo log <件号>（件号格式见 KEY_RE，第二十五轮起也认 issue 号）----------
+PANEL_KEY = r"([A-Z]{2,4}(?:-[A-Z]+-\d{3,}|(?:#|%23)\d+(?:-\d+)?))"     # 面板网址里的件号：新件的 # 写成 %23（第二十五轮）
 
 
 def read_state_ro(code=None):
@@ -3420,9 +3488,11 @@ def item_diff(it, limit=1 << 20):
 
 
 def cmd_log(a):
+    s = read_state_ro()
+    a.key = resolve_key(s, a.key)
     if not KEY_RE.match(a.key or ""):
-        sys.exit("件号格式不对，例：TB-FIX-012")
-    s = read_state_ro(); it = s["items"].get(a.key)
+        sys.exit("件号格式不对，例：TB#123、#123（issue 号）或老件号 TB-FIX-012")
+    it = s["items"].get(a.key)
     evs = read_timeline(a.key)
     if not it and not evs:
         sys.exit(f"没有 {a.key}")
@@ -3444,7 +3514,10 @@ def cmd_log(a):
 
 def cmd_retry(a):
     """问题处理好之后，让卡住的那件从断点继续（合并受阻 → 重试合并；疑似卡住 → 清标记）。"""
-    s = load(); it = s["items"][a.key]
+    s = load(); a.key = resolve_key(s, a.key)
+    if a.key not in s["items"]:
+        sys.exit(f"{CODE} 没有这件：{a.key}")
+    it = s["items"][a.key]
     it.pop("stalled", None)
     if it["state"] == "escalated" and it.get("resume"):
         it["state"] = it.pop("resume")
@@ -3454,7 +3527,7 @@ def cmd_retry(a):
 def cmd_drop(a):
     """第二十轮补：老板直接说「这件不做」。还在旧执行端（换执行端前）的件只记不做、不碰旧执行端，
     下一轮也不会在新执行端重建；已在当前执行端的件照常收尾（Multica issue 标 cancelled）。"""
-    s = load(); it = s["items"].get(a.key)
+    s = load(); a.key = resolve_key(s, a.key); it = s["items"].get(a.key)
     if not it:
         sys.exit(f"{CODE} 没有这件：{a.key}")
     if it["state"] in ("dropped", "merged", "shipped"):
@@ -3942,22 +4015,22 @@ def cmd_panel(a):
             if m and m.group(1) in list_projects():
                 rc, o, e = run("-p", m.group(1), "status", "--json")
                 return self.send(200 if rc == 0 else 500, o if rc == 0 else json.dumps({"error": e[-200:]}, ensure_ascii=False))
-            m = re.fullmatch(r"/api/(item|diff)/([A-Z]{2,4})/([A-Z]{2,4}-[A-Z]+-\d{3,})", path)
+            m = re.fullmatch(r"/api/(item|diff)/([A-Z]{2,4})/" + PANEL_KEY, path)
             if m and m.group(2) in list_projects():               # 每件时间线 / 改动
-                rc, o, e = run("-p", m.group(2), "log", m.group(3), "--json" if m.group(1) == "item" else "--diff")
+                rc, o, e = run("-p", m.group(2), "log", unquote(m.group(3)), "--json" if m.group(1) == "item" else "--diff")
                 if m.group(1) == "diff":
                     return self.send(200 if rc == 0 else 404, o if rc == 0 else e[-200:], "text/plain; charset=utf-8",
                                      [("X-Content-Type-Options", "nosniff")])
                 return self.send(200 if rc == 0 else 404, o if rc == 0 else json.dumps({"error": e[-200:]}, ensure_ascii=False))
-            m = re.fullmatch(r"/api/artifacts/([A-Z]{2,4})/([A-Z]{2,4}-[A-Z]+-\d{3,})", path)
+            m = re.fullmatch(r"/api/artifacts/([A-Z]{2,4})/" + PANEL_KEY, path)
             if m and m.group(1) in list_projects():               # 看效果闸门里的产出物清单
-                it = read_state_ro(m.group(1))["items"].get(m.group(2)) or {}
-                return self.send(200, json.dumps({"item": m.group(2), "files": artifact_list(it),
+                it = read_state_ro(m.group(1))["items"].get(unquote(m.group(2))) or {}
+                return self.send(200, json.dumps({"item": unquote(m.group(2)), "files": artifact_list(it),
                                                   "manual_checks": (it.get("report") or {}).get("manual_checks") or [],
                                                   "max_bytes": artifact_max()}, ensure_ascii=False))
-            m = re.fullmatch(r"/api/artifact/([A-Z]{2,4})/([A-Z]{2,4}-[A-Z]+-\d{3,})/(.+)", path)
+            m = re.fullmatch(r"/api/artifact/([A-Z]{2,4})/" + PANEL_KEY + r"/(.+)", path)
             if m and m.group(1) in list_projects():               # 单个产出物：防目录穿越、限大小、不让浏览器按网页执行
-                it = read_state_ro(m.group(1))["items"].get(m.group(2)) or {}
+                it = read_state_ro(m.group(1))["items"].get(unquote(m.group(2))) or {}
                 code_, f, err = artifact_file(it, unquote(m.group(3)))
                 if err:
                     return self.send(code_, json.dumps({"error": err}, ensure_ascii=False))
@@ -4045,7 +4118,7 @@ def cmd_feedback(a):
     --item <件号>：对某件补反馈，它等你的旧闸门作废、改完重开（不开 issue；件有 issue 就在上面留一条）。"""
     if getattr(a, "item", None):
         refuse_agents("对某件补反馈（会作废等老板的闸门）")
-        s = load(); it = s["items"].get(a.item)
+        s = load(); a.item = resolve_key(s, a.item); it = s["items"].get(a.item)
         if not it:
             sys.exit(f"没有 {a.item}")
         if it["state"] in ("merged", "shipped", "dropped", "pushing"):
@@ -4672,7 +4745,9 @@ if __name__ == "__main__":
     sp = p.add_subparsers(dest="cmd", required=True)
     x = sp.add_parser("add"); x.add_argument("--title", required=True); x.add_argument("--scope", required=True)
     x.add_argument("--look", "--ui", "--ux", dest="ui", action="store_true"); x.add_argument("--product", action="store_true")
-    x.add_argument("--issue"); x.add_argument("--spec")
+    x.add_argument("--issue", help="GitHub issue 号（件号就用它，例 EV#29）"); x.add_argument("--spec")
+    x.add_argument("--new-issue", dest="new_issue", action="store_true",
+                   help="第二十五轮：没有 issue 时先在项目的 GitHub 仓库开一个，件号用它（建不成就退回本地件号）")
     x.add_argument("--kind", choices=list(KINDS), default="feat", help="类别：" + "，".join(f"{k}={v}" for k, v in KINDS.items()))
     x.add_argument("--parent", help="拆出来的子件写父件号")
     x.add_argument("--window", help='时间窗：trading:cn，或 "mon-fri 09:30-11:30,13:00-15:00"（Asia/Shanghai），窗外不开工')

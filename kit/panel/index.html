@@ -115,10 +115,10 @@ function gateCard(g, code, name){
 
 // 看效果闸门里直接看产出物：图片原样显示；HTML 放进沙盒 iframe（只许脚本，绝不给同源权限），并加 CSP 断网；其余给下载链接
 const ART_CSP = `<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data:; style-src 'unsafe-inline'; script-src 'unsafe-inline'; font-src data:; connect-src 'none'; form-action 'none'">`;
-const artUrl = (code, item, path) => `api/artifact/${code}/${item}/` + path.split("/").map(encodeURIComponent).join("/");
+const artUrl = (code, item, path) => `api/artifact/${code}/${encodeURIComponent(item)}/` + path.split("/").map(encodeURIComponent).join("/");
 async function loadArtifacts(el){
   const code = el.dataset.code, item = el.dataset.item;
-  let a; try { a = await api(`api/artifacts/${code}/${item}`); } catch (e) { return; }
+  let a; try { a = await api(`api/artifacts/${code}/${encodeURIComponent(item)}`); } catch (e) { return; }
   const checks = (a.manual_checks||[]).length ? `<div class="checks">请看：${a.manual_checks.map(esc).join("；")}</div>` : "";
   const parts = await Promise.all((a.files||[]).map(async f => {
     const url = artUrl(code, item, f.path), name = `<div class="name">${esc(f.path)}</div>`;

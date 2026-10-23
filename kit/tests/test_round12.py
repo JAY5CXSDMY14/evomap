@@ -286,11 +286,11 @@ def test_trusted_issue_comment_supersedes_but_old_untrusted_and_evo_comments_don
     loop.ok("-p", "AB", "pull")
     st = loop.state("AB")
     assert gate in st["superseded_gates"]
-    assert "字号太小了" in st["items"][K]["spec"]
-    assert "外人说全删了" not in st["items"][K]["spec"] and "开闸门前的旧话" not in st["items"][K]["spec"]
+    assert "字号太小了" in st["items"]["AB#7"]["spec"]
+    assert "外人说全删了" not in st["items"]["AB#7"]["spec"] and "开闸门前的旧话" not in st["items"]["AB#7"]["spec"]
     loop.ok("-p", "AB", "pull")                                               # 同一条评论不会再作废一次
     assert len(loop.state("AB")["superseded_gates"]) == 1
-    fb = [e for e in events(loop) if e["event"] == "feedback"]
+    fb = [e for e in events(loop, "7") if e["event"] == "feedback"]
     assert len(fb) == 1 and "issue 评论" in fb[0]["source"]
 
 

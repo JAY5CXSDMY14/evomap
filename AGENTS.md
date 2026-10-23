@@ -34,7 +34,7 @@ cd kit && python3 -m pytest -q tests/test_multica_backend.py
 # evo 本身（多项目时加 -p <代号>）
 kit/bin/evo status [--json]        # 等你的、进行中、卡住的；--json 格式见 docs/agent-interface.md
 kit/bin/evo -p EV tick             # 接棒一轮：派工、收回报、合并、查停滞
-kit/bin/evo -p EV runs [件号]      # 永久运行记录 runs/<件号>/
+kit/bin/evo -p EV runs [件号]      # 永久运行记录 runs/<件号>/；件号 = GitHub issue 号（EV#29，写 29 / #29 也认），老件 EV-FIX-001 照旧
 kit/bin/evo selfcheck [--json]     # 自检（编译、功能包、事件、金丝雀）
 kit/bin/evo canary                 # 判据金丝雀：已知不合格的样例必须判不过
 kit/bin/evo models                 # 核对施工 / 验收模型（Orca 路线）

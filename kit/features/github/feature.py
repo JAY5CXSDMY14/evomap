@@ -237,6 +237,15 @@ def feedback_issue(words):
     print(r.stdout.strip())
 
 
+def create_issue(title, body):
+    """第二十五轮（#27）：evo add --new-issue 先开 issue 再登记，件号用它。返回 issue 号（字符串）；没建成 None（调用方退回本地件号）。"""
+    if not K.CFG.get("github_repo"):
+        return None
+    r = K.gh_run("issue", "create", "-R", K.CFG["github_repo"], "--title", title, "--body", body)
+    m = re.search(r"/issues/(\d+)", r.stdout or "") if r.returncode == 0 else None
+    return m.group(1) if m else None
+
+
 def issue_comment(num, text):
     if K.CFG.get("github_repo") and num:
         K.gh_run("issue", "comment", str(num), "-R", K.CFG["github_repo"], "-b", text)
@@ -255,6 +264,7 @@ class GitHub:
     pull = staticmethod(lambda: cmd_pull(None))
     feedback_issue = staticmethod(feedback_issue)
     issue_comment = staticmethod(issue_comment)
+    create_issue = staticmethod(create_issue)
     ensure_labels = staticmethod(ensure_labels)
 
 

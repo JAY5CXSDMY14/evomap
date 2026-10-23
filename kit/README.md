@@ -263,6 +263,7 @@ CI：kit-tests run 39561803019（提交 ed7832b）全套绿；两个待定项锁
 
 ## 第二十五轮：架构减法续（老板 10-23 15:09 批；`kit/tests/test_round25.py`）
 - #26 老板卡只剩三类：做不做（`do`）/ 看效果（`look`）/ 上线（`ship`）。决策岗转老板（红线）、外部来报碰红线、每件上限到了都开「做不做」卡，问题里写清来由，选项统一「做 / 不做」；三张表 `owner_asks` / `ext_gates` / `budget_gates` 并成一张 `do_gates`（`why` = decider / external / budget）。老状态读的时候自动并表、一张不丢；老卡的「同意 / 继续 / 同意交决策岗」= 做，「不同意 / 拒绝」= 不做。`status --json` 的 `kind` 只出 do / look / ship / other，新增 `reason`；App 把老 evo 的 ask / external / budget 按 do 读。EV 受保护路径（决策岗的 `answer` 自动改 `ask_owner`）照旧，只是卡变成做不做。
+- #27 件号直接用 GitHub issue 号：新件 `TB#123`（同一个 issue 再登记——决策岗拆分、提议——依次 `TB#123-2`、`-3`），不再取 `TB-FIX-012` 序号。`log` / `runs` / `retry` / `drop` / `feedback --item` / `add --parent` 和决策岗 JSON 的 `item` 都认件号、`123`、`#123`；issue 号先找新件，再找挂着这个 issue 的老件。老件原样可读可操作。没有 issue 的件（`evo add` 不带 `--issue`、主线变红的修复件）退回老格式 `TB-FIX-001`；想用 issue 号就先建 issue 再 `--issue`，或 `evo add --new-issue`（evo 先在项目仓库开 issue，建不成退回本地件号）。标题里不许写件号或 issue 号。分支 `evo/tb#123`、工作区 `tb123`、合并提交 `merge TB#123: …`；面板网址里 `#` 写 `%23`。
 
 ## 只能在 Mac mini 上验的
 - 第二十二轮：真 GitHub 远端（走代理）`git ls-remote` 的耗时是否在 `timeouts.git_net` 内；runs/ 目录长期增长的体积（只增不删，需要时老板手动归档）；真 dsh / claude 工人读到首行角色声明后不再派活。
