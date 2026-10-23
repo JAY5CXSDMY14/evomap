@@ -171,3 +171,11 @@
 - 3ee8168 + c203553（#16）：删插件系统（evo_plugin.py、features/plugins、示例插件、card/plugin-* 四个 schema、docs/plugins.md、App 插件页 / 命令 / 件按钮 / 设置开关）。feature list 的 third_party 留着恒为 null（合约只加不删）；版本范围匹配只留 evo_rt.py；JSONValue/CardTone 挪到 EvoCore/JSONValue.swift。c203553 补 3ee8168 漏改的 MainWindow 回话区高度（CI 编译红过一次）。
 - CI：kit-tests 373 passed（3ee8168）；app 全绿（c203553：EvoCore 101 测试、打包、snapshots、mac-demo）。mac-demo 里「⌘K 没跳到件详情 / 找不到 win-item-0」1 处是老问题，10-22 的 run 也有。
 - 没碰 evo 正在改的 evo_exec.py、evo_roles.py、features/team、multica/install.sh。
+
+## 2026-10-23 16:50 第二十五轮（老板 15:09 批）：架构减法 #26 / #27 / #17 / #12
+- 3da76d2（#26）：老板卡六类收成三类：做不做 / 看效果 / 上线。外部来报、决策岗转老板（ask）、每件上限（budget）三张表并进 do_gates，卡上 `reason` 写来由（item / decider / external / budget）；`gates[].kind` 只出 do / look / ship / other。老状态里的旧卡读状态时并进 do_gates，老卡选项（同意交决策岗 / 拒绝等）照旧认。合约不升版本、只加 `reason`。
+- c42f32a（#27）：新件号 = GitHub issue 号（TB#123），所有收件号的命令也认 `123` / `#123`；老件号（TB-FIX-012）照旧可用，不改名。只改了件号；「决策岗直接 register、删标签回路」没做，留着。
+- 9dc16ea（#17）：删 ui-preset / arch-preset 功能包、kit/presets、evo_deps、vendor/taste-skill、`evo ui` / `evo arch`。项目配置加 `checks`（自己的 lint / 类型检查 / CI 命令），验收岗逐条跑；status --json 加 `checks`。TB / ST 两个 profile 的 checks 先留空，等老板确认真实命令再填。
+- acccbb6（#12）：批卡只在 Telegram；没配 Telegram 时推一次「没处批卡」提醒（邮件兜底带 `evo -p 代号 approve` 命令），status --json 加 `approve_via`（telegram / cli）。网页面板只读，是看效果页：写接口一律 410。App 冻结：批卡按钮只提示去 Telegram 批，不再跑 approve。
+- 60fbf5f：9dc16ea 漏改测试白名单（test_projects_config 的 PROJECT_KEYS 没加 checks），kit-tests 在 9dc16ea / acccbb6 各红 1 个；补上。
+- 没碰 evo_exec.py、evo_roles.py、features/team、multica/install.sh。#15（删额度切换 / 模型试用）本轮没做。
