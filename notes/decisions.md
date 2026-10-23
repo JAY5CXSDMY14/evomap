@@ -191,3 +191,4 @@
 - 改：终端里跑 evo 时 shell 没有 EVO_TG_*，`evo_notify.env` 兜底读 ~/Library/LaunchAgents/com.evoloop.{autopilot,bot}.plist 的环境变量，status 不再误报「Telegram 没配好」。
 - 20:50 补：上游故障只停出事的那个岗（以前同账号 magpie 的验收 / 决策一起连坐）；额度 / 上游故障原样重排的次数（rate_waits）不计入「用量异常」的派工次数。
 - 10-24 02:15 #32 终端停在上游报错（工人活着不回报）也走 15 分钟短暂停重排（两次探测同尾巴）；#33 换成行为级测试（上游只停一岗、rate_waits 不计用量异常、429 仍按账号停、普通输出不触发）。
+- 10-24 02:25 install.sh：没 export 的 TG/邮件/代理变量沿用已装常驻 plist 里的值（之前重装会抹掉）；占位 token 告警。

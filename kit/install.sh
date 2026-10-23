@@ -157,8 +157,18 @@ if [ "$(uname)" = Darwin ]; then
   # 装的时候环境里有就带进常驻进程（plist 只有本人可读）：Telegram、邮件、webhook 密钥、代理（国内连 Telegram 要代理）
   for v in EVO_TG_TOKEN EVO_TG_CHAT EVO_TG_OWNER EVO_SMTP_HOST EVO_SMTP_PORT EVO_SMTP_USER EVO_SMTP_PASS EVO_SMTP_TLS \
            EVO_MAIL_FROM EVO_MAIL_TO EVO_WEBHOOK_SECRET HTTPS_PROXY HTTP_PROXY NO_PROXY; do
-    [ -n "${!v:-}" ] && ENVX="$ENVX<key>$v</key><string>$(xml "${!v}")</string>"
+    val="${!v:-}"
+    if [ -z "$val" ]; then   # 10-24：这次没 export 就沿用已装常驻里的值（以前重装会把 Telegram / 代理悄悄抹掉）
+      for old in "$PLIST" "$HOME/Library/LaunchAgents/com.evoloop.bot.plist"; do
+        [ -f "$old" ] || continue
+        val=$(/usr/libexec/PlistBuddy -c "Print :EnvironmentVariables:$v" "$old" 2>/dev/null || true)
+        [ -n "$val" ] && break
+      done
+      [ -n "$val" ] && export "$v=$val"
+    fi
+    [ -n "$val" ] && ENVX="$ENVX<key>$v</key><string>$(xml "$val")</string>"
   done
+  case "${EVO_TG_TOKEN:-}" in *这里*|*换成*|*粘在*) warn "EVO_TG_TOKEN 看起来是占位字，不是真 token：Telegram 会发不出去" ;; esac
   mkdir -p "$(dirname "$PLIST")"
   # install_agent <label> <plist> <说明> <evo 参数...>：内容没变且已加载就跳过
   # PYTHONDONTWRITEBYTECODE=1：常驻进程不在套件目录里写 __pycache__（装在应用包里时包内文件不能变，否则签名失效）
