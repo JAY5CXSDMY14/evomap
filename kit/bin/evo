@@ -1998,6 +1998,9 @@ def rl_pause(role, line, key, fallback=False, upstream=False):
     if fallback:
         acct = R.account_of(team_rc(role, True))
         roles = [role + ":fallback"]
+    elif upstream:   # 10-23：上游故障只停出事的这个岗（同账号的别的岗可能走别的线，不连坐）
+        acct = role_account(role)
+        roles = [role]
     else:
         acct = role_account(role)
         roles = [r for r in (CFG.get("roles") or {}) if (CFG["roles"][r] or {}).get("cmd") and role_account(r) == acct] or [role]
@@ -2100,6 +2103,7 @@ def check_usage(s):
             continue
         done = it.setdefault("usage_alerted", [])
         runs, mins = (it.get("usage") or {}).get("runs", 0), item_minutes(it)
+        runs = max(0, runs - it.get("rate_waits", 0))   # 10-23：额度 / 上游故障原样重排的那几次不算派工
         if mr and runs > mr and "runs" not in done:
             done.append("runs"); log(s, f"{k} 用量异常：已派工 {runs} 次（上限 {mr}）")
             notify("usage_abnormal", "用量异常", f"{k} {it['title']}：已派工 {runs} 次（上限 {mr}）", item=k, runs=runs, limit=mr)
