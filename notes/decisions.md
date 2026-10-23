@@ -164,3 +164,10 @@
 - #21 HTML 讲解页不进仓库，只留 docs/loop-overview.html；其余按需生成。
 - #17 自带架构/UI 预设规则书换成各项目自己的 lint/CI。
 - 排期：第 24 轮 #20 v1 清理 + #21 + #16；第 25 轮 #26/#27/#12/#15/#17（等 evo 修完 #29–#31 再动，避免改同一文件）；#14 删 Orca 仍等土布迁 Multica。
+
+## 2026-10-23 15:55 第二十四轮（老板 15:09 批）：架构减法 #20 / #21 / #16
+- 32284fd（#20）：删 v1 副本——根目录 prompts/、scripts/（含 v1 install.sh）、templates/、profiles/ 和只讲 v1 的 docs/loop.md、orchestration.md、adoption.md；README 只讲 evo；项目模板 code-standards.md 的 PR / Reviewer 改成施工 / 验收岗、evo 合并、不走 PR。evo new、kit/install.sh 不受影响。旧名 tubu 软链和 ~/.tubu 回退没动（要先确认老项目迁完）；没打 evoloop-v1 tag（删前最后提交 cf3c890）。
+- e5f965b（#21）：删 docs/ 下 26 个渲染 html，只留 loop-overview.html；.gitignore 挡 docs/**/*.html；AGENTS.md 写明讲解页 .md 为源、html 按需生成不提交。没改 git 历史。一次性笔记归档 docs/archive/ 没做。
+- 3ee8168 + c203553（#16）：删插件系统（evo_plugin.py、features/plugins、示例插件、card/plugin-* 四个 schema、docs/plugins.md、App 插件页 / 命令 / 件按钮 / 设置开关）。feature list 的 third_party 留着恒为 null（合约只加不删）；版本范围匹配只留 evo_rt.py；JSONValue/CardTone 挪到 EvoCore/JSONValue.swift。c203553 补 3ee8168 漏改的 MainWindow 回话区高度（CI 编译红过一次）。
+- CI：kit-tests 373 passed（3ee8168）；app 全绿（c203553：EvoCore 101 测试、打包、snapshots、mac-demo）。mac-demo 里「⌘K 没跳到件详情 / 找不到 win-item-0」1 处是老问题，10-22 的 run 也有。
+- 没碰 evo 正在改的 evo_exec.py、evo_roles.py、features/team、multica/install.sh。
