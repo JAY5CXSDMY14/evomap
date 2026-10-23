@@ -1119,7 +1119,7 @@ struct ComposerDock: View {
                     ChatSection(lines: Array(state.chat.suffix(4)), mood: state.mood, liveEmotion: state.mateEmotion, state: state)
                         .padding(.top, 4)
                 }
-                .frame(maxHeight: state.chat.suffix(4).contains { $0.card != nil } ? 320 : 200)
+                .frame(maxHeight: 200)
                 .fixedSize(horizontal: false, vertical: true)
             }
             if let ch = state.pendingTeam {
