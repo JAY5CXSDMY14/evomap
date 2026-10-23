@@ -179,3 +179,8 @@
 - acccbb6（#12）：批卡只在 Telegram；没配 Telegram 时推一次「没处批卡」提醒（邮件兜底带 `evo -p 代号 approve` 命令），status --json 加 `approve_via`（telegram / cli）。网页面板只读，是看效果页：写接口一律 410。App 冻结：批卡按钮只提示去 Telegram 批，不再跑 approve。
 - 60fbf5f：9dc16ea 漏改测试白名单（test_projects_config 的 PROJECT_KEYS 没加 checks），kit-tests 在 9dc16ea / acccbb6 各红 1 个；补上。
 - 没碰 evo_exec.py、evo_roles.py、features/team、multica/install.sh。#15（删额度切换 / 模型试用）本轮没做。
+
+## 2026-10-23 18:15 看门狗顺带给 Multica 执行端自愈（老板批准，Air 测试期，没用就删）
+- 起因：Air 上 com.evoloop.multica-daemon 15:05 起、17:38 前两次被卸出 launchd（原因未明，疑为重跑 kit/multica/install.sh 后 bootstrap 失败）。
+- kit/selfmaint/evo-guard.sh 每分钟：plist 在但没加载 → enable + bootstrap（重试 3 次）；加载了但不在跑 → kickstart。记 guard.log，推送一小时最多一次（kind multica_daemon_heal）。GUARD_NO_MULTICA=1 关闭。只用 launchctl print，开销可忽略。
+- 删除方式：删掉 evo-guard.sh 里「Multica 执行端自愈」一段和 tests/test_guard_multica.py。
