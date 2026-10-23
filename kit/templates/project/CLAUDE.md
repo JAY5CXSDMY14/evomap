@@ -1,2 +1,2 @@
 @AGENTS.md
-@LESSONS.md
+@docs/LESSONS.md

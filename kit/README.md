@@ -9,7 +9,7 @@
 | 模型入口 | magpie（yetone） | 岗位只写模型名；额度用完自动换号 |
 | 接棒器 `bin/evo` | 本仓库 | 施工→验收（换模型）→看效果→合并；冲突排队；返工两轮；停滞提醒；上线批次 |
 | 统一入口 | 本仓库 intake 设计 | GitHub issue 打 `autopilot:ready` 自动登记，登记前过脱敏词表 |
-| 教训沉淀、夜间复盘 | yetone/magpie 的 LESSONS 做法 | `prompts/nightly-retro.md` + `scripts/lessons.py`，同一教训出现 3 次升为规矩 |
+| 教训沉淀、夜间复盘 | yetone/magpie 的 LESSONS 做法 | 岗位规则 `roles/retro.md`（`evo retro` 派工时注入）+ `bin/lessons.py`，同一教训出现 3 次升为规矩；不走 PR，合并由 evo 做 |
 | 审查岗 | -agent-code-review | 云端只读代码、只建 issue，问题自动流回入口 |
 | 解释页 | answer-me-with-html | 复杂流程出 HTML 给你看 |
 | 规矩 | Mac mini 协作契约 | 红线、验收即命令、证据、脱敏全部保留；5 条修订见 `contract-revisions/` |

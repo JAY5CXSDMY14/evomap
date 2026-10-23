@@ -1,17 +1,17 @@
 # AGENTS.md — 路由表
 
 > 本文件不写具体规则，只告诉 Agent **干什么活之前读哪份文档**。
-> 本项目使用 evoloop 自进化循环：代码由 agent 编写、审查、合并、发布，每晚复盘的教训写入 LESSONS.md。
+> 本项目由 evo 自动循环推进：施工、验收（换一个模型）由 agent 做，合并和推送由 evo 做（不走 PR），每晚复盘的教训写入 docs/LESSONS.md。
 
 ## 项目一句话
 {{PROJECT_ONE_LINER}}
 
 ## 开工前必读（按顺序）
 1. 本文件
-2. 你要改动的子系统文档：`docs/subsystems/<name>.md`（下表）
-3. `docs/code-standards.md` —— 验收标准、Review 清单、commit 规范（硬性）
-4. `LESSONS.md` —— 近期犯过的错和能拦住它的规则（CLAUDE.md 已自动加载）
-5. 审外部贡献时：`docs/contributors.md`
+2. 你要改动的子系统文档：`docs/subsystems/<name>.md`（下表；还没有就在同一个提交里建一份）
+3. `docs/code-standards.md` —— 验收标准、检查清单、commit 规范（硬性）
+4. `docs/LESSONS.md` —— 近期犯过的错和能拦住它的规则（CLAUDE.md 已自动加载）
+5. 任务书里的岗位规则 —— evo 派工时注入，以它为准
 
 ## 子系统路由
 | 子系统 | 目录 | 文档 | 负责什么 |
@@ -19,16 +19,20 @@
 | {{api}} | `{{api/}}` | `docs/subsystems/{{api}}.md` | {{...}} |
 | {{web}} | `{{web/}}` | `docs/subsystems/{{web}}.md` | {{...}} |
 
-改了某个子系统的行为、状态或契约 → **同一个 PR 里**更新对应文档。
+改了某个子系统的行为、状态或契约 → **同一个提交里**更新对应文档。
 
-## 按任务路由
-| 你要做的事 | 先读 | 用哪个提示词 |
+## 按岗位路由
+岗位规则不放在本仓库：evo 派工时把 evoloop 仓库 `kit/roles/` 里对应的那份注入任务书。本仓库不需要 `prompts/` 目录。
+**不走 PR**：施工在自己的工作分支上提交，验收通过后由 evo 合并、推送；不开 PR、不自己合并、不推送。
+
+| 岗位 | 先读 | 岗位规则（evoloop 仓库） |
 |---|---|---|
-| 分诊新 Issue | 本文件「产品边界」 | `prompts/triage.md` |
-| 修 bug / 做功能 | 子系统文档 + code-standards + LESSONS | `prompts/builder.md` |
-| 审 PR | code-standards 全文 + contributors（外部 PR） | `prompts/reviewer.md` |
-| 发版 | code-standards「发布」 | `prompts/release.md` |
-| 夜间复盘 | evoloop/docs/lessons-system.md | `prompts/nightly-retro.md` |
+| 施工（修 bug / 做功能 / 文档） | 子系统文档 + code-standards + docs/LESSONS.md | `kit/roles/builder.md` |
+| 验收（另一个模型，只读复核） | code-standards 全文 + 任务书验收标准 | `kit/roles/verifier.md` |
+| 决策（拆任务、技术决定、转老板） | 本文件「产品边界」「已拍板的产品决定」 | `kit/roles/decider.md` |
+| 夜间错题本 | docs/LESSONS.md | `kit/roles/retro.md` |
+
+分诊新 issue 由决策岗按「产品边界」做；上线由老板在 evo 里点「上线」闸门，agent 不发版。
 
 ## 检查命令
 ```bash
@@ -64,7 +68,7 @@
 |---|---|---|
 | {{例：按钮只在 hover 时出现}} | {{YYYY-MM-DD}} | {{the owner / #issue}} |
 
-遇到与这些决定冲突的需求 → 标 `evo:needs-human`，不要自己改。
+遇到与这些决定冲突的需求 → 交决策岗转老板（施工 / 验收用 `ask`，Multica 下把 issue 标 blocked 写清问题），不要自己改。
 
 ## 必须人放行的改动
 - CI / 发布脚本 / 工作流
@@ -79,6 +83,6 @@
 - {{...}}
 
 ## 协作规则
-- 每个会话独立 `git worktree`；永不在共享 checkout 提交。
-- 开工前在 Issue 评论认领（`scripts/claim.sh`）。
+- 每件在执行端（Multica / Orca）给的独立工作区里做；永不在共享 checkout 提交。
+- 派工由 evo 做，不用自己认领 issue。
 - 一个 commit 一个目标；顺手发现的问题另开 Issue。

@@ -75,8 +75,7 @@ evoloop/
 │   ├── adoption.md              ← 分阶段接入一个现有项目（以 tubu-platform 为例）
 │   └── magpie-reference.md      ← 原始调研：magpie 的循环、数据、来源
 ├── templates/                   ← 拷进目标仓库根目录的文件
-│   ├── AGENTS.md                ← 路由表：干什么活之前读哪份文档
-│   ├── CLAUDE.md                ← 两行：@AGENTS.md @LESSONS.md
+│   │                            （AGENTS.md、CLAUDE.md 只在 kit/templates/project/ 留一份，install.sh 从那里拷）
 │   ├── LESSONS.md               ← 错题本（空白 + 示例条目）
 │   ├── docs/code-standards.md   ← 验收标准 + Review 清单 + commit 规范
 │   ├── docs/contributors.md     ← 外部贡献的安全闸门

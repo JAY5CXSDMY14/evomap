@@ -19,6 +19,10 @@ echo "Installing evoloop into $TARGET"
 (cd "$SRC/templates" && find . -type f | sed 's|^\./||') | while read -r f; do
   copy "$SRC/templates/$f" "$f"
 done
+# AGENTS.md / CLAUDE.md 只留一份：kit/templates/project（evo new 用的那份，第二十三轮删了 templates/ 下的重复）
+for f in AGENTS.md CLAUDE.md; do
+  copy "$SRC/kit/templates/project/$f" "$f"
+done
 for d in prompts scripts; do
   (cd "$SRC/$d" && find . -type f | sed 's|^\./||') | while read -r f; do
     [ "$d/$f" = "scripts/install.sh" ] && continue
