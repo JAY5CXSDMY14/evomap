@@ -10,7 +10,7 @@
 | 层 | 在哪 | 管什么 | 谁能改 |
 |---|---|---|---|
 | 内核 | `kit/bin/evo`、`evo_rt.py`、`evo_bus.py`、`evo_notify.py` | 件的状态机、闸门、锁、权限、事件总线、功能包运行时、自升级 | 改动走老板闸门（见 `docs/self-maintenance.md`） |
-| 内核库 | `kit/bin/evo_deps.py`、`evo_roles.py`、`evo_time.py` 等 | 几个功能包共用的工具 | 和普通代码一样 |
+| 内核库 | `kit/bin/evo_roles.py`、`evo_time.py` 等 | 几个功能包共用的工具 | 和普通代码一样 |
 | 功能包 | `kit/features/<id>/` | 一个可开关的功能（推送渠道、上线、GitHub、团队页……） | 和普通代码一样；`item-caps`、`orca-gate-sync` 两个安全类除外 |
 | 看门狗 | `kit/selfmaint/evo-guard.sh` | 自升级后的回退 | **只有老板手改**，evo 和工人都不许碰 |
 
@@ -25,8 +25,6 @@
 
 | id | 名字 | 精简也开 | 占的槽位 / 服务 |
 |---|---|---|---|
-| `ui-preset` | UI 栈预设 | 否 | cli `ui`、任务书开头、交卷检查 |
-| `arch-preset` | 架构预设 | 否 | cli `arch`、任务书开头、交卷检查、status |
 | `notify-telegram` | Telegram 推送 | 否 | 推送渠道、cli `bot` |
 | `notify-email` | 邮件推送 | 否 | 推送渠道、服务 `mail.send`、设置 |
 | `notify-webhook` | Webhook 推送 | 否 | 推送渠道（配了就算在用） |
@@ -191,7 +189,7 @@ evo feature preset essentials             # 精简
 ## 7. 照做：加一个新功能包
 
 1. 建目录 `kit/features/<id>/`，写 `feature.json`（照第 3.1 节）。名字、一句话说明写中文。
-2. 写 `feature.py` 的 `apply(ctx)`。只 import 标准库和内核库（`evo_notify`、`evo_time`、`evo_deps`、`evo_roles` 等），不 import 别的功能包。
+2. 写 `feature.py` 的 `apply(ctx)`。只 import 标准库和内核库（`evo_notify`、`evo_time`、`evo_roles` 等），不 import 别的功能包。
 3. 老板能改的值写进 `settings`。代码里读 `ctx.config["键"]`：老板改过就是改过的值，否则是 `default`；手改进来不合 schema 的值会被丢掉。不要再往全局 `config.json` 加新键。
 4. 子命令走 `cli` 槽位：`ctx.contribute("cli", "名字", {"help": "…", "setup": lambda parser: …, "run": lambda args: …, "no_project": False})`。功能关着时，evo 会让这个子命令回一句「功能关着」，并给出 `evo feature on <id>`。
 5. 要在一轮里做事就订阅 `tick.*` 事件；要加 `status --json` 字段就占 `status` 槽位，字段只加不改。
@@ -205,9 +203,11 @@ evo feature preset essentials             # 精简
 
 1. 找出老功能在内核里的所有入口（子命令、一轮里的调用点、status 字段、配置键）。
 2. 在内核调用点换成 `svc("服务名")` 或 `hook("槽位")`，拿不到就按「没有这个功能」走。
-3. 代码搬进 `kit/features/<id>/feature.py`；几个包都要用的工具放进内核库（例如第十八轮的 `evo_deps`、`evo_roles`）。
+3. 代码搬进 `kit/features/<id>/feature.py`；几个包都要用的工具放进内核库（例如第十八轮的 `evo_roles`）。
 4. 老配置键照旧能读，不要逼老板改配置。先读哪个由功能包自己定，并写进这个设置的 `description`。例如 `deploy`：项目或全局 `config.json` 写了 `auto_ship_gate` 就以它为准，没写才用功能设置。
 5. JSON 接口（`status --json` 等）字段名和 `schema_version` 不变。
 6. 跑全套测试，绿了再提交，提交信息写「迁出 `<id>`」。
 
 第十八轮已经按这个步骤迁了 12 个（提交 7cc9051 到 9e28321）。
+
+> 第二十五轮（#17）删了 `ui-preset`、`arch-preset` 两个功能包、`kit/presets/`、`kit/vendor/taste-skill`、`kit/vendor/madr` 和内核库 `evo_deps.py`。代码风格、分层、依赖规则交给各项目自己的 lint / CI，项目在 config.json 的 `checks` 声明命令，evo 把它们写进施工 / 验收任务书的「项目检查」块，验收岗逐条跑。

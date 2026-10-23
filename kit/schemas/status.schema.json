@@ -56,10 +56,22 @@
       ]
     },
     "ui_preset": {
-      "type": "string"
+      "type": "string",
+      "description": "第二十五轮起不再出（预设删了）"
     },
     "arch_preset": {
-      "type": "string"
+      "type": "string",
+      "description": "第二十五轮起不再出（预设删了）"
+    },
+    "checks": {
+      "type": "array",
+      "items": {"type": "string"},
+      "description": "第二十五轮新增：项目自己声明的检查命令（lint / 类型检查 / CI），验收岗逐条跑"
+    },
+    "retired_keys": {
+      "type": "array",
+      "items": {"type": "string"},
+      "description": "第二十五轮新增：config.json 里还写着、但已不再读的预设键"
     },
     "roles": {
       "type": "array",

@@ -28,7 +28,7 @@ Evo.app 不读 evo 的内部文件，只跑 `evo … --json` 拿数据。这份�
 
 App 还会跑这些**写**命令（输出是给人看的文字，不是接口）：`approve`、`feedback`、`add`、`tick`、`ship`、`watchdog`、`team set|dismiss|init --apply`、`feature on|off|set`、`panel --show-token`。
 
-另外 `evo models --json`、`evo -p X ui show|check --json`、`evo -p X arch show|check --json` 也带 `schema_version: 1`，App 现在不读，面板 / 外部 Agent 用。`evo status --json` 的详细字段说明以 [agent-interface.md](agent-interface.md) 2.1 为准。
+另外 `evo models --json` 也带 `schema_version: 1`，App 现在不读，面板 / 外部 Agent 用（`evo ui` / `evo arch` 第二十五轮随预设删了）。`evo status --json` 的详细字段说明以 [agent-interface.md](agent-interface.md) 2.1 为准。
 
 ## 三、逐个命令
 
@@ -63,7 +63,7 @@ App 还会跑这些**写**命令（输出是给人看的文字，不是接口）
 | `log` | [string] | 是 | 最近 15 条动静 |
 | `roles` | 列表 | 可选 | 岗位状态 `{role, name, status, label, items, why, until}` |
 | `stale` / `no_live_path` | 列表 | 可选 | 卡太久 / 没活路的件 `{key, title?, state?, reason?, hours?, minutes?}`（老格式可能是数字或布尔，App 都认） |
-| `goal`、`ui_preset`、`arch_preset`、`rate_limits`、`usage`、`decider`、`team` | — | 可选 | 见 agent-interface.md |
+| `goal`、`checks`（第二十五轮：项目自己的检查命令）、`retired_keys`（config 里还写着已删的预设键）、`ui_preset` / `arch_preset`（第二十五轮起不再出）、`rate_limits`、`usage`、`decider`、`team` | — | 可选 | 见 agent-interface.md |
 | `paused` | string? | 可选 | 第十七轮：项目暂停原因；没暂停为 null。status 只读，暂停时照常返回（以前退出码非 0） |
 | `tick_running` | 对象? | 可选 | 第十七轮：正在跑的一轮 `{pid, cmd, since, minutes}`；这时返回的是上次存盘的状态 |
 | `gates_stale` | bool | 可选 | 第十七轮：这次没读到 Orca 闸门（status 不新建协调终端） |

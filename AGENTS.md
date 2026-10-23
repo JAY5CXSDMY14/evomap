@@ -12,7 +12,7 @@ evo 是一个通用的自动开发循环：老板说需求、拍板，evo 负责
 | 目录 | 放什么 |
 |---|---|
 | `kit/bin/` | 内核：`evo`（接棒器，`tubu` 是旧名）、`evo_exec.py`（执行端 Orca / Multica）、`evo_notify.py`（提醒）、`evo_rt.py` / `evo_bus.py`（功能包运行时、事件）、`evo_roles.py`、`evo_time.py`、`lessons.py` |
-| `kit/features/` | 功能包，一个目录一个（team、deploy、digest、github、notify-*、ui-preset、arch-preset、item-caps…），说明见 `docs/architecture.md` |
+| `kit/features/` | 功能包，一个目录一个（team、deploy、digest、github、notify-*、item-caps…；第二十五轮删了 ui-preset / arch-preset，项目在 config.json 的 `checks` 写自己的 lint / CI 命令），说明见 `docs/architecture.md` |
 | `kit/roles/` | 岗位规则：`builder.md`（施工）、`verifier.md`（验收）、`decider.md`（决策）、`retro.md`（夜间错题本）。派工时 evo 把它们注入任务书 |
 | `kit/multica/` | 在本机装 / 固化 Multica daemon 和 dsh runtime 的脚本（`install.sh`），说明见 `kit/multica/README.md` |
 | `kit/tests/` | 全部测试；`kit/tests/fakes/` 是假 orca / multica / gh / curl 和假工人 |

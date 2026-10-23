@@ -36,7 +36,6 @@
   evo -p AB log <件号> [--json|--diff]   这件的时间线（派工、交卷、闸门、返工、合并、推送、上线……）
   evo -p AB feedback --item <件号> "原话"  对某件补反馈：它等你的看效果/做不做闸门作废，改完重开
   evo -p AB goal [set "一两句" | clear]   项目目标：写进每份任务书开头「项目目标：…」
-  evo -p AB ui [show | set web-react|swiftui|none | set 类别=包名[,包名] | set 类别= | check]   UI 栈预设（见 kit/presets/ui/README.md）
   evo -p TB runs [件号] [--json]  永久运行记录 runs/<件号>/（第二十二轮：任务书、交卷全文、Multica run、合并前测试日志）
   evo canary [--json]             判据金丝雀：喂已知不合格的样例，有一条被判通过就报（第二十二轮）
   evo projects --json             项目列表（App 用；所有给 App 的 --json 都带 schema_version，见 docs/app-contract.md）
@@ -89,8 +88,8 @@ DEFAULTS = {
     "standards_file": "docs/code-standards.md",
 }
 PROJECT_KEYS = ("executor", "multica", "clone", "clone_path", "git_env", "orca_gate_sync", "code", "name", "repo", "main_branch", "github_repo", "trusted_authors", "trusted_labelers", "test_cmd", "push_cmd", "deploy_cmd",
-                "policy_terms", "lessons_file", "standards_file", "digest_issue", "goal", "ui_preset", "ui_overrides", "ui_paths",
-                "arch_preset", "arch_overrides")
+                "policy_terms", "lessons_file", "standards_file", "digest_issue", "goal", "checks")
+RETIRED_PROJECT_KEYS = ("ui_preset", "ui_overrides", "ui_paths", "arch_preset", "arch_overrides")   # 第二十五轮（#17）删了预设，写了也不读
 # 旧环境变量名照认（先认新名，没有再认旧名）
 ENV_ALIASES = {"EVO_TG_TOKEN": "TUBU_TG_TOKEN", "EVO_TG_CHAT": "TUBU_TG_CHAT", "TUBU_TG_TOKEN": "EVO_TG_TOKEN",
                "TUBU_TG_CHAT": "EVO_TG_CHAT", "EVO_PROJECT": "TUBU_PROJECT", "EVO_CONFIG": "TUBU_CONFIG",
@@ -1130,10 +1129,26 @@ def goal_head(cfg=None):
     return f"项目目标：{g}\n\n" if g else ""
 
 
+def project_checks():
+    """第二十五轮（#17）：项目自己声明的检查命令（lint / 类型检查 / CI），config.json 的 checks（字符串或列表）。
+    以 TODO 开头的是还没定的占位，不当命令跑。"""
+    c = CFG.get("checks") or []
+    c = [c] if isinstance(c, str) else c
+    return [str(x).strip() for x in c if str(x).strip() and not str(x).strip().upper().startswith("TODO")]
+
+
+def checks_head(role, it):
+    """任务书里的「项目检查」块：施工交卷前自己跑一遍，验收逐条重跑、有一条不过就不通过。代码风格、分层、依赖规则都在项目自己的工具里。"""
+    cs = project_checks()
+    if not cs:
+        return ""
+    who = "交卷前逐条跑一遍，红的修好再交" if role == "build" else "逐条重跑（在测试命令之外），有一条不过或被跳过就不通过，结论里写每条的命令和结果"
+    return "项目检查（项目自己的 lint / 类型检查 / CI，" + who + "）：\n" + "".join(f"- `{c}`\n" for c in cs) + "\n"
+
+
 def spec_head(role, it):
-    """任务书开头：项目目标一行，接着（只对碰界面的件）「UI 规范」块，（只对碰后端路径的件）「架构规范」块。"""
-    # 第十八轮：UI / 架构规范块来自功能包（prompt.head 槽位，按 key 排序：10-ui、20-arch）；功能关着就没有
-    return goal_head() + self_head(it) + "".join(fn(role, it) or "" for _, _, fn in hook("prompt.head"))
+    """任务书开头：项目目标一行、evo 自维护规矩、项目自己的检查命令（第二十五轮起替代 UI / 架构预设），再加功能包的 prompt.head 块。"""
+    return goal_head() + self_head(it) + checks_head(role, it) + "".join(fn(role, it) or "" for _, _, fn in hook("prompt.head"))
 
 
 # 第二十二轮：施工任务书开头固定的角色声明（《Context 与 Loop》：执行器读到主脑的派发手册，把活又派出去空转 90 分钟）
@@ -3445,13 +3460,9 @@ def cmd_goal(a):
     print(f"{CODE} 项目目标：" + (g or "（已清掉）") + "。下一份任务书起生效")
 
 
-# ---------- UI 栈预设（第十三轮，见 kit/presets/ui/README.md）----------
 def _write_project_cfg(c):
     p = _project_cfg_path(CODE); tmp = p + ".tmp"
     json.dump(c, open(tmp, "w", encoding="utf-8"), ensure_ascii=False, indent=2); os.replace(tmp, p)
-
-
-# ---------- 后端/架构预设（第十五轮，见 kit/presets/arch/README.md）----------
 
 
 # ---------- evo log <件号>（件号格式见 KEY_RE，第二十五轮起也认 issue 号）----------
@@ -3680,7 +3691,7 @@ def cmd_run(a):
 # ---------- 开新项目 / 导入旧项目 ----------
 
 
-def _setup_project(code, name, path, github, test_cmd, notes, goal=None, ui_preset=None, arch_preset=None, in_place=False, executor=None):
+def _setup_project(code, name, path, github, test_cmd, notes, goal=None, checks=None, in_place=False, executor=None):
     """只写项目自己的 config.json；岗位、模型、上限、提醒都在全局 ~/.evoloop/config.json。"""
     code = code.upper()
     if not re.fullmatch(r"[A-Z]{2,4}", code):
@@ -3702,12 +3713,9 @@ def _setup_project(code, name, path, github, test_cmd, notes, goal=None, ui_pres
                            "workspace": GCFG.get("multica_workspace") or os.environ.get("MULTICA_WORKSPACE_SLUG", "")}
     if goal:
         base["goal"] = goal
-    if ui_preset and ui_preset != "none":
-        base["ui_preset"] = ui_preset
-        notes += preset_svc("ui").setup_notes(base, code, ui_preset)
-    if arch_preset and arch_preset != "none":
-        base["arch_preset"] = arch_preset
-        notes += preset_svc("arch").setup_notes(base, code, arch_preset)
+    base["checks"] = list(checks or [])                 # 第二十五轮（#17）：项目自己的 lint / 类型检查 / CI 命令，验收岗逐条跑
+    if not base["checks"]:
+        notes.append("没写检查命令（--check）：lint / 类型检查这类规则请放进项目自己的工具，再把命令写进 config.json 的 checks")
     if not has_origin:
         notes.append("没有 origin 远端：push_cmd 留空，合并后只在本地（之后在 config.json 补 push_cmd）")
     work = path
@@ -3744,32 +3752,9 @@ def _goal_arg(a):
     return g or None
 
 
-def preset_svc(kind):
-    """第十八轮：UI / 架构预设是功能包（服务 preset.ui / preset.arch）；关着时给 --ui-preset 就说清楚。"""
-    p = svc("preset." + kind)
-    if not p:
-        raise SystemExit(f"功能 {kind}-preset 关着，--{kind}-preset 用不了。打开：evo feature on {kind}-preset")
-    return p
-
-
-def _ui_arg(a):
-    v = getattr(a, "ui_preset", None)
-    if v and v != "none" and v not in preset_svc("ui").NAMES:
-        raise SystemExit(f"--ui-preset 只能是：{' | '.join(preset_svc('ui').NAMES)}")
-    return v
-
-
-def _arch_arg(a):
-    v = getattr(a, "arch_preset", None)
-    if v and v != "none" and v not in preset_svc("arch").NAMES:
-        raise SystemExit(f"--arch-preset 只能是：{' | '.join(preset_svc('arch').NAMES)}")
-    return v
-
-
 def cmd_new(a):
     """开新项目：建仓库骨架（AGENTS / 错题本 / 规范），可选在 GitHub 建私有仓库。"""
     goal = _goal_arg(a)                   # 先校验，免得建了仓库才发现目标写得不对
-    _ui_arg(a); _arch_arg(a)
     path = os.path.abspath(a.path); os.makedirs(path, exist_ok=True)
     notes = []
     if not os.path.isdir(os.path.join(path, ".git")):
@@ -3785,14 +3770,13 @@ def cmd_new(a):
     if a.github and a.create:
         r = subprocess.run(["gh", "repo", "create", a.github, "--private", "--source", path, "--push"], capture_output=True, text=True)
         notes.append("GitHub 私有仓库已建并推送" if r.returncode == 0 else "GitHub 建仓没成功：" + r.stderr.strip()[:120])
-    _setup_project(a.code, a.name, path, a.github, a.test, notes, goal, _ui_arg(a), _arch_arg(a), getattr(a, "in_place", False),
+    _setup_project(a.code, a.name, path, a.github, a.test, notes, goal, getattr(a, "check", None), getattr(a, "in_place", False),
                    getattr(a, "executor", None))
 
 
 def cmd_import(a):
     """导入旧项目：不动它的代码和历史，只补登记、标签和缺的文档。"""
     goal = _goal_arg(a)
-    _ui_arg(a); _arch_arg(a)
     path = os.path.abspath(a.path)
     if not os.path.isdir(os.path.join(path, ".git")):
         raise SystemExit("这个目录不是 git 仓库")
@@ -3824,7 +3808,7 @@ def cmd_import(a):
     if not os.path.exists(ai):     # 只放文件不提交（导入不动历史），要不要提交你定
         open(ai, "w", encoding="utf-8").write(open(os.path.join(KIT, "templates", "project", "AGENT_INTERFACE.md"), encoding="utf-8").read())
         notes.append("放了 AGENT_INTERFACE.md（外部 Agent 怎么读、怎么报；未提交，要用就自己提交）")
-    _setup_project(a.code, a.name, path, gh, t, notes, goal, _ui_arg(a), _arch_arg(a), getattr(a, "in_place", False),
+    _setup_project(a.code, a.name, path, gh, t, notes, goal, getattr(a, "check", None), getattr(a, "in_place", False),
                    getattr(a, "executor", None))
 
 
@@ -4210,6 +4194,9 @@ def cmd_status(a):
     mg = s.get("model_guard") or {}
     if mg and not mg.get("ok"):
         print(f"■ 停派施工 / 验收：{mg.get('why')}")
+    old = [x for x in RETIRED_PROJECT_KEYS if CFG.get(x)]
+    if old:
+        print(f"■ config.json 里的 {'、'.join(old)} 已不再读（第二十五轮删了 UI / 架构预设）：规则放进项目自己的 lint / CI，命令写进 checks")
     print("■ 等你点头" + ("（Orca 闸门这次没读到）" if stale else ""))
     early = {it["gates"].get("look") for it in s["items"].values() if it["gates"].get("look") and it["state"] != "verified"}
     pend = [g for g in pend if g["id"] not in early]   # 10-22 Air：看效果闸门建件时就挂着，验收通过前不算「等你点头」
@@ -4323,7 +4310,11 @@ def status_doc(s, pend):
                     "items": dec.get("items") or []},
         "log": s["log"][-15:],
     }
-    for fid, key, fn in hook("status"):            # 第十八轮：功能包往 status 里加字段（ui_preset、arch_preset、limits…）
+    doc["checks"] = project_checks()                # 第二十五轮新增（只加字段）：项目自己的检查命令
+    old = [x for x in RETIRED_PROJECT_KEYS if CFG.get(x)]
+    if old:
+        doc["retired_keys"] = old                    # 第二十五轮：config.json 里还写着已删的预设键（不再读）
+    for fid, key, fn in hook("status"):            # 第十八轮：功能包往 status 里加字段（limits…）
         try:
             fn(s, doc)
         except Exception as e:
@@ -4754,8 +4745,7 @@ if __name__ == "__main__":
     for nm in ("new", "import"):
         x = sp.add_parser(nm); x.add_argument("code"); x.add_argument("--name", required=True); x.add_argument("--path", required=True)
         x.add_argument("--github"); x.add_argument("--test"); x.add_argument("--goal", help="项目目标（一两句），写进每份任务书开头")
-        x.add_argument("--ui-preset", dest="ui_preset", help="UI 栈预设：web-react | swiftui | none（默认 none）")
-        x.add_argument("--arch-preset", dest="arch_preset", help="后端/架构预设：python-fastapi | node-ts | swift-app | none（默认 none）")
+        x.add_argument("--check", action="append", help="第二十五轮：项目自己的检查命令（lint / 类型检查 / CI），可写多次；验收岗逐条跑")
         x.add_argument("--in-place", dest="in_place", action="store_true", help="不建专用克隆，直接在这个目录里合并（老做法）")
         x.add_argument("--executor", choices=["multica", "orca"], help="执行端（第二十轮）：multica（新项目默认）| orca")
         if nm == "new":

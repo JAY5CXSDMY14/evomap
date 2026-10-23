@@ -1,13 +1,12 @@
 """第二十二轮第 3 条：规则注入硬上限。
 
-量的是「最胖」的一份任务书：项目目标写满 200 字、evo 自维护规矩、UI 预设 + 架构预设两段都拼上，再加 Multica 交卷尾巴；
+量的是「最胖」的一份任务书：项目目标写满 200 字、evo 自维护规矩、项目检查命令（第二十五轮起替代 UI / 架构预设两段），再加 Multica 交卷尾巴；
 决策岗量一批只有一件时的批次任务书（规则 + 目标 + 固定说明 + 交卷尾巴，件越多越长的那部分不算）。
 单位是 UTF-8 字节。上限 = 第二十二轮实测 + 约 20% 余量，见 kit/README.md 第二十二轮。超了别调上限：删一条再加一条。
 """
 import json, os, sys
 
 from conftest import KIT
-from test_arch_preset import TB_LIKE, commit
 
 sys.path.insert(0, os.path.join(KIT, "bin"))
 import evo_exec  # noqa: E402
@@ -25,8 +24,8 @@ def nbytes(t):
 
 def fattest_specs(loop):
     with_decider(loop)
-    repo = loop.project("AB", goal="长" * 200, ui_preset="web-react", arch_preset="python-fastapi", self_maintained=True)
-    commit(loop, repo, TB_LIKE)
+    loop.project("AB", goal="长" * 200, self_maintained=True,
+                 checks=["ruff check api tools", "lint-imports", "npx eslint web/src --max-warnings 0", "npx tsc --noEmit"])
     loop.ok("-p", "AB", "add", "--kind", "feat", "--title", "新增上架表单和接口", "--scope", "web/src/components/,api/", "--look")
     return loop.item("AB")
 
@@ -46,7 +45,7 @@ def test_role_files_under_cap():
 def test_assembled_build_and_verify_prompts_under_cap(loop):
     it = fattest_specs(loop)
     b, v = it["build_spec"], it["verify_spec"]
-    assert "UI 规范（预设" in b and "架构规范（预设" in b and "evo 自维护规矩" in b       # 确实是最胖的那份
+    assert "项目检查" in b and "项目检查" in v and "lint-imports" in v and "evo 自维护规矩" in b       # 确实是最胖的那份
     nb = nbytes(b) + nbytes(evo_exec.BUILD_TAIL)
     nv = nbytes(v) + nbytes(evo_exec.VERIFY_TAIL)
     print(f"build {nb} verify {nv}")

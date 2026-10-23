@@ -201,18 +201,19 @@ def test_feature_cli_list_off_on(loop):
     d = json.loads(loop.ok("feature", "dump", "--json").stdout)
     assert d["schema_version"] == 1 and d["api"] == "1.0"
     ids = {f["id"]: f for f in d["features"]}
-    assert ids["ui-preset"]["state"] == "active"
-    loop.ok("feature", "off", "ui-preset")
-    r = loop.evo("-p", "AB", "ui", "show")
-    assert r.returncode != 0 and "evo feature on ui-preset" in (r.stderr + r.stdout)
-    loop.ok("feature", "on", "ui-preset")
+    assert ids["item-caps"]["state"] == "active"
+    assert "ui-preset" not in ids and "arch-preset" not in ids              # 第二十五轮（#17）删了预设
+    loop.ok("feature", "off", "item-caps")
+    r = loop.evo("-p", "AB", "limits", "show")
+    assert r.returncode != 0 and "evo feature on item-caps" in (r.stderr + r.stdout)
+    loop.ok("feature", "on", "item-caps")
     assert json.loads(loop.ok("feature", "list", "--json").stdout)["features"]
 
 
-def test_ui_preset_in_use_refuses_off(loop):
+def test_feature_in_use_refuses_off(loop):
     loop.project("AB")
-    loop.patch_cfg("AB", ui_preset="web-react")
-    r = loop.evo("feature", "off", "ui-preset")
+    loop.patch_cfg("AB", deploy_cmd="true")
+    r = loop.evo("feature", "off", "deploy")
     assert r.returncode == 2 and "正在用" in r.stderr
 
 

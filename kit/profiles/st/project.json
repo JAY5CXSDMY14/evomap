@@ -28,11 +28,8 @@
   "_lessons_standards": "两个文件 REASTOCK 里原来没有，ST-OPS-001 建仓时放空壳（一行标题），之后由 evo 的工人往里写。",
   "digest_issue": null,
   "scope_allow": ["artifacts/"],
-  "ui_preset": "swiftui",
-  "_ui_preset": "REASTOCK 是原生 SwiftUI：系统组件优先、SF Symbols、原生弹簧动画，第三方 UI 库要老板批准（写进 ui_overrides）。只管新代码；仓库已有的库照旧，冲突时现有的赢（evo -p ST ui 查看）。见 kit/presets/ui/README.md。",
-  "arch_preset": "swift-app",
-  "_arch_preset": "第十五轮：REASTOCK 现有结构按类型平铺（Views/ Engine/ Data/ Core/ Models/ Resources/），沿用现有、不迁移，evo 只报一次。新代码守分层：Views → Engine/Data → Models；Engine、Data、Models 新加 import SwiftUI/AppKit 打回；新开目录先 ask 决策岗。Core（AppStore、AutoScheduler）不归层、不查。见 kit/presets/arch/README.md。",
-  "arch_overrides": {"root": "REASTOCK/Sources/REASTOCK"},
+  "checks": [],
+  "_checks": "第二十五轮（#17）删了 evo 自带的 swiftui 界面预设和 swift-app 架构预设，改由项目自己的工具查。TODO（ST-OPS-002 建好统一测试入口后填进 checks）：例如 `swiftlint --strict`（若引入）、一条检查 Engine/ Data/ Models/ 不 import SwiftUI/AppKit 的脚本（原预设的分层：Views → Engine/Data → Models；Core 不查）。第三方 UI 库要老板批准、三态必做这两条照旧，后者写在 kit/roles/verifier.md。",
   "report_required": true,
   "git_guard": true,
   "overrides": {

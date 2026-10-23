@@ -22,29 +22,6 @@
   "lessons_file": "docs/LESSONS.md",
   "standards_file": "docs/code-standards.md",
   "digest_issue": null,
-  "arch_preset": "python-fastapi",
-  "_arch_preset": "老板 2026-10-21 批准：沿用现有 api/ 平铺结构和 migrations/NNN_*.sql 原生 SQL 迁移，只约束新代码。api/schemas.py 延迟 import materials_repo 是老违约不追究；两个 004 迁移老的不动，新编号再撞打回。见 kit/presets/arch/README.md。",
-  "arch_overrides": {
-    "root": "api",
-    "layout": "by-type",
-    "migrations_dir": "migrations",
-    "migrations_pattern": "^\\d{3}_[a-z0-9_]+(\\.sqlite)?\\.sql$",
-    "layers.service": [
-      "auth.py",
-      "batch_import.py",
-      "search_*.py",
-      "processing_log.py",
-      "seed.py"
-    ],
-    "layers.core": [
-      "dictionary.py",
-      "normalize.py",
-      "weave_code.py",
-      "storage/*"
-    ],
-    "arch_paths": [
-      "api/",
-      "migrations/"
-    ]
-  }
+  "checks": [],
+  "_checks": "第二十五轮（#17）删了 evo 自带的 python-fastapi 架构预设，改由项目自己的工具查。TODO（老板 / 土布仓库确认真实命令后填进 checks）：例如 `ruff check api tools`、`lint-imports`（import-linter，把原预设的分层写进 .importlinter：api/ 平铺、service 层 auth.py / batch_import.py / search_*.py / processing_log.py / seed.py，core 层 dictionary.py / normalize.py / weave_code.py / storage/*，只许上层依赖下层）、迁移命名检查 migrations/NNN_*.sql（可写成一条脚本）。没填之前验收岗只跑 test_cmd。原 arch_overrides 见 git 历史（第二十四轮的 kit/profiles/tubu/project.json）。"
 }

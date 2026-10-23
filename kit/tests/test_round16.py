@@ -66,8 +66,7 @@ def test_app_json_outputs_match_schemas(loop):
 def test_other_json_outputs_carry_schema_version(loop):
     loop.project("AB")
     assert js(loop.ok("models", "--json"))["schema_version"] == 1
-    assert js(loop.ok("-p", "AB", "ui", "show", "--json"))["schema_version"] == 1
-    assert js(loop.ok("-p", "AB", "arch", "show", "--json"))["schema_version"] == 1
+    assert js(loop.ok("-p", "AB", "limits", "--json"))["schema_version"] == 1   # 第二十五轮：evo ui / evo arch 随预设删了
 
 
 def test_projects_text_output_unchanged(loop):

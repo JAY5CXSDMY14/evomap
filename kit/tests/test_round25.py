@@ -123,3 +123,41 @@ def test_title_with_key_or_issue_number_rejected(loop):
     for t in ("AB-FIX-9 修复登录", "#29 修复登录", "AB#29 修复登录"):
         r = loop.evo("-p", "AB", "add", "--kind", "fix", "--title", t, "--scope", "web/")
         assert r.returncode != 0 and "issue 号" in (r.stderr + r.stdout)
+
+
+# ---------- #17 预设换成项目自己的 lint / CI ----------
+def test_project_checks_go_into_build_and_verify_specs(loop):
+    loop.project("AB", checks=["ruff check api", "TODO：等老板定", "lint-imports"])
+    loop.add("AB")
+    it = loop.item("AB")
+    assert "项目检查" in it["build_spec"] and "`ruff check api`" in it["build_spec"] and "交卷前逐条跑" in it["build_spec"]
+    assert "`lint-imports`" in it["verify_spec"] and "有一条不过或被跳过就不通过" in it["verify_spec"]
+    assert "TODO" not in it["verify_spec"].split("项目检查")[1].split("\n\n")[0]          # 占位不当命令
+    st = loop.status_json("AB")
+    assert st["checks"] == ["ruff check api", "lint-imports"] and "retired_keys" not in st
+    assert "ui_preset" not in st and "arch_preset" not in st
+
+
+def test_no_checks_no_block_and_retired_keys_flagged(loop):
+    loop.project("AB", arch_preset="python-fastapi", arch_overrides={"root": "api"})
+    loop.add("AB")
+    assert "项目检查（项目自己的" not in loop.item("AB")["verify_spec"]
+    st = loop.status_json("AB")
+    assert st["checks"] == [] and st["retired_keys"] == ["arch_preset", "arch_overrides"]
+    assert "已不再读" in loop.ok("-p", "AB", "status").stdout
+    assert loop.evo("-p", "AB", "arch", "show").returncode != 0                  # evo arch / evo ui 子命令没了
+    assert loop.evo("-p", "AB", "ui", "show").returncode != 0
+
+
+def test_import_with_check_flag(loop):
+    import subprocess
+    repo = os.path.join(loop.tmp, "src-CK")
+    os.makedirs(repo)
+    subprocess.run(["git", "init", "-q", "-b", "main", repo], check=True)
+    open(os.path.join(repo, "README.md"), "w").write("x\n")
+    subprocess.run(["git", "-C", repo, "add", "-A"], check=True)
+    subprocess.run(["git", "-C", repo, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "i"], check=True)
+    loop.ok("import", "CK", "--name", "检查", "--path", repo, "--test", "true", "--check", "ruff check .", "--check", "mypy .")
+    cfg = json.load(open(os.path.join(loop.projects, "CK", "config.json"), encoding="utf-8"))
+    assert cfg["checks"] == ["ruff check .", "mypy ."] and "ui_preset" not in cfg and "arch_preset" not in cfg
+    assert loop.evo("import", "CX", "--name", "x", "--path", repo, "--arch-preset", "python-fastapi").returncode != 0
