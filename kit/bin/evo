@@ -2828,6 +2828,14 @@ def void_item_gates(s, k, it):
     for gid in {it["gates"].get("look"), it["gates"].get("do"), it.get("ship_gate")} - {None}:
         EX.gate_resolve(coord(s), gid, "作废")
         s.setdefault("superseded_gates", {})[gid] = {"item": k, "why": "这件已标为不做"}
+    # 10-23 Air：EV-CHORE-001 不做后，决策岗转老板的提问 mg_72 还挂着。转老板的提问、每件上限的闸门一并作废。
+    for box in ("owner_asks", "budget_gates"):
+        for gid in [g for g, v in (s.get(box) or {}).items() if v.get("key") == k]:
+            v = s[box].pop(gid)
+            EX.gate_resolve(coord(s), gid, "作废")
+            if box == "owner_asks" and v.get("task"):
+                EX.task_update(coord(s), v["task"], "completed")
+            s.setdefault("superseded_gates", {})[gid] = {"item": k, "why": "这件已标为不做"}
     tidy_closed(it, s, k)
 
 
@@ -2853,6 +2861,10 @@ def tidy_closed(it, s=None, k=None):
         if it.get("ship_gate"):
             sup.setdefault(it["ship_gate"], {"item": k, "why": "这件已标为不做"})
             it["ship_gate"] = None; hit = True
+        if s is not None and k:                          # 10-23 Air：老版本 drop 留下的转老板提问 / 上限闸门（mg_72）
+            for box in ("owner_asks", "budget_gates"):
+                for gid in [g for g, v in (s.get(box) or {}).items() if v.get("key") == k]:
+                    s[box].pop(gid); sup.setdefault(gid, {"item": k, "why": "这件已标为不做"}); hit = True
     return hit
 
 
@@ -4127,6 +4139,8 @@ def status_doc(s, pend):
     gates = []
     dead = {gid for k, it in s["items"].items() if it["state"] == "dropped"
             for gid in (it["gates"].get("look"), it["gates"].get("do"), it.get("ship_gate")) if gid}
+    dead |= {gid for box in ("owner_asks", "budget_gates") for gid, v in (s.get(box) or {}).items()
+             if s["items"].get(v.get("key"), {}).get("state") == "dropped"}   # 老版本 drop 留下的转老板提问（mg_72）
     for g in pend:
         if g["id"] in dead or g["id"] in (s.get("superseded_gates") or {}):
             continue                                    # 不做的件 / 作废的闸门不再摆到老板面前

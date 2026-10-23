@@ -377,3 +377,39 @@ def test_tick_realigns_issue_status_of_closed_items(loop):
     assert any("和 evo 对齐" in l for l in loop.state("MB")["log"])
     loop.tick("MB")
     assert loop.item("MB")["exec"].get("closed") is True
+
+
+def _plant_owner_ask(loop, code, key, gid="mg_72"):
+    sd = os.path.join(loop.projects, code, "state")
+    lp = os.path.join(sd, "exec-multica.json")
+    L = json.load(open(lp, encoding="utf-8")) if os.path.exists(lp) else {"n": 0, "tasks": {}, "gates": {}, "dispatches": {}, "issues": {}, "agent_ids": {}, "project_id": None}
+    L.setdefault("gates", {})[gid] = {"id": gid, "task": None, "question": f"{key} 决策岗转老板", "options": ["同意", "不同意"],
+                                      "status": "pending", "resolution": None}
+    json.dump(L, open(lp, "w", encoding="utf-8"), ensure_ascii=False)
+    s = loop.state(code)
+    s.setdefault("owner_asks", {})[gid] = {"key": key, "task": None, "note": "测试"}
+    json.dump(s, open(os.path.join(sd, "state.json"), "w", encoding="utf-8"), ensure_ascii=False)
+
+
+def test_drop_voids_owner_ask_gate(loop):
+    """10-23 Air：EV-CHORE-001 不做后，决策岗转老板的提问 mg_72 还挂在「等你点头」里。"""
+    loop.multica_project("MB")
+    loop.add("MB")
+    _plant_owner_ask(loop, "MB", K)
+    loop.ok("-p", "MB", "drop", K, "测试")
+    s = loop.state("MB")
+    assert "mg_72" not in (s.get("owner_asks") or {}) and "mg_72" in s["superseded_gates"]
+    st = json.loads(loop.ok("-p", "MB", "status", "--json").stdout)
+    assert "mg_72" not in [g["id"] for g in st["gates"]]
+    assert loop.evo("-p", "MB", "approve", "mg_72", "同意").returncode != 0
+
+
+def test_old_drop_leftover_owner_ask_hidden(loop):
+    """老版本 drop 已经做完、提问还在 owner_asks 里：状态页不再摆出来。"""
+    loop.multica_project("MB")
+    loop.add("MB")
+    loop.ok("-p", "MB", "drop", K, "测试")
+    _plant_owner_ask(loop, "MB", K)
+    st = json.loads(loop.ok("-p", "MB", "status", "--json").stdout)
+    assert "mg_72" not in [g["id"] for g in st["gates"]]
+    assert "mg_72" not in loop.ok("-p", "MB", "status").stdout
