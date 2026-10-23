@@ -184,3 +184,8 @@
 - 起因：Air 上 com.evoloop.multica-daemon 15:05 起、17:38 前两次被卸出 launchd（原因未明，疑为重跑 kit/multica/install.sh 后 bootstrap 失败）。
 - kit/selfmaint/evo-guard.sh 每分钟：plist 在但没加载 → enable + bootstrap（重试 3 次）；加载了但不在跑 → kickstart。记 guard.log，推送一小时最多一次（kind multica_daemon_heal）。GUARD_NO_MULTICA=1 关闭。只用 launchctl print，开销可忽略。
 - 删除方式：删掉 evo-guard.sh 里「Multica 执行端自愈」一段和 tests/test_guard_multica.py。
+
+## 2026-10-23 19:35 上游故障 ≠ 额度；终端读常驻 TG 配置
+- Air 实况：magpie 上游 `API Error: 504 … proxyconn`、`503 auth_unavailable: no auth available` 被当成额度用完，暂停 60 分钟、推「额度暂停」。
+- 改：这类行（5xx / proxyconn / auth_unavailable / TLS 超时 / 连接拒绝）除非同行明说 429 / quota / usage limit / rate limit，一律归「上游故障」：暂停 `limits.upstream_retry_minutes`（默认 15）后重试，推 `upstream_down`「岗上游连不上（不是额度）」，件原样重排不扣轮次；status 标 [上游故障]/[额度]。
+- 改：终端里跑 evo 时 shell 没有 EVO_TG_*，`evo_notify.env` 兜底读 ~/Library/LaunchAgents/com.evoloop.{autopilot,bot}.plist 的环境变量，status 不再误报「Telegram 没配好」。

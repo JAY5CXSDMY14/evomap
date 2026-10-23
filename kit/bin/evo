@@ -1982,19 +1982,19 @@ def rl_paused(role):
         return {"resumed": e}
     e = _rl_io(f)
     if e and "resumed" in e:
-        notify("rate_limit_resumed", f"{role} 岗额度恢复", f"暂停自 {TM.local(e['resumed']['since']).strftime('%H:%M')}", role=role)
+        notify("rate_limit_resumed", f"{role} 岗{'上游重试' if e['resumed'].get('kind') == 'upstream' else '额度恢复'}", f"暂停自 {TM.local(e['resumed']['since']).strftime('%H:%M')}", role=role)
         team_fallback_off(role, e["resumed"])
         return None
     return e
 
 
-def rl_pause(role, line, key, fallback=False):
+def rl_pause(role, line, key, fallback=False, upstream=False):
     """标记岗位（以及同账号的岗位）暂停到重置时间：解析得出就用，否则默认 60 分钟。返回到点时间。
     第十四轮：卡片配了备用（不同账号）的岗位不推「额度暂停」，改记「切到备用」；备用自己也满了记在 <岗位>:fallback。"""
-    until = TM.parse_reset(line, zone=(CFG.get("windows") or {}).get("tz"))
-    guessed = until is None
-    if guessed:
-        until = TM.now() + 60 * LIM.get("rate_limit_default_minutes", 60)
+    until = None if upstream else TM.parse_reset(line, zone=(CFG.get("windows") or {}).get("tz"))
+    guessed = until is None and not upstream
+    if until is None:   # 10-23：上游故障不是额度，短暂停后重试（默认 15 分钟）
+        until = TM.now() + 60 * (LIM.get("upstream_retry_minutes", 15) if upstream else LIM.get("rate_limit_default_minutes", 60))
     if fallback:
         acct = R.account_of(team_rc(role, True))
         roles = [role + ":fallback"]
@@ -2009,13 +2009,18 @@ def rl_pause(role, line, key, fallback=False):
         for r in roles:
             old = d["roles"].get(r) or {}
             d["roles"][r] = {"until": max(until, old.get("until", 0)), "since": old.get("since", TM.now()), "why": line[:200],
-                             "project": CODE, "item": key, "account": acct, "guessed": guessed}
+                             "project": CODE, "item": key, "account": acct, "guessed": guessed,
+                             "kind": "upstream" if upstream else "quota"}
         return new
     new = _rl_io(f)
     for r in [r for r in new if team_has_fallback(r, acct)]:
         team_fallback_on(r, key, until, acct)
     new = [r for r in new if not team_has_fallback(r, acct)]
-    if new:   # 同一次暂停只推一次
+    if new and upstream:   # 上游故障：说清楚不是额度，提示去 magpie 查那条线
+        notify("upstream_down", f"{'、'.join(new)} 岗上游连不上（不是额度），暂停",
+               f"到 {TM.local(until).strftime('%m-%d %H:%M')} 自动重试。去 magpie 看这条线（登录、代理、上游站）。提示：{line[:160]}",
+               item=key, roles=new, until=until, account=acct)
+    elif new:   # 同一次暂停只推一次
         notify("rate_limited", f"{'、'.join(new)} 岗额度用完，暂停", f"到 {TM.local(until).strftime('%m-%d %H:%M')}"
                + ("（没写重置时间，按 60 分钟）" if guessed else "") + f" 自动恢复。提示：{line[:120]}", item=key,
                roles=new, until=until, account=acct)
@@ -2029,7 +2034,10 @@ def terminal_tail(h):
 
 def rl_evidence(text, terminal=None):
     """回报正文 + 终端尾部里找额度提示；有几处命中时优先能解析出重置时间的那一行。"""
-    hits = [h for h in (TM.rate_limit_line(text), TM.rate_limit_line(terminal_tail(terminal)) if terminal else None) if h]
+    tail = terminal_tail(terminal) if terminal else ""
+    hits = [h for h in (TM.rate_limit_line(text), TM.rate_limit_line(tail)) if h]
+    if not hits:   # 10-23：上游故障也原样重排（不扣轮次），但按「上游」暂停
+        hits = [h for h in (TM.upstream_line(text), TM.upstream_line(tail)) if h]
     return next((h for h in hits if TM.parse_reset(h) is not None), hits[0] if hits else None)
 
 
@@ -2043,7 +2051,8 @@ def worker_end(s, it, role):
 
 def requeue_rate_limited(s, k, it, role, line):
     """工人因额度停了：岗位暂停，这件原样重排（同一轮、同一个模型），不算失败也不算返工。"""
-    until = rl_pause(role, line, k, fallback=bool((it["dispatch"].get(role) or {}).get("fallback")))
+    up = TM.is_upstream(line)
+    until = rl_pause(role, line, k, fallback=bool((it["dispatch"].get(role) or {}).get("fallback")), upstream=up)
     worker_end(s, it, role)
     c = coord(s); d = it["dispatch"].get(role) or {}
     if d.get("terminal"):
@@ -2062,7 +2071,7 @@ def requeue_rate_limited(s, k, it, role, line):
         it["verify"] = nv; it["state"] = "built"
     it.pop("stalled", None); it.pop("rl_probe", None)
     it["rate_waits"] = it.get("rate_waits", 0) + 1
-    log(s, f"{k} {'施工' if role == 'build' else '验收'}岗额度用完，暂停到 {TM.local(until).strftime('%m-%d %H:%M')}，原样重排（不扣轮次）")
+    log(s, f"{k} {'施工' if role == 'build' else '验收'}岗{'上游连不上' if up else '额度用完'}，暂停到 {TM.local(until).strftime('%m-%d %H:%M')}，原样重排（不扣轮次）")
 
 
 # ---------- 用量：每个项目/岗位的工人次数、分钟数；token 看 magpie（可选）----------
@@ -2735,8 +2744,9 @@ def decider_done(s, dec, m, typ, outcome):
         dec["ended"] = time.time(); usage_add(s, None, "decide", minutes=(dec["ended"] - dec.get("since", dec["ended"])) / 60)
     rl = rl_evidence(text, dec.get("terminal") if outcome != "succeeded" else None)
     if rl:
-        rl_pause("decide", rl, None, fallback=bool(dec.get("fallback"))); dec["last"] = 0; s["decide_seen"] = {}   # 额度恢复后整批重叫
-        return log(s, "决策岗批次因额度中断")
+        up = TM.is_upstream(rl)
+        rl_pause("decide", rl, None, fallback=bool(dec.get("fallback")), upstream=up); dec["last"] = 0; s["decide_seen"] = {}   # 额度恢复后整批重叫
+        return log(s, "决策岗批次因" + ("上游故障中断" if up else "额度中断"))
     log(s, "决策岗批次做完")
     s["decide_timeouts"] = 0
     trail("_decide", "batch", text=m.get("body") or "", meta={"task": dec.get("task"), "items": dec.get("items"), "outcome": outcome})
@@ -4219,9 +4229,10 @@ def cmd_status(a):
         print(f"  {k}  {state_name(it)}{flag}  {it['title']}  （派工 {u.get('runs', 0)} 次 · {int(item_minutes(it))} 分钟{mx}）")
     rl = {r: e for r, e in _rl_peek().items() if e["until"] > TM.now()}
     if rl:
-        print("■ 额度暂停")
+        print("■ 岗位暂停（额度 / 上游故障）")
         for r, e in rl.items():
-            print(f"  {r} 到 {TM.local(e['until']).strftime('%m-%d %H:%M')}  {e.get('why', '')[:80]}")
+            why = "上游故障" if e.get("kind") == "upstream" or TM.is_upstream(e.get("why", "")) else "额度"
+            print(f"  {r} 到 {TM.local(e['until']).strftime('%m-%d %H:%M')}  [{why}] {e.get('why', '')[:80]}")
     us = s.get("usage") or {}
     if us:
         print("■ 用量（本项目）  " + "  ".join(f"{r} {u['runs']} 次/{int(u['minutes'])} 分钟" for r, u in us.items()))

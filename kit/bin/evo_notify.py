@@ -41,14 +41,39 @@ PUSH_KINDS |= {"tick_timeout", "main_red", "intake_down", "decider_stuck"}
 PUSH_KINDS.add("approve_channel_missing")          # 第二十五轮（#12）：批卡只在 Telegram，没配时推一次
 KIND_NAMES.update({"approve_channel_missing": "没处批卡"})
 KIND_NAMES.update({"tick_timeout": "一轮超时", "main_red": "主线红了", "intake_down": "拉不到 issue", "decider_stuck": "决策岗卡住"})
+PUSH_KINDS.add("upstream_down")                    # 10-23：magpie 上游故障（5xx / proxyconn / auth_unavailable），不是额度
+KIND_NAMES.update({"upstream_down": "上游故障"})
 ENV_ALIASES = {"EVO_TG_TOKEN": "TUBU_TG_TOKEN", "EVO_TG_CHAT": "TUBU_TG_CHAT", "TUBU_TG_TOKEN": "EVO_TG_TOKEN",
                "TUBU_TG_CHAT": "EVO_TG_CHAT"}
+
+
+_LAUNCHD_ENV = None
+
+
+def launchd_env():
+    """10-23 Air：终端里跑 evo status 时 shell 没有 EVO_TG_*，但常驻（launchd）里有。读常驻 plist 的环境变量兜底。"""
+    global _LAUNCHD_ENV
+    if _LAUNCHD_ENV is None:
+        _LAUNCHD_ENV = {}
+        import plistlib
+        for lab in ("com.evoloop.autopilot", "com.evoloop.bot"):
+            f = os.path.expanduser(f"~/Library/LaunchAgents/{lab}.plist")
+            try:
+                with open(f, "rb") as fh:
+                    for k2, v2 in ((plistlib.load(fh) or {}).get("EnvironmentVariables") or {}).items():
+                        _LAUNCHD_ENV.setdefault(k2, v2)
+            except Exception:
+                pass
+    return _LAUNCHD_ENV
 
 
 def env(name, default=None):
     v = os.environ.get(name) if name else None
     if not v and name in ENV_ALIASES:
         v = os.environ.get(ENV_ALIASES[name])
+    if not v and name and name.startswith(("EVO_", "TUBU_")):
+        le = launchd_env()
+        v = le.get(name) or (le.get(ENV_ALIASES[name]) if name in ENV_ALIASES else None)
     return v or default
 
 

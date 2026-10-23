@@ -154,6 +154,30 @@ RATE_PATTERNS = [
     r"额度(已)?用(完|尽)", r"请求过于频繁",
 ]
 _RATE_RE = re.compile("|".join(f"(?:{p})" for p in RATE_PATTERNS), re.I)
+# 10-23 Air：上游 / 网关故障（magpie 转发的 5xx、proxyconn、auth_unavailable、TLS 超时）不是额度用完。
+# 这类行只有在同一行里明说 429 / quota / usage limit / rate limit 时才算额度；否则归「上游故障」。
+UPSTREAM_PATTERNS = [
+    r"API Error:\s*5\d\d\b", r"\b50[234]\b.{0,60}(gateway|unavailable|timeout|proxy)", r"proxyconn",
+    r"auth_unavailable", r"no auth available", r"TLS handshake timeout", r"connection (refused|reset)",
+    r"ECONNRESET|ECONNREFUSED|ETIMEDOUT", r"bad gateway", r"service unavailable",
+]
+_UP_RE = re.compile("|".join(f"(?:{p})" for p in UPSTREAM_PATTERNS), re.I)
+_STRONG_RATE_RE = re.compile(r"\b429\b|quota (exceeded|exhausted)|usage limit|rate[ _-]?limit|额度(已)?用(完|尽)|too many requests", re.I)
+
+
+def is_upstream(line):
+    """这一行是上游 / 网关故障（而且没明说额度）。"""
+    return bool(line) and bool(_UP_RE.search(line)) and not _STRONG_RATE_RE.search(line)
+
+
+def upstream_line(text, tail=60):
+    """在最后 tail 行里找上游故障提示，返回那一行（没有返回 None）。"""
+    if not text:
+        return None
+    for l in reversed([l for l in str(text).splitlines() if l.strip()][-tail:]):
+        if is_upstream(l):
+            return l.strip()[:300]
+    return None
 
 
 def rate_limit_line(text, tail=60):
@@ -162,7 +186,7 @@ def rate_limit_line(text, tail=60):
         return None
     lines = [l for l in str(text).splitlines() if l.strip()][-tail:]
     for l in reversed(lines):
-        if _RATE_RE.search(l):
+        if _RATE_RE.search(l) and not is_upstream(l):
             return l.strip()[:300]
     return None
 
