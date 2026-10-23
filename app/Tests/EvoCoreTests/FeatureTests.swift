@@ -4,7 +4,7 @@ import XCTest
 /// v0.7.0（第十八轮）：功能列表解码、侧栏显示/隐藏、settings schema 自动表单、evo watch 事件流与回退轮询、页错误边界。
 final class FeatureTests: XCTestCase {
     private func list() throws -> FeatureList {
-        try FeatureList.decode(String(decoding: try fixture("feature_list.json"), as: UTF8.self))   // 真 evo feature list --json（plugins 关着）
+        try FeatureList.decode(String(decoding: try fixture("feature_list.json"), as: UTF8.self))   // 真 evo feature list --json（第二十四轮删了 plugins 那条）
     }
 
     // MARK: 功能列表
@@ -12,13 +12,13 @@ final class FeatureTests: XCTestCase {
     func testDecodeRealFeatureList() throws {
         let l = try list()
         XCTAssertEqual(l.schemaVersion, 1)
-        XCTAssertEqual(l.features.count, 12)
+        XCTAssertEqual(l.features.count, 11)
         let caps = try XCTUnwrap(l.feature("item-caps"))
         XCTAssertTrue(caps.essential)
         XCTAssertEqual(caps.settings?.fields.map(\.key), ["decider_reworks", "item_hard_runs", "item_hard_hours"])   // 按 x-order
         XCTAssertEqual(caps.value(caps.settings!.fields[1]), .number(20))      // evo feature set 改过
-        XCTAssertEqual(l.feature("plugins")?.state, "off")
-        XCTAssertEqual(l.feature("plugins")?.badge.text, "关着")
+        XCTAssertNil(l.feature("plugins"))                                   // 第二十四轮删了插件（#16）
+        XCTAssertEqual(l.feature("team")?.badge.text, "开着")
         XCTAssertTrue(l.feature("team")?.hasPage == true)
         XCTAssertTrue(ContractCheck.check(String(decoding: try fixture("feature_list.json"), as: UTF8.self), command: .featureList).isOK)
     }
@@ -43,8 +43,6 @@ final class FeatureTests: XCTestCase {
     func testSidebarFollowsFeatureList() throws {
         let off = FeatureRegistry(try list())
         XCTAssertTrue(off.teamVisible)
-        XCTAssertFalse(off.pluginsVisible)                          // plugins 关着 → 「插件」分组不出现
-        XCTAssertEqual(off.fallback(.plugin("example-hello", "hello")), .inbox)
         XCTAssertEqual(off.fallback(.team), .team)
         XCTAssertEqual(off.fallback(.project("TB")), .project("TB"))
         XCTAssertTrue(off.pageVisible("inbox"))                     // 没有功能包声明 → 内核的页，一直显示
@@ -52,11 +50,12 @@ final class FeatureTests: XCTestCase {
         var l = try list()
         l.features = l.features.map { f in var f = f; if f.id == "team" { f.state = "off"; f.enabled = false }; return f }
         let noTeam = FeatureRegistry(l)
+        XCTAssertEqual(l.feature("team")?.badge.text, "关着")
         XCTAssertFalse(noTeam.teamVisible)
         XCTAssertEqual(noTeam.fallback(.team), .inbox)
 
         let old = FeatureRegistry(nil)                              // 老 evo 没有 feature 命令：照旧全显示
-        XCTAssertTrue(old.teamVisible && old.pluginsVisible)
+        XCTAssertTrue(old.teamVisible)
         XCTAssertTrue(old.active("team"))
         XCTAssertTrue(old.settingsRows.isEmpty)
         XCTAssertTrue(old.summary.contains("没有功能开关"))
@@ -65,13 +64,13 @@ final class FeatureTests: XCTestCase {
     func testSettingsRowsPagesThenConfigurable() throws {
         let r = FeatureRegistry(try list())
         let rows = r.settingsRows
-        XCTAssertEqual(rows.count, 12)
-        XCTAssertEqual(rows.prefix(2).map(\.id), ["plugins", "team"])          // 管侧栏页的在最前
-        let rest = Array(rows.dropFirst(2))
+        XCTAssertEqual(rows.count, 11)
+        XCTAssertEqual(rows.prefix(1).map(\.id), ["team"])                     // 管侧栏页的在最前
+        let rest = Array(rows.dropFirst(1))
         let firstPlain = rest.firstIndex { $0.settings?.fields.isEmpty != false }!
         XCTAssertTrue(rest[..<firstPlain].allSatisfy { $0.settings?.fields.isEmpty == false })
         XCTAssertTrue(rest[firstPlain...].allSatisfy { $0.settings?.fields.isEmpty != false && !$0.hasPage })
-        XCTAssertTrue(r.summary.hasPrefix("12 个功能，开着 11 个"))
+        XCTAssertTrue(r.summary.hasPrefix("11 个功能，开着 11 个"))
     }
 
     // MARK: settings schema → 表单

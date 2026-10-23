@@ -447,43 +447,6 @@
    ]
   },
   {
-   "id": "plugins",
-   "name": "第三方插件",
-   "sub": "~/.evoloop/plugins 里的外部插件（侧栏页 / 输入框命令 / 通知渠道 / 件按钮），接口见 docs/plugins.md",
-   "version": "1.0.0",
-   "api": "^1",
-   "essential": false,
-   "state": "active",
-   "why": "",
-   "enabled": true,
-   "chosen": false,
-   "source": "user",
-   "in_use": 0,
-   "in_use_text": "",
-   "requires": [
-    "notify"
-   ],
-   "provides": [
-    "plugins.host"
-   ],
-   "parts": [
-    {
-     "slot": "page",
-     "key": "plugins",
-     "title": "插件",
-     "icon": "puzzlepiece.extension"
-    },
-    {
-     "slot": "cli",
-     "key": "plugin"
-    }
-   ],
-   "settings": null,
-   "config": {},
-   "config_source": {},
-   "subscribes": []
-  },
-  {
    "id": "team",
    "name": "团队 / 模型协调",
    "sub": "岗位卡片、magpie 健康检查、额度满切备用、模型成绩和建议；团队页",

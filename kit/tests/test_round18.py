@@ -364,14 +364,12 @@ def test_self_upgrade_switches_release(tmp_path, loop):
     assert os.path.exists(os.path.join(loop.root, "releases", v2, "SOURCE"))
 
 
-def test_plugins_feature_off_turns_off_third_party(loop):
+def test_third_party_field_stays_null(loop):
+    """第二十四轮删了第三方插件（#16）：feature dump 的 third_party 字段留着、恒为 null（JSON 合约只加字段不删）。"""
     loop.project("AB")
     d = json.loads(loop.ok("feature", "dump", "--json").stdout)
-    assert d["third_party"] == []
-    loop.ok("feature", "off", "plugins")
-    r = loop.evo("plugin", "list", "--json")
-    assert r.returncode != 0 and "evo feature on plugins" in r.stderr
-    assert json.loads(loop.ok("feature", "dump", "--json").stdout)["third_party"] is None
+    assert "third_party" in d and d["third_party"] is None
+    assert not any(f["id"] == "plugins" for f in d["features"])
 
 
 def test_outputs_match_schemas(loop):

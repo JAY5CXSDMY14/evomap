@@ -180,8 +180,6 @@ struct SettingsView: View {
                          color: state.watchLink.alive() || isStatic ? Theme.textSecondary : Theme.warning)
                 }
                 .staggeredAppear(4)
-                PluginSettingsCard(state: state)          // v0.6.0：插件开关
-                    .staggeredAppear(5)
                 HStack {
                     Button { WindowManager.shared.showSetup() } label: { Label("打开首次设置向导", systemImage: "wand.and.stars") }
                         .buttonStyle(BouncyStyle(kind: .primary))

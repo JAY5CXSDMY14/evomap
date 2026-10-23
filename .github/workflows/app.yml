@@ -35,8 +35,7 @@ jobs:
           test -f build/Evo.app/Contents/Resources/evo/bin/evo
           test -f build/Evo.app/Contents/Resources/evo/panel/index.html
           test -f build/Evo.app/Contents/Resources/evo/install.sh
-          test -f build/Evo.app/Contents/Resources/evo/bin/evo_plugin.py
-          test -f build/Evo.app/Contents/Resources/evo/plugins/example-hello/plugin.json
+          test ! -e build/Evo.app/Contents/Resources/evo/bin/evo_plugin.py   # 第二十四轮删了插件（#16）
           test -f build/Evo.app/Contents/Resources/evo/schemas/status.schema.json
           test -f build/Evo.app/Contents/Resources/evo/features/team/feature.json
           test -f build/Evo.app/Contents/Resources/evo/schemas/feature-list.schema.json
@@ -58,8 +57,7 @@ jobs:
           python3 build/Evo.app/Contents/Resources/evo/bin/evo projects
           python3 build/Evo.app/Contents/Resources/evo/bin/evo --help | head -5
           python3 build/Evo.app/Contents/Resources/evo/bin/evo projects --json
-          EVO_PLUGINS_DIR="$RUNNER_TEMP/evo-smoke/plugins" python3 build/Evo.app/Contents/Resources/evo/bin/evo plugin install build/Evo.app/Contents/Resources/evo/plugins/example-hello
-          EVO_PLUGINS_DIR="$RUNNER_TEMP/evo-smoke/plugins" python3 build/Evo.app/Contents/Resources/evo/bin/evo plugin list --json
+          python3 build/Evo.app/Contents/Resources/evo/bin/evo feature list --json > /dev/null
           bash build/Evo.app/Contents/Resources/evo/install.sh | tail -5 || true
           # 跑完不能在签过名的包里留下 __pycache__
           if find build/Evo.app -name __pycache__ | grep -q .; then echo "包里出现 __pycache__"; exit 1; fi

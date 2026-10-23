@@ -45,7 +45,7 @@ class FeatureError(Exception):
     pass
 
 
-# ---------- 版本范围：和第三方插件同一套语法（^1、>=1 <2、*）----------
+# ---------- 版本范围（^1、>=1 <2、*）：第二十四轮删插件后只留这一份 ----------
 def _ver(s):
     parts = s.split(".")
     if not 1 <= len(parts) <= 3 or not all(p.isdigit() for p in parts):

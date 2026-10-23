@@ -37,7 +37,6 @@
   evo -p AB feedback --item <件号> "原话"  对某件补反馈：它等你的看效果/做不做闸门作废，改完重开
   evo -p AB goal [set "一两句" | clear]   项目目标：写进每份任务书开头「项目目标：…」
   evo -p AB ui [show | set web-react|swiftui|none | set 类别=包名[,包名] | set 类别= | check]   UI 栈预设（见 kit/presets/ui/README.md）
-  evo plugin list|enable|disable|run|validate|install …   插件（第十六轮，见 docs/plugins.md）：侧栏页 / 输入框命令 / 通知渠道
   evo -p TB runs [件号] [--json]  永久运行记录 runs/<件号>/（第二十二轮：任务书、交卷全文、Multica run、合并前测试日志）
   evo canary [--json]             判据金丝雀：喂已知不合格的样例，有一条被判通过就报（第二十二轮）
   evo projects --json             项目列表（App 用；所有给 App 的 --json 都带 schema_version，见 docs/app-contract.md）
@@ -239,7 +238,6 @@ BUS = BUSMOD.Bus(EVENTS_PATH, CODE if HAS_PROJECT else None)
 RT = RTMOD.Runtime(FEATURES_DIR, EVO_ROOT, K, BUS)
 NOTE.channel_list = lambda: [v for _, _, v in hook("notify.channel")]     # 推送渠道是功能包（Telegram / 邮件 / webhook）
 NOTE.hold_ok = lambda: svc("digest") is not None
-NOTE.plugins_ok = lambda: svc("plugins.host") is not None                 # 第三方插件层（功能包 plugins）关着：插件渠道不收通知                          # 早报功能关着：夜里不攒，直接推
 _RT_READY = []
 
 
@@ -268,8 +266,8 @@ def emit(event, item=None, live=None, record=True, **data):
 
 
 # ---------- 第十八轮：自维护（EV 改 evo 自己）。见 docs/self-maintenance.md ----------
-# 受保护：内核（状态机、闸门、锁、事件、运行时）、权限（refuse_agents、插件环境白名单）、自升级、岗位规则、安全类功能包。
-SELF_PROTECTED = ["kit/bin/evo", "kit/bin/evo_rt.py", "kit/bin/evo_bus.py", "kit/bin/evo_notify.py", "kit/bin/evo_plugin.py",
+# 受保护：内核（状态机、闸门、锁、事件、运行时）、权限（refuse_agents）、自升级、岗位规则、安全类功能包。
+SELF_PROTECTED = ["kit/bin/evo", "kit/bin/evo_rt.py", "kit/bin/evo_bus.py", "kit/bin/evo_notify.py",
                   "kit/roles/**", "kit/install.sh", "kit/selfmaint/**", "kit/features/item-caps/**", "kit/features/orca-gate-sync/**"]
 SELF_FORBIDDEN = ["kit/selfmaint/**"]          # 看门狗和回退逻辑：施工一律不许改（只有老板手改）
 
@@ -309,7 +307,7 @@ def self_head(it):
     """EV（self_maintained）任务书开头的规矩。"""
     if not self_maintained():
         return ""
-    return ("【evo 自维护规矩】这个仓库就是 evo 自己。改到内核（kit/bin/evo、evo_rt、evo_bus、evo_notify、evo_plugin）、闸门、锁、权限、"
+    return ("【evo 自维护规矩】这个仓库就是 evo 自己。改到内核（kit/bin/evo、evo_rt、evo_bus、evo_notify）、闸门、锁、权限、"
             "自升级、岗位规则（kit/roles）、每件上限 / Orca 闸门同步功能包的件，一律走老板闸门，决策岗不能批。"
             "严禁修改 kit/selfmaint/（看门狗和回退逻辑），改了交卷直接打回。新功能放 kit/features/<id>/，按 docs/architecture.md 的步骤做。\n\n")
 
@@ -4546,8 +4544,8 @@ def feature_doc():
     r = rt()
     return {"schema_version": FEATURE_SCHEMA_VERSION, "api": RTMOD.API, "preset": r.preset, "file": r.path,
             "file_error": r.file_error, "features": r.dump(),
-            # 第三方层：~/.evoloop/plugins 的外部插件（接口不变，见 docs/plugins.md）；功能包 plugins 关着时为 null
-            "third_party": svc("plugins.host").list() if svc("plugins.host") else None}
+            # 第三方插件第二十四轮删了（#16）；字段留着、恒为 null（JSON 合约只加字段不删）
+            "third_party": None}
 
 
 def _feature_line(f):

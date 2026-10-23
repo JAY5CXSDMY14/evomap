@@ -242,7 +242,7 @@ public struct FeatureRegistry: Equatable, Sendable {
     public var list: FeatureList?
     public init(_ list: FeatureList?) { self.list = list }
 
-    /// 内置页（team、plugins…）显示不显示：老 evo 没有 feature 命令（list 为 nil）→ 照旧都显示；
+    /// 内置页（team…）显示不显示：老 evo 没有 feature 命令（list 为 nil）→ 照旧都显示；
     /// 有列表 → 声明了这个页的功能包开着才显示；没有功能包声明它 → 内核的页，一直显示。
     public func pageVisible(_ key: String) -> Bool {
         guard let l = list else { return true }
@@ -335,14 +335,11 @@ public struct PageError: Equatable, Sendable {
 public extension FeatureRegistry {
     /// 侧栏「团队」显示吗（功能包 team 声明了 page:team）。
     var teamVisible: Bool { pageVisible("team") }
-    /// 侧栏「插件」分组显示吗（功能包 plugins 声明了 page:plugins）。
-    var pluginsVisible: Bool { pageVisible("plugins") }
 
     /// 选中的页被关掉了：退回「等你处理」；没关就原样。
     func fallback(_ sel: SidebarItem) -> SidebarItem {
         switch sel {
         case .team: return teamVisible ? sel : .inbox
-        case .plugin: return pluginsVisible ? sel : .inbox
         default: return sel
         }
     }

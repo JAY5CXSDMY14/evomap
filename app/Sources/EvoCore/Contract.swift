@@ -11,8 +11,6 @@ public enum ContractCommand: String, Sendable, CaseIterable {
     case log = "evo log --json"
     case team = "evo team --json"
     case teamInit = "evo team init --json"
-    case pluginList = "evo plugin list --json"
-    case pluginRun = "evo plugin run --json"
     case featureList = "evo feature list --json"    // 第十八轮
     case watch = "evo watch --json"                 // 第十八轮：每行一个事件
 }

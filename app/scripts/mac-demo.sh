@@ -38,15 +38,11 @@ defaults write $BUNDLE notificationsEnabled -bool false
 defaults write $BUNDLE mateCharacter ball
 defaults write $BUNDLE appearance light
 defaults delete $BUNDLE "NSWindow Frame Evo.main" 2>/dev/null || true
-# v0.6.0 插件：用包里的真 evo 装示例插件 example-hello（装好默认关着 → 打开），插件目录放临时目录，不碰本机的
+# 功能开关 / 事件流交给包里的真 evo；EVO_HOME 放临时目录，不碰本机的（插件演示第二十四轮删了）
 export EVO_REAL_EVO="$APP/Contents/Resources/evo/bin/evo"
-export EVO_PLUGINS_DIR="$WORK/plugins"
 export EVO_HOME="$WORK/evo/projects"
 export PYTHONDONTWRITEBYTECODE=1
 mkdir -p "$EVO_HOME"
-python3 "$EVO_REAL_EVO" plugin install "$APP/Contents/Resources/evo/plugins/example-hello" 2>&1 | tee -a "$HOW"
-python3 "$EVO_REAL_EVO" plugin enable example-hello 2>&1 | tee -a "$HOW"
-python3 "$EVO_REAL_EVO" plugin list 2>&1 | tee -a "$HOW"
 mkdir -p "$HOME/.evoloop"
 # runner 默认可能开着「减弱动态效果」（调度球就只画静态帧、不跟鼠标）：记下来，试着关掉；关不掉应用也会因 EVO_DEMO_MOTION=1 照样动
 note "减弱动态效果（录屏前）：$(defaults read com.apple.universalaccess reduceMotion 2>&1 | tail -1)"
@@ -249,16 +245,6 @@ drive() {
   if evo_front; then paste_text "把验收换成 group/evo-verify"; fi; sleep 0.5
   click composer-send || fails=$((fails+1)); waitpt team-confirm-yes >/dev/null; sleep 1.2; shot 09c-team-confirm
   click team-confirm-yes || fails=$((fails+1)); sleep 2.4; shot 09d-team-changed
-  # v0.6.0 插件：侧栏「插件」分组 → 示例插件页（通用卡片渲染）→ 点卡片按钮 → 输入框 /hello
-  if click win-sidebar-plugin-0; then
-    waitpt plugin-page-btn-0 >/dev/null || note "  ✗ 插件页没画出按钮（可能报错了，看截图）"; sleep 1.4; shot 09e-plugin-page
-    click plugin-page-btn-1 || fails=$((fails+1)); sleep 1.8; shot 09f-plugin-button
-  else
-    note "  ✗ 侧栏没有插件页（evo plugin list 没读到？）"; fails=$((fails+1))
-  fi
-  click composer-field || fails=$((fails+1)); sleep 0.4
-  if evo_front; then paste_text "/hello 老板"; fi; sleep 0.5
-  click composer-send || fails=$((fails+1)); waitpt chat-card >/dev/null || note "  ✗ 没看到 /hello 的回话卡片"; sleep 1.4; shot 09g-plugin-hello
   # v0.7.0 功能开关：设置 → 功能，关掉「团队 / 模型协调」→ 侧栏「团队」消失（真 evo feature off team）
   click win-sidebar-settings || fails=$((fails+1)); waitpt settings-feature-team >/dev/null; sleep 1.6; waitstable settings-feature-team
   click settings-feature-team || fails=$((fails+1))

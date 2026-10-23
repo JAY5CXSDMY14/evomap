@@ -259,6 +259,7 @@ CI：kit-tests run 39561803019（提交 ed7832b）全套绿；两个待定项锁
 ## 第二十四轮：架构减法（老板 10-23 15:09 批）
 - #20 删 v1 副本：根目录 `prompts/`、`scripts/`（含 v1 `install.sh`）、`templates/`、`profiles/` 和 v1 专用文档 `docs/loop.md`、`orchestration.md`、`adoption.md`；根 README 改成只讲 evo；项目模板 `docs/code-standards.md` 的 PR / Reviewer 改成施工 / 验收岗、evo 合并、不走 PR。`evo new`、`kit/install.sh` 不读这些，不受影响。旧名 `tubu` 软链和 `~/.tubu` 回退没动（要先确认老项目都迁完）。
 - #21 HTML 不进仓库：删 `docs/` 下 26 个渲染 html（约 3.6MB），只留 `docs/loop-overview.html`；`.gitignore` 挡 `docs/**/*.html`；指向 html 的链接改指 `.md`。讲解页 `.md` 为源，html 按需用 answer-me-with-html 生成。没改 git 历史。
+- #16 删插件系统（推翻第十六轮「留插件接口」）：删 `bin/evo_plugin.py`、`features/plugins`、`plugins/example-hello`、`schemas/` 里 card / plugin-list / plugin-manifest / plugin-run、`docs/plugins.md`；`evo plugin` 子命令、插件通知渠道、`SELF_PROTECTED` 里的 evo_plugin.py 和插件环境白名单一起没了。`feature list --json` 的 `third_party` 字段留着、恒为 null（合约只加不删）。版本范围匹配只剩 `evo_rt.py` 一份。App 删 `Plugins.swift` / `PluginViews.swift` 和侧栏插件组、输入框 `/命令`、件按钮、设置里的插件开关；`JSONValue` / `CardTone` 挪到 `EvoCore/JSONValue.swift`，接口横幅 `ContractBanner` 挪到 `MainWindow.swift`。以后加功能直接进 evo，通知渠道走 `notify-webhook`。
 
 ## 只能在 Mac mini 上验的
 - 第二十二轮：真 GitHub 远端（走代理）`git ls-remote` 的耗时是否在 `timeouts.git_net` 内；runs/ 目录长期增长的体积（只增不删，需要时老板手动归档）；真 dsh / claude 工人读到首行角色声明后不再派活。

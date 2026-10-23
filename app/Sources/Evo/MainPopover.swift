@@ -507,7 +507,7 @@ struct ChatSection: View {
     let lines: [AppState.ChatLine]
     let mood: MascotMood
     var liveEmotion: MateEmotion? = nil
-    var state: AppState? = nil                     // v0.6.0：插件回话卡片上的按钮要再跑插件
+    var state: AppState? = nil
     private var lastEvo: UUID? { lines.last { !$0.mine }?.id }
 
     var body: some View {
@@ -523,15 +523,7 @@ struct ChatSection: View {
                         } else {
                             MateView(emotion: l.failed ? .error : .happy, size: 26, forceStill: true)
                         }
-                        if let c = l.card {
-                            PluginCardView(card: c, compact: true, onAction: action(l), probePrefix: l.id == lines.last?.id ? "chat-card" : nil)
-                                .padding(12)
-                                .frame(maxWidth: 460, alignment: .leading)
-                                .card()
-                                .uiProbe(l.id == lines.last?.id ? "chat-card" : nil)
-                        } else {
-                            SpeechBubble(text: l.text, side: .evo, tone: l.failed ? .danger : .neutral)
-                        }
+                        SpeechBubble(text: l.text, side: .evo, tone: l.failed ? .danger : .neutral)
                         Spacer(minLength: 40)
                     }
                 }
@@ -539,15 +531,6 @@ struct ChatSection: View {
                                         removal: .opacity))
             }
         }
-    }
-}
-
-@MainActor
-extension ChatSection {
-    /// 回话卡片上的按钮：再跑同一个插件命令，带上按钮的 action / payload。
-    func action(_ l: AppState.ChatLine) -> ((CardButton) -> Void)? {
-        guard let st = state, let cmd = l.command else { return nil }
-        return { b in st.runComposerPlugin(cmd, args: "", project: st.focusedProject ?? st.codes.first ?? "", action: b.action, payload: b.payload) }
     }
 }
 

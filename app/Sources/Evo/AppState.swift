@@ -32,11 +32,6 @@ final class AppState: ObservableObject {
     @Published var team: TeamDoc?                  // v0.4.0 团队页：evo team --json
     @Published var teamError: String?
     @Published var pendingTeam: TeamChange?        // 等你点「确认换」的换模型（卡片下拉框 / 输入框「把验收换成 X」）
-    @Published var plugins: PluginList?            // v0.6.0：evo plugin list --json（侧栏「插件」分组、设置里的开关）
-    @Published var pluginPages: [String: CardViewState] = [:]     // 「插件/页」→ 插件页的三态
-    @Published var itemActionResults: [String: CardViewState] = [:]   // 「项目/件号/插件/按钮」→ 件详情页插件按钮的结果
-    @Published var pluginBusy: Set<String> = []    // 正在开关的插件名
-    @Published var pluginNote: String?             // 插件列表读不出来时的一句（老 evo 没有 plugin 命令）
     @Published var contractWarning: String?        // v0.6.0：evo 的 JSON 接口大版本对不上（evo 比 App 新/旧，请更新）
     @Published var features: FeatureList?          // v0.7.0：evo feature list --json（nil = 老 evo 没有功能开关，界面照旧全显示）
     @Published var featureNote: String?            // 功能列表读不出来的原因（设置页「功能」卡片里画错误卡片 + 重试）
@@ -58,8 +53,6 @@ final class AppState: ObservableObject {
         var text: String
         var mine: Bool
         var failed = false
-        var card: PluginCard? = nil                 // v0.6.0：插件「/命令」的回话是一张卡片
-        var command: PluginComposerRef? = nil       // 卡片上的按钮再跑这个插件命令
     }
 
     static let pollSeconds: TimeInterval = 30
@@ -262,7 +255,6 @@ final class AppState: ObservableObject {
         if Launchd.installed { loopRunning = await Launchd.isLoaded() } else { loopRunning = nil }
         await loadFeatures()                       // v0.7.0：先读功能列表，关掉的功能不去问它
         if registry.teamVisible { await loadTeam() }
-        if registry.pluginsVisible { await loadPlugins() }
         applyFeatureVisibility()
         lastRefresh = Date()
     }
@@ -342,14 +334,6 @@ final class AppState: ObservableObject {
     // MARK: 输入框
 
     func send(mode: ComposerMode, project: String, text: String, look: Bool) -> String? {
-        // v0.6.0：「/名字 参数」是插件的输入框命令：交给插件，回话是一张卡片（不认识的 /词 照旧当反馈发）
-        if let m = PluginCommandParser.match(text, commands: plugins?.composerCommands ?? []) {
-            chat.append(ChatLine(text: text.trimmingCharacters(in: .whitespacesAndNewlines), mine: true))
-            trimChat()
-            react(.sending)
-            runComposerPlugin(m.command, args: m.args, project: project, action: nil, payload: nil)
-            return nil
-        }
         // v0.4.0：「把验收换成 X」不发给 evo feedback，先出确认卡，点了才 evo team set
         if let ch = TeamIntent.parse(text, currentProject: project.isEmpty ? nil : project, projects: codes) {
             chat.append(ChatLine(text: text.trimmingCharacters(in: .whitespacesAndNewlines), mine: true))

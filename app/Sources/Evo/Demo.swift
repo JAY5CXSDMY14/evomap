@@ -228,12 +228,6 @@ enum DemoRunner {
             }
         case .team:
             withAnimation(Motion.or(Motion.softSpring)) { st.windowSelection = .team }
-        case .pluginPage:
-            if let pg = st.plugins?.sidebarPages.first {
-                withAnimation(Motion.or(Motion.softSpring)) { st.windowSelection = .plugin(pg.plugin, pg.id) }
-            }
-        case .pluginCommand:
-            _ = st.send(mode: .feedback, project: st.codes.first ?? "", text: "/hello 老板", look: false)
         case .features:          // v0.7.0：设置页「功能」，关掉 team → 侧栏「团队」消失
             withAnimation(Motion.or(Motion.softSpring)) { st.windowSelection = .settings }
             st.setFeatureEnabled("team", false)

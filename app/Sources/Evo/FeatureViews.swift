@@ -51,11 +51,6 @@ extension AppState {
             if team != nil { team = nil }
             if teamError != nil { teamError = nil }
         }
-        if !reg.pluginsVisible {
-            let note = "功能「插件」关着（设置 → 功能里打开），第三方插件不跑。"
-            if plugins != nil { plugins = nil }
-            if pluginNote != note { pluginNote = note }
-        }
     }
 
     func setFeatureEnabled(_ id: String, _ on: Bool) {
@@ -70,7 +65,7 @@ extension AppState {
             let name = features?.feature(id)?.name ?? id
             flash = r.ok ? "功能「\(name)」\(on ? "打开了" : "关掉了")" : "没成：\(r.tail.prefix(100))"
             await loadFeatures()
-            if on { await loadTeam(); await loadPlugins() }
+            if on { await loadTeam() }
             clearFlash(containing: name)
         }
     }

@@ -1,8 +1,8 @@
 # evo 的外部 Agent 接口
 
-给 Muse、Grok bot、本机 DSH、各种插件 bot 用：**能看、能报，不能批、不能上线**。
+给 Muse、Grok bot、本机 DSH 等外部 bot 用：**能看、能报，不能批、不能上线**。
 
-> App（Evo.app）读的那几个 `--json` 的版本规则和字段表见 [app-contract.md](app-contract.md)（第十六轮）；插件见 [plugins.md](plugins.md)。
+> App（Evo.app）读的那几个 `--json` 的版本规则和字段表见 [app-contract.md](app-contract.md)（第十六轮）。
 
 每个项目仓库里有一份短版 `AGENT_INTERFACE.md`（`evo new` 会放，`evo import` 会放但不提交）。
 

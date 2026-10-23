@@ -3,16 +3,15 @@
 # evo 架构：内核 + 功能包（第十八轮）
 
 写给要改 evo 的 AI Agent。读完你能做三件事：看懂一个功能装在哪里、加一个新功能包、把内核里的老功能迁成功能包。
-做法照 magpie 的插件运行时（`internal/pluginrt`）：内核只管状态机和接线，功能都是可开关的包。
+做法照 magpie 的插件运行时（`internal/pluginrt`）：内核只管状态机和接线，功能都是可开关的包。第十六轮的第三方插件（`~/.evoloop/plugins`）第二十四轮删了（#16）：以后加功能直接进 evo。
 
 ## 1. 分层
 
 | 层 | 在哪 | 管什么 | 谁能改 |
 |---|---|---|---|
-| 内核 | `kit/bin/evo`、`evo_rt.py`、`evo_bus.py`、`evo_notify.py`、`evo_plugin.py` | 件的状态机、闸门、锁、权限、事件总线、功能包运行时、自升级 | 改动走老板闸门（见 `docs/self-maintenance.md`） |
+| 内核 | `kit/bin/evo`、`evo_rt.py`、`evo_bus.py`、`evo_notify.py` | 件的状态机、闸门、锁、权限、事件总线、功能包运行时、自升级 | 改动走老板闸门（见 `docs/self-maintenance.md`） |
 | 内核库 | `kit/bin/evo_deps.py`、`evo_roles.py`、`evo_time.py` 等 | 几个功能包共用的工具 | 和普通代码一样 |
 | 功能包 | `kit/features/<id>/` | 一个可开关的功能（推送渠道、上线、GitHub、团队页……） | 和普通代码一样；`item-caps`、`orca-gate-sync` 两个安全类除外 |
-| 第三方插件 | `~/.evoloop/plugins/<名字>/` | 老板自己装的外部插件，子进程跑 | 插件作者；接口见 `docs/plugins.md` |
 | 看门狗 | `kit/selfmaint/evo-guard.sh` | 自升级后的回退 | **只有老板手改**，evo 和工人都不许碰 |
 
 规矩只有一条最要紧：**内核从不 import 某个功能包**。内核拿功能只走两条路：
@@ -37,7 +36,6 @@
 | `digest` | 早报和每晚汇总 | 否 | cli `digest`、设置 |
 | `github` | GitHub 来源 | 是 | cli `pull`、服务 `gh` |
 | `team` | 团队 / 模型协调 | 是 | 服务 `team`、cli `team` / `models`、App 页 `team` |
-| `plugins` | 第三方插件 | 否 | 服务 `plugins.host`、cli `plugin`、App 页 `plugins` |
 
 看实时状态：`evo feature list`（人看）或 `evo feature list --json`（App 读，格式见 `kit/schemas/feature-list.schema.json`）。
 
@@ -183,7 +181,7 @@ evo feature preset essentials             # 精简
 ## 6. App 怎么跟着功能走（App 0.7.0）
 
 - 启动后读 `evo feature list --json`。老 evo 没有这个命令：当作「全开」，界面照旧。
-- 侧栏：声明了 `page` 槽位的功能（`team`、`plugins`）关着，它的页就不出现；正选着它就退回「等你处理」。没有功能包声明的页（等你处理、项目、卡太久、设置）一直在。
+- 侧栏：声明了 `page` 槽位的功能（`team`）关着，它的页就不出现；正选着它就退回「等你处理」。没有功能包声明的页（等你处理、项目、卡太久、设置）一直在。
 - 设置页「功能」卡片：每个功能一个开关；有 `settings` 的多一个「设置」按钮，展开后按 schema 自动画表单（boolean → 开关，enum → 一排按钮，数字 → 数字框带范围，字符串 → 文本框）。输入先在 App 里按 schema 校验，不合格就红字，不跑 evo；合格才跑 `evo feature set`，evo 再校验一次，拒了就把原话挂在字段下面。
 - 订阅 `evo watch --json`：有事件就刷新（去抖 1.2 秒）；事件流活着时只做 2 分钟一次的兜底轮询；45 秒没收到任何一行就当断了，回到 30 秒轮询，并按 5、10、20、40、60 秒退避重连。
 - 每页错误边界：团队页、项目页、件详情读不出来时，只这一页画「出错了 + 重试」卡片，侧栏和别的页照常。等你处理、卡太久是汇总页，不整页挡住；设置页永远能打开（evo 路径填错了要靠它改回来）。
@@ -209,7 +207,7 @@ evo feature preset essentials             # 精简
 2. 在内核调用点换成 `svc("服务名")` 或 `hook("槽位")`，拿不到就按「没有这个功能」走。
 3. 代码搬进 `kit/features/<id>/feature.py`；几个包都要用的工具放进内核库（例如第十八轮的 `evo_deps`、`evo_roles`）。
 4. 老配置键照旧能读，不要逼老板改配置。先读哪个由功能包自己定，并写进这个设置的 `description`。例如 `deploy`：项目或全局 `config.json` 写了 `auto_ship_gate` 就以它为准，没写才用功能设置。
-5. JSON 接口（`status --json` 等）字段名和 `schema_version` 不变；第十六轮外部插件的 `evo_api 1.0` / `schema_version 1` 不变。
+5. JSON 接口（`status --json` 等）字段名和 `schema_version` 不变。
 6. 跑全套测试，绿了再提交，提交信息写「迁出 `<id>`」。
 
 第十八轮已经按这个步骤迁了 12 个（提交 7cc9051 到 9e28321）。

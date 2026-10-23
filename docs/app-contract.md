@@ -10,9 +10,9 @@ Evo.app 不读 evo 的内部文件，只跑 `evo … --json` 拿数据。这份�
    - 版本号比 App 认得的大：「evo 版本比 App 新（… 是第 2 版接口，这个 App 只认第 1 版），请更新 Evo App。」
    - 版本号小于 1：「evo 版本比 App 旧 …，请更新 evo」。
 4. 没有 `schema_version` 的老输出（例如第十五轮之前的 `evo log --json`）按 1 处理。
-5. App 侧逻辑在 `app/Sources/EvoCore/Contract.swift`（`ContractCheck`），测试在 `app/Tests/EvoCoreTests/PluginTests.swift`。
+5. App 侧逻辑在 `app/Sources/EvoCore/Contract.swift`（`ContractCheck`），测试在 `app/Tests/EvoCoreTests/ContractTests.swift`。
 
-插件接口另有自己的版本（`evo_api`，现在是 `1.0`），见 [plugins.md](plugins.md)。
+第二十四轮（#16）删了插件：`evo plugin list|run --json` 两个命令、`plugin-list` / `plugin-run` / `plugin-manifest` / `card` 四个 schema 一起没了（老板批准的删除，不升版本）。老 App 跑 `evo plugin list` 会失败，它本来就按「老 evo 没有插件」处理：不显示插件分组，不崩。`evo feature list --json` 的 `third_party` 字段留着、恒为 null。
 
 ## 二、App 调的命令一览
 
@@ -23,10 +23,8 @@ Evo.app 不读 evo 的内部文件，只跑 `evo … --json` 拿数据。这份�
 | `evo -p <代号> log <件号> --json` | 打开件详情 | `log.schema.json` | 详情页显示错误 |
 | `evo team --json` | 每 30 秒 | `team.schema.json` | 团队页显示错误 |
 | `evo team init --json` | 首次设置向导 | `team-init.schema.json` | 向导里显示错误 |
-| `evo plugin list --json` | 每 30 秒 | `plugin-list.schema.json` | 不显示插件分组；设置里说一句 |
-| `evo plugin run <名字> <类型> <id> --json …` | 打开插件页、点击按钮、输入框 `/命令`、件按钮 | `plugin-run.schema.json`（卡片：`card.schema.json`） | 只在那一页 / 那条回话显示错误 |
 
-App 还会跑这些**写**命令（输出是给人看的文字，不是接口）：`approve`、`feedback`、`add`、`tick`、`ship`、`watchdog`、`team set|dismiss|init --apply`、`plugin enable|disable`、`panel --show-token`。
+App 还会跑这些**写**命令（输出是给人看的文字，不是接口）：`approve`、`feedback`、`add`、`tick`、`ship`、`watchdog`、`team set|dismiss|init --apply`、`feature on|off|set`、`panel --show-token`。
 
 另外 `evo models --json`、`evo -p X ui show|check --json`、`evo -p X arch show|check --json` 也带 `schema_version: 1`，App 现在不读，面板 / 外部 Agent 用。`evo status --json` 的详细字段说明以 [agent-interface.md](agent-interface.md) 2.1 为准。
 
@@ -92,64 +90,8 @@ App 还会跑这些**写**命令（输出是给人看的文字，不是接口）
 
 `team init --json`：`{schema_version, cards: {岗位: {tool, models, thinking, fallback?}}, notes: [string], magpie}`；`team init --apply --json`：`{schema_version, ok, applied, notes}`。
 
-### 3.5 `evo plugin list --json`
-
-```json
-{"schema_version": 1, "evo_api": "1.0", "plugins_dir": "/Users/boss/.evoloop/plugins",
- "plugins": [{"name": "example-hello", "version": "0.1.0", "description": "…", "evo_api": "^1",
-   "enabled": true, "valid": true, "compatible": true, "active": true, "errors": [],
-   "contributes": {"sidebar_pages": [{"id": "hello", "title": "你好", "icon": "hand.wave"}],
-                   "composer_commands": [{"id": "hello", "name": "hello", "title": "打个招呼", "usage": "/hello 名字"}],
-                   "notify_channels": [{"id": "hello-log", "title": "写到本地文件", "events": "push"}],
-                   "item_actions": [{"id": "hello-item", "title": "跟这件打招呼", "icon": "hand.wave"}]}}]}
-```
-
-| 字段 | 类型 | 含义 |
-|---|---|---|
-| `evo_api` | string | 这版 evo 的插件接口版本 |
-| `plugins_dir` | string | 插件目录（默认 `~/.evoloop/plugins`，环境变量 `EVO_PLUGINS_DIR` 可改） |
-| `plugins[].enabled` | bool | manifest 里的开关（新装的一律 false） |
-| `plugins[].valid` | bool | plugin.json 合格 |
-| `plugins[].compatible` | bool | 插件要的 `evo_api` 范围包含这版 evo |
-| `plugins[].active` | bool | `enabled && valid && compatible`；**App 只显示 active 插件的贡献点** |
-| `plugins[].errors` | [string] | 不合格的原因（中文） |
-| `plugins[].contributes.*` | 列表 | 四种贡献点（不含插件的命令行，App 用不着也不该看） |
-
-### 3.6 `evo plugin run <名字> <类型> <id> --json`
-
-参数：`<类型>` = `sidebar_page` | `composer_command` | `notify_channel` | `item_action`；`<id>` 是贡献点的 id（输入框命令也可以用 `name`）。可选 `--args 文字`（输入框 `/名字` 后面的话）、`--action A --payload JSON`（点了卡片上的按钮）、`--project 代号`、`--item 件号`。
-
-```json
-{"schema_version": 1, "ok": true, "plugin": "example-hello", "kind": "sidebar_page", "id": "hello",
- "card": {"schema_version": 1, "title": "你好，老板 👋", "blocks": [ … ]}, "error": null, "elapsed_ms": 41, "stderr_tail": ""}
-```
-
-| 字段 | 类型 | 含义 |
-|---|---|---|
-| `ok` | bool | 插件跑成功、输出合格 |
-| `card` | 卡片? | 成功时的卡片（`notify_channel` 为 null） |
-| `error` | string? | 失败原因：没打开、不兼容、超时（20 秒）、输出超过 256 KB、退出码非 0、不是 JSON、卡片不合格 |
-| `elapsed_ms` | 整数 | 用时 |
-| `stderr_tail` | string | 插件 stderr 的最后 500 字（排错用） |
-
-**插件失败时 evo 退出码是 3，但 stdout 照样是这个信封**；App 先读信封。evo 自己的用法错误（参数不对）退出码 1/2，stdout 不是 JSON。
-
-### 3.7 卡片（`card.schema.json`，插件写、App 画）
-
-```json
-{"schema_version": 1, "title": "标题", "subtitle": "可选副标题",
- "blocks": [
-   {"type": "text", "text": "一段话", "style": "body|caption|title|mono", "tone": "neutral|accent|success|warning|danger"},
-   {"type": "list", "items": [{"title": "一行", "subtitle": "小字", "badge": "角标", "symbol": "SF Symbol 名", "tone": "success"}]},
-   {"type": "table", "columns": ["列1", "列2"], "rows": [["a", "b"], ["c", 3]]},
-   {"type": "buttons", "buttons": [{"label": "按钮", "action": "动作名", "style": "primary|secondary|danger", "payload": {"任意": "JSON"}}]}
- ]}
-```
-
-上限：50 块、列表 200 条、表格 200 行 12 列、按钮 6 个、每段文字 2000 字（超长截断）、payload 4 KB。不认识的块：evo 校验时报错（插件按 v1 写）；App 解码时直接跳过（给以后的小版本留余地）。
-
 ## 四、改接口的流程
 
 1. 只加字段：改 evo、改 `kit/schemas/` 对应文件（加 `properties`）、改这份文档的表、在 EvoCore 解码里加可选字段。`schema_version` 不动。
 2. 要做不兼容改动：先想能不能「加新字段、旧字段留着」。实在不行：`APP_SCHEMA_VERSION`（kit/bin/evo）升 2 → 新 schema 文件 → App 的 `ContractCheck.supported` 升 2 并发版。老 App 会看到「请更新」横幅。
-3. kit 测试会拿每个命令的真输出过 schema；App 测试用 `Tests/EvoCoreTests/Fixtures/` 里的样例（`plugin_list.json`、`plugin_run_page.json`…）。
+3. kit 测试会拿每个命令的真输出过 schema；App 测试用 `Tests/EvoCoreTests/Fixtures/` 里的样例（`feature_list.json`、`status_future.json`…）。

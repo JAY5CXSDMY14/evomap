@@ -42,7 +42,6 @@ EV 项目的配置写 `"self_maintained": true` 后，下面这些路径受保�
 | `kit/bin/evo_rt.py` | 功能包运行时 |
 | `kit/bin/evo_bus.py` | 事件总线 |
 | `kit/bin/evo_notify.py` | 推送内核（outbox、免打扰） |
-| `kit/bin/evo_plugin.py` | 第三方插件宿主（环境变量白名单） |
 | `kit/roles/**` | 岗位规则 |
 | `kit/install.sh` | 安装 / 版本目录 |
 | `kit/selfmaint/**` | 看门狗、回退（**禁止改**） |

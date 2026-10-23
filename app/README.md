@@ -4,7 +4,7 @@ evo 自动循环的 macOS 菜单栏外壳。SwiftUI 写的小壳：菜单栏弹�
 
 v0.6.1（kit 第十七轮）：项目暂停时卡片写「暂停：原因」，不再显示成读不出状态（`evo status` 改为只读，暂停也照常返回）；闸门认 `confirm`（Orca 手机端点的「通过 / 上线」要在 App 里再点一次才生效，试运行）和 `budget`（每件上限：继续还是不做）。每件上限的三个数字这版没进 App 设置页，在面板项目页「每件上限」或 `evo limits` 改。
 
-v0.6.0 起**能装插件**：丢一个文件夹进 `~/.evoloop/plugins/`，侧栏多一页、输入框多一个 `/命令`、通知多一个渠道，不用改 App（见下面 v0.6.0 和 `../docs/plugins.md`）；App 读 evo 的 JSON 接口都带版本号（`../docs/app-contract.md`）。
+v0.6.0 起 App 读 evo 的 JSON 接口都带版本号（`../docs/app-contract.md`）。v0.6.0 加的插件（侧栏插件页、输入框 `/命令`、件按钮、设置里的插件开关）kit 第二十四轮删了（#16）。
 
 v0.3.0 起有了**真正的 Mac 窗口**（Claude 桌面版的样子：左侧栏、宽内容区、底部钉着输入框、统一标题栏和工具栏），菜单栏弹窗变成紧凑的速览；吉祥物换成 aora-bot 表情引擎的球形角色，v0.5.0 起叫 **调度球**（可切 云宝 / 亮亮）。实机截图和录屏在 CI 构件 mac-demo / snapshots 里（含第三方角色形象，不进公开仓库）。
 
@@ -68,7 +68,6 @@ app/
     MainPopover.swift    菜单栏弹窗（紧凑：问候、汇总、前两张闸门卡、打开窗口）
     Palette.swift        ⌘K 命令面板
     Windows.swift        设置、首次向导
-    PluginViews.swift    v0.6.0 插件：通用卡片渲染器（三态）、插件页、件按钮、设置里的开关、接口版本横幅
     Snapshots.swift      make snapshots 用的假数据和出图
     AppState / Panel / Notifier / Shell   轮询、面板窗口、通知、跑命令
   Tests/EvoCoreTests/    单元测试 + Fixtures/ 样例 JSON
@@ -140,16 +139,11 @@ app/
 
 ### v0.6.0 插件 + 接口版本（kit 第十六轮）
 - **接口定版本**：App 只通过 `evo … --json` 取数，每个输出顶层都有 `schema_version`（现在 1）。`ContractCheck`（`Sources/EvoCore/Contract.swift`）先看版本号：同一大版本多了字段照常解码、忽略新字段；大版本不认识（比如 evo 升到 2）就不解码，窗口顶上出一条黄色横幅「evo 版本比 App 新（…），请更新 Evo App」（或「比 App 旧，请更新 evo」），对应项目卡片显示同一句，不崩溃。项目列表改读 `evo projects --json`，老 evo 不认就退回纯文本。字段表见 `../docs/app-contract.md`，Schema 在 `../kit/schemas/`。
-- **侧栏「插件」分组**：`evo plugin list --json` 里打开了的插件的侧栏页，一页一行（图标是插件给的 SF Symbol）。点开 → `evo plugin run <插件> sidebar_page <id> --json` → 插件输出的卡片 JSON 用**通用卡片渲染器**画：标题、文字（正文 / 小字 / 大标题 / 等宽，五种色调）、列表（图标、副标题、角标）、表格、按钮。按钮点了再跑同一条插件命令（带 action / payload），卡片弹簧换上。三态：加载（转圈）、报错（红字 + 再试一次，写明「只是这个插件出错」）、空。
-- **输入框 `/命令`**：打 `/hello 老板` → 交给插件的 composer_command，回话是一张卡片（气泡位置换成卡片，按钮照样能点）。不认识的 `/词` 照旧当反馈发，不会吞掉「/api 路径不对」这种话。
-- **件详情页按钮**：插件的 item_action 在件详情右栏「插件」卡片里一个按钮，结果卡片画在下面。
-- **设置 → 插件**：每个插件一个开关（跑 `evo plugin enable/disable`），下面一行是版本和贡献点；plugin.json 不合格或 evo_api 不兼容的插件红字说明、拨不开。新装的插件默认关着。
-- 纯逻辑在 `Sources/EvoCore/Plugins.swift`（plugin list / run 解码、卡片模型、`/命令` 匹配、命令行拼装、三态）和 `Contract.swift`，测试 `Tests/EvoCoreTests/PluginTests.swift`（样例 `Fixtures/plugin_*.json` 是真 evo 的输出）。界面在 `Sources/Evo/PluginViews.swift`；组件截图 `make snapshots` 多一张 `plugin-light/dark.png`。
-- CI 实机演示多一段：用包里的真 evo 装示例插件 `example-hello`（`evo plugin install` + `enable`，插件目录在临时目录）→ 侧栏点「你好」→ 点卡片上的「掷骰子」→ 输入框打 `/hello 老板`，截 `09e-plugin-page`、`09f-plugin-button`、`09g-plugin-hello`。假 evo（`scripts/demo/fake-evo.py`）把 `plugin` 子命令转给真 evo，所以演示的是真的插件机制。
+- 插件部分（侧栏「插件」分组、通用卡片渲染器、输入框 `/命令`、件详情页插件按钮、设置 → 插件、`Plugins.swift` / `PluginViews.swift` / `PluginTests.swift`、实机演示的 09e–09g 三张图）第二十四轮删了（#16）。接口版本横幅 `ContractBanner` 挪到 `MainWindow.swift`，测试在 `Tests/EvoCoreTests/ContractTests.swift`，组件截图改叫 `contract-banner-light/dark.png`。
 
 
 ### v0.7.0 功能开关 + 事件流 + 错误边界（kit 第十八轮）
-- **侧栏跟着功能走**：启动读 `evo feature list --json`；功能包 `team` 关了侧栏「团队」消失，`plugins` 关了「插件」整组消失，正选着就退回「等你处理」。老 evo 没有 `feature` 命令 → 照旧全显示。
+- **侧栏跟着功能走**：启动读 `evo feature list --json`；功能包 `team` 关了侧栏「团队」消失，正选着就退回「等你处理」。老 evo 没有 `feature` 命令 → 照旧全显示。
 - **设置 → 功能**：每个功能一个开关（状态角标：开着 / 关着 / 出错 / 等服务；「在用」的关不掉，灰着写原因）。管侧栏页的排最前，再是有设置的。点「设置（N 项）」展开**按 settings schema 自动画的表单**：boolean → 开关、enum → 一排按钮、integer / number → 数字框带范围、string → 文本框。先在 App 里按 schema 校验（红字），合格才跑 `evo feature set`；evo 拒了把原话挂在字段下。
 - **订阅 `evo watch --json`**：有事件去抖 1.2 秒刷新；事件流活着时只做 2 分钟兜底轮询；45 秒没收到一行就当断了，回到 30 秒轮询，并按 5/10/20/40/60 秒退避重连。设置 → evo 里一行写着现在是连上还是轮询。
 - **每页错误边界**：团队页、项目页、件详情读不出来 → 只这一页画「出错了」卡片（原因、重试、返回），侧栏和别的页照常；等你处理、卡太久不整页挡；设置页永远能开。（SwiftUI 没有异常式边界，这里按「这页的数据读没读出来」判断。）

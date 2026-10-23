@@ -231,20 +231,8 @@ struct SidebarView: View {
                             .uiProbe("win-sidebar-team")
                             .transition(.move(edge: .leading).combined(with: .opacity))
                     }
-                    // v0.6.0：插件分组（打开了的插件的侧栏页；没有就不出现）；v0.7.0：功能包 plugins 关了整组不出现
-                    let pages = state.registry.pluginsVisible ? (state.plugins?.sidebarPages ?? []) : []
-                    if !pages.isEmpty {
-                        SidebarHeading(text: "插件")
-                        ForEach(Array(pages.enumerated()), id: \.element.key) { i, pg in
-                            SidebarRow(symbol: pg.symbol, title: pg.title, badge: 0, accentBadge: false,
-                                       selected: current == .plugin(pg.plugin, pg.id)) { go(.plugin(pg.plugin, pg.id)) }
-                                .uiProbe("win-sidebar-plugin-\(i)")
-                                .transition(.move(edge: .leading).combined(with: .opacity))
-                        }
-                    }
                 }
                 .padding(.horizontal, 8)
-                .animation(Motion.or(Motion.softSpring), value: state.plugins?.sidebarPages.map(\.key) ?? [])
                 .animation(Motion.or(Motion.softSpring), value: state.registry.teamVisible)
             }
             Spacer(minLength: 0)
@@ -416,9 +404,6 @@ struct DetailArea: View {
                         case .item(let p, let k): ItemPane(state: state, project: p, key: k, width: width)
                         case .stale: StalePane(state: state)
                         case .team: TeamPane(state: state, width: width)
-                        case .plugin(let p, let id):
-                            if let ref = state.plugins?.page(p, id) { PluginPane(state: state, ref: ref) }
-                            else { Hint(text: "插件 \(p) 的页「\(id)」不在了（插件关掉或删掉了）", color: Theme.textSecondary) }
                         case .settings: SettingsView(state: state, embedded: true).frame(maxWidth: .infinity)
                         }
                         }
@@ -928,7 +913,6 @@ struct ItemPane: View {
                     }
                 }
             }
-            ItemPluginActions(state: state, project: project, key: key)     // v0.6.0：插件的件按钮
             if !log.notes.isEmpty {
                 InfoCard(title: "你说过", symbol: "text.bubble") {
                     ForEach(Array(log.notes.enumerated()), id: \.offset) { _, n in
@@ -1153,6 +1137,23 @@ struct ComposerDock: View {
         )
         .animation(Motion.or(Motion.softSpring), value: state.chat)
         .animation(Motion.or(Motion.pop), value: state.pendingTeam)
+    }
+}
+// MARK: - 接口版本对不上时的横幅
+
+struct ContractBanner: View {
+    let text: String
+    var body: some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: "arrow.triangle.2.circlepath").foregroundStyle(Theme.warning)
+            Text(text).font(Theme.body(12.5)).foregroundStyle(Theme.textPrimary).fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 0)
+        }
+        .padding(12)
+        .background(RoundedRectangle(cornerRadius: Theme.radiusSmall, style: .continuous).fill(Theme.warning.opacity(0.12)))
+        .overlay(RoundedRectangle(cornerRadius: Theme.radiusSmall, style: .continuous).strokeBorder(Theme.warning.opacity(0.35), lineWidth: 1))
+        .accessibilityElement(children: .combine)
+        .uiProbe("contract-banner")
     }
 }
 #endif

@@ -141,8 +141,8 @@ def main(argv):
     if len(argv) >= 2 and argv[0] == "-p":
         code, argv = argv[1], argv[2:]
     cmd = argv[0] if argv else "help"
-    if cmd in ("plugin", "feature", "watch"):
-        # v0.6.0 插件、v0.7.0 功能开关 / 事件流：交给真 evo（包里的 kit；$EVO_HOME、$EVO_PLUGINS_DIR 指到临时目录），演示的是真机制
+    if cmd in ("feature", "watch"):
+        # v0.7.0 功能开关 / 事件流：交给真 evo（包里的 kit；$EVO_HOME 指到临时目录），演示的是真机制
         real = os.environ.get("EVO_REAL_EVO")
         if not real or not os.path.exists(real):
             if cmd == "feature":
