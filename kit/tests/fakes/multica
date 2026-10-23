@@ -7,7 +7,8 @@ issue assign（不带 --no-start）/ issue rerun 时同步跑一次 run：假工
 假工人用 `multica issue comment add --content-stdin` 交卷（作者是 agent，source_task_id = run id），退出码非 0 = run failed。
 施工 run 完成后 issue 自动转 in_review（和 Air 实测一样）；验收 / 决策不改状态。
 开关：$FAKE_MULTICA_DIR/daemon-down（daemon 停了）、server-down（服务端连不上，退出码 2）、
-      comment-triggers（留言会叫醒被指派的 agent，测 evo 不会重复派）。
+      comment-triggers（留言会叫醒被指派的 agent，测 evo 不会重复派）；
+      agent-models.json / agent-models-in-get（第二十三轮：agent 的模型，见 AGENTS 下面的说明）。
 """
 import fcntl, json, os, subprocess, sys, uuid
 
@@ -15,9 +16,25 @@ D = os.environ["FAKE_MULTICA_DIR"]
 os.makedirs(D, exist_ok=True)
 SP = os.path.join(D, "state.json")
 HERE = os.path.dirname(os.path.abspath(__file__))
-AGENTS = [{"id": "ag-build", "name": "施工-DSH", "role": "build", "rt": "dsh"},
-          {"id": "ag-verify", "name": "验收-Claude", "role": "verify", "rt": "claude"},
-          {"id": "ag-decide", "name": "决策-Claude", "role": "decide", "rt": "claude"}]
+# 第二十三轮：agent 带模型字段 model（形状是假设：真机 `multica agent list/get --output json` 的字段名待核实，见 docs/multica-backend.md）
+AGENTS = [{"id": "ag-build", "name": "施工-DSH", "role": "build", "rt": "dsh", "model": "deepseek-official/group/free-ds"},
+          {"id": "ag-verify", "name": "验收-Claude", "role": "verify", "rt": "claude", "model": "sonnet"},
+          {"id": "ag-decide", "name": "决策-Claude", "role": "decide", "rt": "claude", "model": "fable"}]
+# 开关：$FAKE_MULTICA_DIR/agent-models.json = {"agent 名": "模型" 或 null}，覆盖上面的模型（null = 这个 agent 没填模型）；
+#       agent-models-in-get（文件存在）= list 不带模型，只有 agent get 才给（测 evo 会补查 get）
+_MP = os.path.join(D, "agent-models.json")
+if os.path.exists(_MP):
+    for _a in AGENTS:
+        _o = json.load(open(_MP, encoding="utf-8"))
+        if _a["name"] in _o:
+            _a["model"] = _o[_a["name"]]
+
+
+def agent_doc(a, with_model=True):
+    d = {"id": a["id"], "name": a["name"], "runtime": a["rt"]}
+    if with_model and a.get("model"):
+        d["model"] = a["model"]
+    return d
 
 
 class St:
@@ -126,7 +143,9 @@ def main():
     if os.path.exists(os.path.join(D, "server-down")):
         fail("Network error: connection refused", 2)
     if argv[:2] == ["agent", "list"]:
-        out([{"id": a["id"], "name": a["name"]} for a in AGENTS])
+        out([agent_doc(a, not os.path.exists(os.path.join(D, "agent-models-in-get"))) for a in AGENTS])
+    if argv[:2] == ["agent", "get"]:
+        out(agent_doc(agent(aid=argv[2])))
     if argv[:2] == ["project", "list"]:
         names = (os.environ.get("FAKE_MULTICA_PROJECTS") or "EV,MA,MB,MC,MD,ME,MF,MG").split(",")
         out([{"id": f"proj-{n.lower()}", "title": n} for n in names])

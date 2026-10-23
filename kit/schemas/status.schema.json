@@ -405,6 +405,11 @@
       "type": "boolean",
       "description": "第十七轮：主线本身测试红了，在途的件等它（不算返工）"
     },
+    "model_guard": {
+      "type": ["object", "null"],
+      "description": "第二十三轮：Multica 项目的施工 / 验收模型核对（ok / code / why / build / verify / at）；Orca 项目为 null；ok=false 时不派施工 / 验收",
+      "additionalProperties": true
+    },
     "limits": {
       "type": "object",
       "description": "第十七轮：每件上限 decider_reworks / item_hard_runs / item_hard_hours（0 = 关）",

@@ -64,6 +64,7 @@
 | `items[].manual_checks` | 施工交卷里写的「看效果时该看哪几处」（列表，可能为空） |
 | `items[].usage` | 这件累计派工次数、工人分钟数（含正在跑的） |
 | `rate_limits` | 现在因订阅额度暂停的岗位；`guessed: true` 表示提示里没写重置时间，按默认 60 分钟 |
+| `model_guard` | 第二十三轮（只加字段）：Multica 项目的施工 / 验收模型核对，`{ok, code, why, build, verify, at}`；`code` 是 `same_model` / `same_agent` / `unverified_model` / null；Orca 项目为 null。`ok: false` 时不派施工 / 验收 |
 | `usage.tokens` | 配了 `magpie.usage_url` 才有：`{"by_model": {...}, "project": 数或 null, "source": "..."}`；否则 `null` |
 | `goal` | 项目目标（一两句，写进每份任务书开头）；没写为 `null`。第十二轮新增 |
 | `roles` | 岗位状态列表：`{"role": "build"/"verify"/"decide", "name": "施工"…, "status": "busy"/"idle"/"paused"/"rate_limited", "label": "忙"/"闲"/"暂停"/"额度满", "items": [件号], "why": 说明或 null, "until": 额度恢复时间或 null}`。第十二轮新增 |

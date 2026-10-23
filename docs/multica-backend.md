@@ -100,3 +100,25 @@ evo 队列里的条目 EV-xxx
 - 验收 agent 在自己的工作区里看不看得到施工的改动。所以评论里给了 evo 验收副本的路径，让它直接去读。
 - run 的状态值：已知 queued / dispatched / running / waiting_local_directory 是进行中，completed 是成功；其它值一律按失败处理。
 
+
+## 9. 第二十三轮：施工模型 ≠ 验收模型的保护（issue #15，2026-10-23）
+Orca 后端由团队功能包在每次派工时查「撞模型」；Multica 下模型绑在 agent 上，evo 不选模型，这条保护原来是空的。现在补上：
+
+- **什么时候查**：每轮 `exec_up` 通过之后、派工之前（`model_guard_check`），读 `multica.agents.build` 和 `multica.agents.verify` 两个 agent 的模型。
+- **怎么读**：先 `multica agent list --output json` 找到这个 agent 的条目，看 `model` 字段（也认 `runtime_config.model` / `config.model` / `settings.model`）；条目里没有再 `multica agent get <id> --output json`。
+- **怎么判**：
+  | 情况 | 结果 |
+  |---|---|
+  | 两边模型名相同（去首尾空白、不分大小写） | 停派施工 / 验收，推一次「施工和验收撞模型」 |
+  | 施工、验收配成同一个 agent | 停（放行开关也不管用） |
+  | 模型名不同 | 照常派 |
+  | 有一边读不到 | 默认停，推一次「没法确认施工和验收用的是不同模型」；项目配置写 `"multica": {"allow_unverified_models": true}` 才放行（只认 JSON 的 true），放行时只记日志不推 |
+- 停的时候件显示「等换模型」，`evo status` 多一行「停派施工 / 验收：原因」，`status --json` 多一个字段 `model_guard`（ok / code / why / build / verify / at）。改好后下一轮自动接着派，同一个原因只推一次。决策岗不受影响。
+- **假设**：magpie 组名（`group/evo-build` 和 `group/evo-verify`）和档位名（`sonnet`、`fable`）这里展不开成员，名字不同就按「不同」算。组里实际成员重叠时看不出来。
+
+**真机待核实（Air）**
+1. `multica agent list --output json` / `agent get <id> --output json` 里模型字段到底叫什么（假 multica 用 `model`，文档 multica.ai/docs/cli 只写了 create/update 有 `--model`）。
+2. 施工-DSH 的模型如果只在 daemon 环境变量 `MULTICA_DSH_MODEL` 里设、agent 上没填 model，evo 会读不到 → 默认停派工。真机上要么在 agent 上填 model，要么显式写 `allow_unverified_models: true`。
+3. agent 上模型留空时（用 runtime 默认），list 返回的是空字符串、null 还是没有这个键——三种 evo 都按「读不到」处理。
+
+对应的 multica-backend.html 这轮没重新生成。

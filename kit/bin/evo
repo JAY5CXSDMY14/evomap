@@ -2388,6 +2388,35 @@ def exec_up(s):
 orca_up = exec_up          # 旧名（功能包 / 老脚本可能还在叫）
 
 
+def model_guard_check(s):
+    """第二十三轮：Multica 下施工 / 验收的模型绑在 agent 上（multica.agents.build / verify），evo 每轮派工前核对一次。
+    两边同一个模型、两个岗位配成同一个 agent、或读不到模型（没写 multica.allow_unverified_models: true）→
+    s["model_guard"] 记原因，这一轮不派施工 / 验收（role_ready 拦）；同一个原因只推一次老板，恢复后记一行。
+    Orca 后端不走这里：那边由团队功能包按每次派工的模型查「撞模型」（docs/model-coordination.md）。"""
+    if EX.name != "multica":
+        s.pop("model_guard", None)
+        return
+    try:
+        g = EX.model_guard()
+    except (Exception, SystemExit) as e:          # 查的过程出错也不算通过
+        g = {"ok": False, "code": "unverified_model", "why": f"没法确认施工和验收用的是不同模型（查的时候出错：{str(e)[:160]}）"}
+    old = s.get("model_guard") or {}
+    if g["ok"]:
+        if old and not old.get("ok"):
+            log(s, "施工 / 验收模型核对通过，恢复派工")
+        if g.get("code") == "unverified_model" and old.get("why") != g["why"]:
+            log(s, g["why"])                        # 老板显式放行：只记日志，不推
+        s["model_guard"] = {**g, "at": TM.iso()}
+        return
+    if old.get("why") != g["why"]:
+        log(s, f"停派施工 / 验收：{g['why']}")
+        title = {"same_model": "施工和验收撞模型，已停派工", "same_agent": "施工和验收是同一个 agent，已停派工"}.get(
+            g["code"], "没法确认施工和验收用的是不同模型，已停派工")
+        notify("model_blocked", title, g["why"] + "。改好后下一轮自动接着派。", role="verify", code=g["code"],
+               build=g.get("build"), verify=g.get("verify"))
+    s["model_guard"] = {**g, "at": TM.iso()}
+
+
 # ---------- 接棒一轮 ----------
 def reconcile_closed(s, limit=5):
     """10-22 Air 标准 5：evo 里已收尾的件（合并 / 上线 = done，不做 = cancelled），执行端 issue 状态对不上就再改一次。
@@ -2418,6 +2447,7 @@ def cmd_tick(a=None):
     s = load(); guard_git(s)
     if not exec_up(s):
         return
+    model_guard_check(s)           # 第二十三轮：Multica 施工 ≠ 验收模型，不通过这一轮不派施工 / 验收
     c = coord(s)
     if exec_reseed(s, c):
         checkpoint(s, "reseed")
@@ -2651,6 +2681,10 @@ def role_ready(s, k, it, role):
         return False
     paused = rl_paused(role)
     if EX.name == "multica":                           # 第二十轮：模型绑在 Multica agent 上，evo 不选路线；额度暂停照旧
+        g = s.get("model_guard")
+        if role in ("build", "verify") and g and not g.get("ok"):   # 第二十三轮：施工 ≠ 验收模型没核对通过
+            it["waiting"] = "model_blocked"; it["model_block"] = g.get("why")
+            return False
         if paused:
             it["waiting"] = "rate_limit"; return False
         it.pop("waiting", None); it.pop("model_block", None)
@@ -4082,6 +4116,9 @@ def cmd_status(a):
         print(f"■ Orca 没开（从 {TM.local(down).strftime('%H:%M')} 起）：先不派工。打开 Orca 后自动接着跑")
     elif down:
         print(f"■ {EX.label} 执行端掉线（从 {TM.local(down).strftime('%H:%M')} 起）：先不派工，恢复后自动接着跑")
+    mg = s.get("model_guard") or {}
+    if mg and not mg.get("ok"):
+        print(f"■ 停派施工 / 验收：{mg.get('why')}")
     print("■ 等你点头" + ("（Orca 闸门这次没读到）" if stale else ""))
     early = {it["gates"].get("look") for it in s["items"].values() if it["gates"].get("look") and it["state"] != "verified"}
     pend = [g for g in pend if g["id"] not in early]   # 10-22 Air：看效果闸门建件时就挂着，验收通过前不算「等你点头」
@@ -4187,6 +4224,8 @@ def status_doc(s, pend):
         "tick_running": (s.get("_ro") or {}).get("tick_running"),
         "gates_stale": bool((s.get("_ro") or {}).get("gates_stale")),
         "main_red": bool(s.get("main_red")),
+        "model_guard": ({k: (s.get("model_guard") or {}).get(k) for k in ("ok", "code", "why", "build", "verify", "at")}
+                        if s.get("model_guard") else None),   # 第二十三轮新增（只加字段）：Multica 施工 / 验收模型核对
         "usage": {"roles": s.get("usage") or {}, "tokens": magpie_tokens()},
         "decider": {"last_woken": TM.iso(dec["last"]) if dec.get("last") else None, "running": bool(dec.get("task") and not dec.get("done")),
                     "items": dec.get("items") or []},

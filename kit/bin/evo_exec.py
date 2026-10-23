@@ -393,6 +393,8 @@ class MulticaExecutor(Executor):
         # 10-22 Air：网页路由带 workspace slug（/evo/issues/EVO-13），不带会 307 到 /login
         self.issue_url = str(mcfg.get("issue_url") or ("{app_url}/{workspace}/issues/{identifier}" if self.workspace
                                                         else "{app_url}/issues/{identifier}"))
+        # 第二十三轮：读不到施工 / 验收 agent 的模型时默认停派工；老板显式写 true 才放行
+        self.allow_unverified_models = mcfg.get("allow_unverified_models") is True
 
     # ---------- CLI ----------
     def cli(self, *args, ok=True, stdin=None, out=True):
@@ -531,6 +533,51 @@ class MulticaExecutor(Executor):
             return False, {2: "Multica 服务端连不上", 3: "Multica 登录失效（multica login --token）", 124: "multica agent list 超时"}.get(
                 a.returncode, f"multica agent list 失败（{a.returncode}）")
         return True, ""
+
+    # ---------- 第二十三轮：施工模型 ≠ 验收模型（Multica 下模型绑在 agent 上，evo 派工前核对一次）----------
+    def agent_model(self, name):
+        """读一个 Multica agent 实际用的模型名。→ (模型名或 None, 读不到的原因)。
+        先看 `multica agent list --output json` 里这个 agent 的条目，没有模型字段再 `multica agent get <id> --output json`。
+        字段按假 multica（tests/fakes/multica）的形状：model；也认 runtime_config.model / config.model / settings.model。
+        【真机字段待核实】Multica 文档（multica.ai/docs/cli，10-23）只写了 agent list/get 和 create/update 的 --model，
+        没写 JSON 里模型字段叫什么。dsh 的模型如果只靠环境变量（MULTICA_DSH_MODEL）设、agent 上没填，这里会读不到 → 按读不到处理。"""
+        if not name:
+            return None, "没配这个岗位的 agent"
+        j = self.cli("agent", "list", ok=False)
+        if j is None:
+            return None, "multica agent list 读不到"
+        a = next((x for x in _arr(j, "agents", "items") if isinstance(x, dict) and x.get("name") == name), None)
+        if not a:
+            return None, f"Multica 里没有 agent「{name}」"
+        m = _model_of(a)
+        if not m and a.get("id"):
+            m = _model_of(self.cli("agent", "get", a["id"], ok=False) or {})
+        return (m, "") if m else (None, f"agent「{name}」上没读到模型字段（可能只在环境变量里设了，或留空用了默认）")
+
+    def model_guard(self):
+        """施工和验收是不是用的同一个模型。→ {ok, code, why, build, verify}。
+        code：same_model（同一个 → 停）/ same_agent（两个岗位配成同一个 agent → 停）/ unverified_model（读不到 → 默认停，
+        multica.allow_unverified_models: true 才放行，放行时 ok=True 但 code 仍记着）/ None（不同，正常派）。
+        比较规则：去掉首尾空白、不分大小写，名字相同才算同一个模型。magpie 组名（如 group/evo-build 和 group/evo-verify）
+        和档位名（sonnet、fable）这里展不开成员：名字不同就按「不同」处理——这是假设，组里实际成员重叠时这里看不出来。"""
+        b_name, v_name = self.agents.get("build"), self.agents.get("verify")
+        if b_name and b_name == v_name:
+            return {"ok": False, "code": "same_agent", "build": None, "verify": None,
+                    "why": f"施工和验收配的是同一个 Multica agent「{b_name}」：验收必须换一个模型"}
+        bm, bwhy = self.agent_model(b_name)
+        vm, vwhy = self.agent_model(v_name)
+        doc = {"build": bm, "verify": vm}
+        if bm and vm:
+            if bm.strip().casefold() == vm.strip().casefold():
+                return {**doc, "ok": False, "code": "same_model",
+                        "why": f"施工（{b_name}）和验收（{v_name}）用的是同一个模型 {bm}：验收必须换一个模型"}
+            return {**doc, "ok": True, "code": None, "why": ""}
+        miss = "；".join(x for x in (bwhy and f"施工：{bwhy}", vwhy and f"验收：{vwhy}") if x)
+        why = f"没法确认施工和验收用的是不同模型（{miss}）"
+        if self.allow_unverified_models:
+            return {**doc, "ok": True, "code": "unverified_model", "why": why + "。项目配置 multica.allow_unverified_models=true，照常派工"}
+        return {**doc, "ok": False, "code": "unverified_model",
+                "why": why + "。先停派工；在 Multica 里给这两个 agent 填上模型，或项目配置写 multica.allow_unverified_models: true 放行"}
 
     # ---------- 编排原语：任务 / 闸门在 evo 自己的账本里，语义同 Orca ----------
     def compat(self, *args, ok=True):
@@ -835,6 +882,18 @@ def verdict(body):
     if re.search(VERDICT_NEG_TEXT, t):
         return False
     return bool(re.search(r"验收通过|\bPASS\b", t))
+
+
+def _model_of(a):
+    """agent 记录里的模型名（字段名见 MulticaExecutor.agent_model 的说明，真机待核实）。"""
+    if not isinstance(a, dict):
+        return None
+    a = a.get("agent") if isinstance(a.get("agent"), dict) else a
+    for v in (a.get("model"), *((a.get(k) or {}).get("model") for k in ("runtime_config", "config", "settings")
+                                if isinstance(a.get(k), dict))):
+        if isinstance(v, str) and v.strip():
+            return v.strip()
+    return None
 
 
 def _find_key(o, key):
