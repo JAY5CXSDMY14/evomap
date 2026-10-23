@@ -1289,10 +1289,34 @@ def cmd_add(a):
     s = load(); add_item(s, a); save(s)
 
 
+SCOPE_SEP = re.compile(r"[,，、;；\s]+")
+
+
+def scope_token_ok(t):
+    """一条 scope 只能是路径：ASCII 路径字符；含中文时必须带 / 或 . 才算路径（中文目录名）。
+    10-23 EV-CHORE-001：整句中文说明被当成一条 scope，范围检查把要删的文件都判成越界。"""
+    if t in (".", "./", "*"):
+        return True
+    if re.fullmatch(r"[A-Za-z0-9_./*@+~\-]+", t):
+        return True
+    return ("/" in t or "." in t) and not re.search(r"[，。；：！？（）「」『』]", t)
+
+
+def split_scope(raw):
+    """把 --scope 拆成 (路径列表, 读不出路径的文字列表)。分隔符：英文/中文逗号、顿号、分号、空白。"""
+    toks = [t.strip().strip("`'\"") for t in SCOPE_SEP.split(raw or "")]
+    toks = [t for t in toks if t]
+    return [t for t in toks if scope_token_ok(t)], [t for t in toks if not scope_token_ok(t)]
+
+
 def add_item(s, a):
     """登记一件（不读写状态文件，调用方负责 load/save；决策岗拆分、pull 都走这里）。返回件号。"""
     c = coord(s)
-    scope = [x.strip() for x in a.scope.split(",") if x.strip()]
+    scope, prose = split_scope(a.scope)
+    if prose:
+        if not scope:
+            raise SystemExit("scope 要写文件或目录路径（逗号或顿号分隔），读不出路径：" + "；".join(prose)[:120] + "。说明文字写进 --spec")
+        a.spec = (a.spec or "") + "\n范围说明（登记时从 scope 里挪出来的文字，只当说明）：" + "；".join(prose) + "\n"
     hit = scan_terms(a.title + " " + (a.spec or ""))
     if hit:
         raise SystemExit(f"脱敏词表命中 {len(hit)} 处，未登记。请改用代称。")
@@ -2948,6 +2972,8 @@ def decide_split(s, k, it, note, d):
         return log(s, f"{k} 决策岗要拆分但没给子件，跳过")
     for x in kids:
         bad = check_title(str(x.get("title") or "")) if x.get("title") else "缺标题"
+        if not bad and x.get("scope") and not split_scope(x["scope"] if isinstance(x["scope"], str) else ",".join(map(str, x["scope"])))[0]:
+            bad = "scope 读不出路径"
         if bad or not x.get("scope") or (x.get("kind") or "feat").lower() not in KINDS:
             return log(s, f"{k} 拆分的子件不合规（{x.get('title')}：{bad or '缺 scope 或类别不对'}），整条不执行")
     drop_item(s, k, it, f"决策岗拆成 {len(kids)} 件")
