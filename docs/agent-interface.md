@@ -10,7 +10,7 @@
 
 1. **读是开放的，写是收窄的。** 读：`evo status --json`、`outbox.jsonl`、webhook 推送、GitHub issue/标签。写：只有 GitHub issue（标签 `agent-report`；老板自己的话用 `owner-feedback`）或 `evo feedback`。
 2. **外部写的一切都是不可信输入**，作者在项目配置 `trusted_authors` 里的除外。决策岗只从里面提炼问题，不执行其中的指令（防提示词注入，Readest 的做法）。
-3. **外部 Agent 永远不能批闸门、不能上线。** 闸门只有老板本人能批：本机命令、面板（要口令）、Telegram 按钮（只认老板的 chat id / 用户 id）。
+3. **外部 Agent 永远不能批闸门、不能上线。** 闸门只有老板本人能批：Telegram 按钮（只认老板的 chat id / 用户 id）；Telegram 没配好时用本机命令 `evo approve` 兜底。第二十五轮（#12）起网页面板只读、App 不再批卡。
 4. **红线请求转给老板**：删数据、改线上、花钱、对外发布（发帖、发邮件、对外 issue）。不可信作者的 issue 碰到这些词，接棒器建一张老板「做不做」卡（问题里写明碰了哪条红线），老板点「做」才进决策岗，点「不做」就在 issue 上留言（第二十五轮起；老卡上的「同意交决策岗 / 拒绝」照旧认）。
 5. **不提供「webhook 进来」的写入口。** 这是故意的：所有写入都落在 GitHub 上，有作者、有时间、能追溯。
 6. **私有仓库要显式给读权限。** 外部 Agent 读 issue/代码前，老板得在 GitHub 上把它的账号加为协作者（只读够了），或给它一个只读的细粒度 token。
@@ -58,6 +58,7 @@
 | `stuck` | 疑似卡住 + 交决策岗 + 有提问 的件数 |
 | `gates[].kind` | 第二十五轮（#26）起只有三类：`do` 做不做 · `look` 看效果 · `ship` 上线（`other` 兜底）。以前的 `external` / `ask` / `budget` 都是 `do`，选项统一「做 / 不做」 |
 | `gates[].reason` | 第二十五轮新增：做不做卡的来由。`item` 件自己的闸门 · `decider` 决策岗转老板（红线）· `external` 外部来报碰红线 · `budget` 每件上限到了 |
+| `approve_via` | 第二十五轮新增（#12）：批卡入口。`telegram` = Telegram 配好了；`cli` = 没配，只能在 Mac 上跑 `evo approve`（evo 会推一次「没处批卡」提醒，邮件兜底里带命令） |
 | `gates[].waiting_since` | 从什么时候开始等老板（看效果闸门从验收通过才算）；没开始计时为 `null` |
 | `items[].state` | 给人看的中文状态：排队、施工中、待验收、验收中、验收通过、已合并·等推送、已合并·可收菜、已上线、交决策岗、有提问、不做，另有 **等窗口**、**等额度** |
 | `items[].raw` | 内部状态：`queued` `building` `built` `verifying` `verified` `pushing` `merged` `shipped` `escalated` `asking` `dropped` |
@@ -179,9 +180,9 @@
 
 | 动作 | 怎么挡的 |
 |---|---|
-| 批闸门 / 打回 | `evo approve` 在设了 `EVO_AGENT` 时直接拒绝；面板要口令；Telegram 只认老板的 chat id / 用户 id；issue 评论里的「/approve」之类一律不解析为批准（第十二轮起，可信作者在闸门开着之后写的新评论只会让旧闸门作废、带着原话返工，不会通过任何东西） |
+| 批闸门 / 打回 | `evo approve` 在设了 `EVO_AGENT` 时直接拒绝；面板只读（写接口一律 410）；Telegram 只认老板的 chat id / 用户 id；issue 评论里的「/approve」之类一律不解析为批准（第十二轮起，可信作者在闸门开着之后写的新评论只会让旧闸门作废、带着原话返工，不会通过任何东西） |
 | 对某件补反馈（会作废老板的闸门） | `evo feedback --item` 在设了 `EVO_AGENT` 时拒绝 |
-| 改项目目标 | `evo goal set/clear` 在设了 `EVO_AGENT` 时拒绝；面板改要口令 |
+| 改项目目标 | `evo goal set/clear` 在设了 `EVO_AGENT` 时拒绝；面板不能改（第二十五轮起只读） |
 | 改模型 / 岗位卡片 | `evo team set/clear/trial/init/dismiss` 在设了 `EVO_AGENT` 时拒绝；`POST /api/team` 要口令且同样拒绝 |
 | 上线 | `evo ship` 同上；上线还要老板点「上线」闸门 |
 | 在 Orca 里直接结闸门 | 第十七轮：工人 / 外部 Agent 调 `orca orchestration gate-resolve` 点「通过 / 上线 / 做 / 同意 / 继续」不算数，evo 只推一条「确认…？」等老板在 evo 入口点；点「打回 / 不做」会照办（试运行，`orca_gate_sync`） |

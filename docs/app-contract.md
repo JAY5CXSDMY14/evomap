@@ -12,7 +12,7 @@ Evo.app 不读 evo 的内部文件，只跑 `evo … --json` 拿数据。这份�
 4. 没有 `schema_version` 的老输出（例如第十五轮之前的 `evo log --json`）按 1 处理。
 5. App 侧逻辑在 `app/Sources/EvoCore/Contract.swift`（`ContractCheck`），测试在 `app/Tests/EvoCoreTests/ContractTests.swift`。
 
-第二十五轮（老板 10-23 批，不升版本）：#26 `gates[].kind` 只出 `do`/`look`/`ship`/`other`，以前的 `external`/`ask`/`budget` 并进 `do`，新增可选 `reason`；#27 新件的件号是 `TB#123`（GitHub issue 号），老件号不变，所有接受件号的命令也接受 `123` / `#123`。老 App 读新输出不崩（kind 本来就认 do；件号本来就当字符串）。
+第二十五轮（老板 10-23 批，不升版本）：#26 `gates[].kind` 只出 `do`/`look`/`ship`/`other`，以前的 `external`/`ask`/`budget` 并进 `do`，新增可选 `reason`；#27 新件的件号是 `TB#123`（GitHub issue 号），老件号不变，所有接受件号的命令也接受 `123` / `#123`；#12 App 冻结、不再跑 `approve`（按钮只提示去 Telegram 批），网页面板只读（写接口 410），`status --json` 加 `approve_via`。老 App 读新输出不崩（kind 本来就认 do；件号本来就当字符串）。
 
 第二十四轮（#16）删了插件：`evo plugin list|run --json` 两个命令、`plugin-list` / `plugin-run` / `plugin-manifest` / `card` 四个 schema 一起没了（老板批准的删除，不升版本）。老 App 跑 `evo plugin list` 会失败，它本来就按「老 evo 没有插件」处理：不显示插件分组，不崩。`evo feature list --json` 的 `third_party` 字段留着、恒为 null。
 
@@ -26,7 +26,7 @@ Evo.app 不读 evo 的内部文件，只跑 `evo … --json` 拿数据。这份�
 | `evo team --json` | 每 30 秒 | `team.schema.json` | 团队页显示错误 |
 | `evo team init --json` | 首次设置向导 | `team-init.schema.json` | 向导里显示错误 |
 
-App 还会跑这些**写**命令（输出是给人看的文字，不是接口）：`approve`、`feedback`、`add`、`tick`、`ship`、`watchdog`、`team set|dismiss|init --apply`、`feature on|off|set`、`panel --show-token`。
+App 还会跑这些**写**命令（输出是给人看的文字，不是接口）：`feedback`、`add`、`tick`、`ship`、`watchdog`、`team set|dismiss|init --apply`、`feature on|off|set`、`panel --show-token`。
 
 另外 `evo models --json` 也带 `schema_version: 1`，App 现在不读，面板 / 外部 Agent 用（`evo ui` / `evo arch` 第二十五轮随预设删了）。`evo status --json` 的详细字段说明以 [agent-interface.md](agent-interface.md) 2.1 为准。
 

@@ -49,7 +49,7 @@ bash kit/install.sh --apply --dev  # 开发用：直接跑仓库里的 kit
 ## 硬规则
 1. **不提交密钥、真实路径、图片。** `.env`、key、token 一律不进库（`.gitignore` 已挡一部分）；文档和代码里的家目录写 `~`，不写真实用户名路径；截图只放 CI 构件和本机（`app/docs/screenshots/` 已忽略）。
 2. **施工模型 ≠ 验收模型。** Orca 路线由团队功能包在每次派工时查「撞模型」；Multica 路线由 `model_guard_check` 每轮读两个 agent 的模型，相同或读不到就停派工（`multica.allow_unverified_models: true` 才放行读不到的情况）。别绕开。
-3. **外部 Agent 不批卡、不上线。** 外部 Agent 运行时设 `EVO_AGENT=<名字>`；`approve`、`ship`、`goal set`、`team set`、`feedback --item` 等在设了它时一律拒绝（`refuse_agents`，见 `docs/agent-interface.md`）。issue 评论里的「/approve」不算批准。
+3. **外部 Agent 不批卡、不上线。** 外部 Agent 运行时设 `EVO_AGENT=<名字>`；`approve`、`ship`、`goal set`、`team set`、`feedback --item` 等在设了它时一律拒绝（`refuse_agents`，见 `docs/agent-interface.md`）。issue 评论里的「/approve」不算批准。第二十五轮起老板只在 Telegram 批卡（没配时 `evo approve` 兜底），网页面板只读，App 冻结。
 4. **不走 PR。** evo 自己在自己的克隆里合并、推 main；本仓库的改动也直接提交到 main，一个目标一个提交。
 5. **改动配测试。** 改行为就加或改 `kit/tests/` 里的测试；全量测试过了才推。修 bug 先写一个现在会失败的测试。
 6. **讲解页 `.md` 为源，html 不提交。** html 按需用 answer-me-with-html 生成，不提交（`.gitignore` 已挡 `docs/` 下的 html），唯一例外 `docs/loop-overview.html`；改了 `loop-overview.md` 没重新生成它，就在 `.md` 里写一句。

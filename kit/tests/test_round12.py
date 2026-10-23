@@ -147,24 +147,21 @@ def test_panel_artifacts_preview_item_timeline_and_goal(loop):
         assert code == 200 and it["has_diff"] and {"add", "dispatch", "report", "gate_open"} <= {e["event"] for e in it["events"]}
         code, hd, body = req(f"{base}/api/diff/AB/{K}", headers=auth)
         assert code == 200 and "change-" in body and hd["Content-Type"].startswith("text/plain")
-        # 项目设置：项目目标
-        post = lambda path, b: json.loads(req(base + path, json.dumps(b).encode(), {"Content-Type": "application/json", **auth})[2])
-        assert post("/api/goal", {"code": "AB", "goal": "让布艺店主十分钟上架一款新品"})["ok"]
-        assert json.load(open(loop.cfg_path("AB")))["goal"] == "让布艺店主十分钟上架一款新品"
-        assert not post("/api/goal", {"code": "AB", "goal": "长" * 201})["ok"]
-        assert post("/api/goal", {"code": "AB", "goal": ""})["ok"] and "goal" not in json.load(open(loop.cfg_path("AB")))
-        # 件页补充反馈：作废旧看效果闸门
-        assert post("/api/note", {"code": "AB", "item": K, "words": "按钮再大一点"})["ok"]
-        assert gate in loop.state("AB")["superseded_gates"]
+        # 第二十五轮（#12）：面板只读。改目标、补反馈、批卡的写接口一律 410，提示去 Telegram / 命令行
+        post = lambda path, b: req(base + path, json.dumps(b).encode(), {"Content-Type": "application/json", **auth})
+        for path, b in (("/api/goal", {"code": "AB", "goal": "随便改"}), ("/api/note", {"code": "AB", "item": K, "words": "x"}),
+                        ("/api/approve", {"code": "AB", "gate": gate, "choice": "通过"}), ("/api/feedback", {"code": "AB", "words": "x"})):
+            code, _, body = post(path, b)
+            assert code == 410 and "Telegram" in json.loads(body)["error"], path
+        assert "goal" not in json.load(open(loop.cfg_path("AB"))) and gate not in (loop.state("AB").get("superseded_gates") or {})
+        page = req(base + "/", headers=auth)[2]
+        assert "只读的看效果页" in page and "api/approve" not in page and "api/goal" not in page
     finally:
         p.terminate(); p.wait(5)
-    p, base, token = start_panel(loop, {**loop.env, "EVO_AGENT": "muse"})      # 外部 Agent 环境：改不了目标
-    try:
-        r = json.loads(req(base + "/api/goal", json.dumps({"code": "AB", "goal": "随便改"}).encode(),
-                           {"Content-Type": "application/json", "Authorization": f"Bearer {token}"})[2])
-        assert not r["ok"] and "外部 Agent" in r["error"]
-    finally:
-        p.terminate(); p.wait(5)
+    loop.ok("-p", "AB", "goal", "set", "让布艺店主十分钟上架一款新品")            # 命令行照旧能改
+    assert json.load(open(loop.cfg_path("AB")))["goal"] == "让布艺店主十分钟上架一款新品"
+    loop.ok("-p", "AB", "feedback", "--item", K, "按钮再大一点")
+    assert gate in loop.state("AB")["superseded_gates"]
 
 
 def test_panel_html_preview_is_sandboxed_without_same_origin():

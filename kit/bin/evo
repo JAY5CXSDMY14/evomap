@@ -2244,6 +2244,32 @@ def _rl_peek():
         return {}
 
 
+# ---------- 第二十五轮（#12）：批卡只在 Telegram；evo approve 命令兜底 ----------
+def approve_via():
+    """批卡入口：telegram（推送渠道里 Telegram 配好了）/ cli（没配：只能在 Mac 上跑 evo approve，邮件里会带命令）。"""
+    for ch in NOTE.channel_list():
+        try:
+            if getattr(ch, "name", None) == "telegram" and hasattr(ch, "ready") and ch.ready(NOTE):
+                return "telegram"
+        except Exception:
+            pass
+    return "cli"
+
+
+def approve_channel_check(s, live):
+    """有卡在等、Telegram 却没配：推一次「没处批卡」（走邮件 / 本机通知等兜底渠道，带 evo approve 命令），不重复推；配好后清掉标记。"""
+    if approve_via() == "telegram":
+        s.pop("approve_missing_warned", None); return
+    if not live or s.get("approve_missing_warned"):
+        return
+    s["approve_missing_warned"] = TM.now()
+    gid = sorted(live)[0]
+    log(s, "有卡在等你，但 Telegram 没配好：批卡请在 Mac 上跑 evo approve（配好 EVO_TG_TOKEN / EVO_TG_CHAT 后自动走 Telegram）")
+    notify("approve_channel_missing", "有卡在等你，但 Telegram 没配好",
+           f"批卡现在只在 Telegram 里点。没配好之前，在 Mac 上跑 evo -p {CODE} status 看等你的卡，"
+           f"再跑 evo -p {CODE} approve <闸门> <选项>（例：evo -p {CODE} approve {gid} …）。配置：EVO_TG_TOKEN、EVO_TG_CHAT，再开 evo bot。")
+
+
 # ---------- 闸门 5 分钟没人处理 → 推（带按钮）----------
 def check_gates(s, gates):
     """gates：Orca 里还 pending 的闸门。「看效果」闸门要等这件验收通过才开始计时（之前它只是挂着）。"""
@@ -2270,11 +2296,13 @@ def check_gates(s, gates):
             if gid in (s.get("do_gates") or {}):
                 opts = GATE_OPTIONS["do"]                # 第二十五轮：老卡在执行端里可能还是「同意 / 继续」，按钮统一成做 / 不做
             notify("gate_waiting", f"等你点头：{g.get('question')}", f"已等 {int((TM.now() - since[gid]) / 60)} 分钟。"
-                   + f" 面板或 evo -p {CODE} approve {gid} …", item=key, gate=gid, options=opts)
+                   + f" 点下面的按钮；Telegram 不方便时在 Mac 上跑 evo -p {CODE} approve {gid} {opts[0] if opts else '…'}",
+                   item=key, gate=gid, options=opts)
     for gid in list(since):
         if gid not in live:
             since.pop(gid, None)
     s["gate_pushed"] = [g for g in pushed if g in live]
+    approve_channel_check(s, live - set(s.get("superseded_gates") or {}))
 
 
 # ---------- 决策岗：交决策岗 / 有提问 / 外部来报 → 至多每 30 分钟叫醒一次，一批处理 ----------
@@ -3465,6 +3493,10 @@ def _write_project_cfg(c):
     json.dump(c, open(tmp, "w", encoding="utf-8"), ensure_ascii=False, indent=2); os.replace(tmp, p)
 
 
+PANEL_READONLY = ("面板只读（第二十五轮起只用来看效果）：批卡请在 Telegram 卡片上点；Telegram 不方便时在 Mac 上跑 "
+                  "evo -p <代号> approve <闸门> <选项>。改目标 / 上限 / 模型 / 团队、补反馈也用命令行（evo goal / limits / models / team / feedback）。")
+
+
 # ---------- evo log <件号>（件号格式见 KEY_RE，第二十五轮起也认 issue 号）----------
 PANEL_KEY = r"([A-Z]{2,4}(?:-[A-Z]+-\d{3,}|(?:#|%23)\d+(?:-\d+)?))"     # 面板网址里的件号：新件的 # 写成 %23（第二十五轮）
 
@@ -3931,7 +3963,7 @@ button{font:inherit;border:0;border-radius:10px;padding:8px 14px;background:#2f6
 
 
 def cmd_panel(a):
-    """本机网页面板。默认只在本机 127.0.0.1；手机要看就 --host 绑 Tailscale 地址（别绑公网）。
+    """本机网页面板（第二十五轮起只读：看效果页，展示件、截图、状态；批卡在 Telegram）。默认只在本机 127.0.0.1；手机要看就 --host 绑 Tailscale 地址（别绑公网）。
     所有接口都要口令：浏览器先过登录页拿 cookie；脚本可带 Authorization: Bearer <口令>。"""
     from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
     from urllib.parse import parse_qs, unquote, quote
@@ -4041,37 +4073,8 @@ def cmd_panel(a):
                 return self.send(401, LOGIN_HTML.replace("%ERR%", "口令不对"), "text/html; charset=utf-8")
             if not self.authed():
                 return self.send(401, json.dumps({"error": "要口令"}, ensure_ascii=False))
-            try:
-                body = json.loads(raw or b"{}")
-            except ValueError:
-                return self.send(400, json.dumps({"ok": False, "error": "不是 JSON"}, ensure_ascii=False))
-            if self.path == "/api/team":                           # 第十四轮：改岗位卡片（子命令里拒绝外部 Agent、过安全栏）
-                t = svc("team")
-                return self.send(200, json.dumps(t.panel_post(body, run) if t else {"ok": False, "error": "功能 team 关着"}, ensure_ascii=False))
-            code = body.get("code", "")
-            if code not in list_projects():
-                return self.send(400, json.dumps({"ok": False, "error": "没有这个项目"}, ensure_ascii=False))
-            if self.path == "/api/approve":
-                args = ["-p", code, "approve", body["gate"], body["choice"]] + ([body["why"]] if body.get("why") else [])
-            elif self.path == "/api/feedback":
-                args = ["-p", code, "feedback", body["words"]]
-            elif self.path == "/api/note":                      # 件页「补充反馈」：作废它等你的旧闸门
-                args = ["-p", code, "feedback", "--item", str(body.get("item") or ""), "--source", "面板", str(body.get("words") or "")]
-            elif self.path == "/api/goal":                      # 项目设置：项目目标（空 = 清掉）；子命令里拒绝外部 Agent、校验长度
-                g = str(body.get("goal") or "").strip()
-                args = ["-p", code, "goal", "set", g] if g else ["-p", code, "goal", "clear"]
-            elif self.path == "/api/limits":                    # 第十七轮：每件上限（本项目）；子命令里拒绝外部 Agent、校验数字
-                kv = [f"{k}={body[k]}" for k in ("decider_reworks", "item_hard_runs", "item_hard_hours") if body.get(k) is not None and str(body.get(k)).strip() != ""]
-                if not kv:
-                    return self.send(400, json.dumps({"ok": False, "error": "没有要改的"}, ensure_ascii=False))
-                args = ["-p", code, "limits", "set", *kv]
-            elif self.path == "/api/models":                    # 空 = 跟随全局；子命令里会拒绝外部 Agent、校验模型名
-                model = str(body.get("model") or "").strip()
-                args = ["-p", code, "models", "set" if model else "clear", str(body.get("role") or "")] + ([model] if model else [])
-            else:
-                return self.send(404, "{}")
-            rc, o, e = run(*args)
-            self.send(200, json.dumps({"ok": rc == 0, "error": (e or o)[-200:]}, ensure_ascii=False))
+            # 第二十五轮（#12）：面板只读（看效果页）。批卡只在 Telegram；改目标 / 上限 / 模型 / 团队、补反馈用命令行
+            return self.send(410, json.dumps({"ok": False, "error": PANEL_READONLY}, ensure_ascii=False))
 
     srv = ThreadingHTTPServer((a.host, a.port), H)        # 先占好端口再报地址：脚本看到这行就能连
     print(f"面板：http://{a.host}:{a.port}/（要口令）", flush=True)
@@ -4197,7 +4200,9 @@ def cmd_status(a):
     old = [x for x in RETIRED_PROJECT_KEYS if CFG.get(x)]
     if old:
         print(f"■ config.json 里的 {'、'.join(old)} 已不再读（第二十五轮删了 UI / 架构预设）：规则放进项目自己的 lint / CI，命令写进 checks")
-    print("■ 等你点头" + ("（Orca 闸门这次没读到）" if stale else ""))
+    via = approve_via()
+    print("■ 等你点头" + ("（Orca 闸门这次没读到）" if stale else "")
+          + ("（在 Telegram 卡片上点）" if via == "telegram" else f"（Telegram 没配好：用 evo -p {CODE} approve <闸门> <选项> 批）"))
     early = {it["gates"].get("look") for it in s["items"].values() if it["gates"].get("look") and it["state"] != "verified"}
     pend = [g for g in pend if g["id"] not in early]   # 10-22 Air：看效果闸门建件时就挂着，验收通过前不算「等你点头」
     pend = [g for g in pend if g["id"] not in (s.get("superseded_gates") or {})]   # 作废 / 不做件的闸门不摆出来
@@ -4311,6 +4316,7 @@ def status_doc(s, pend):
         "log": s["log"][-15:],
     }
     doc["checks"] = project_checks()                # 第二十五轮新增（只加字段）：项目自己的检查命令
+    doc["approve_via"] = approve_via()              # 第二十五轮新增（#12）：批卡入口 telegram / cli
     old = [x for x in RETIRED_PROJECT_KEYS if CFG.get(x)]
     if old:
         doc["retired_keys"] = old                    # 第二十五轮：config.json 里还写着已删的预设键（不再读）
@@ -4327,7 +4333,7 @@ def status_doc(s, pend):
 def refuse_agents(what):
     """外部 Agent 永远不能批闸门、不能上线。约定：外部 Agent 的运行环境设 EVO_AGENT=<名字>（见 docs/agent-interface.md）。"""
     if os.environ.get("EVO_AGENT"):
-        sys.exit(f"{what}只能老板本人做（面板 / Telegram 按钮 / 本机命令）；外部 Agent（EVO_AGENT={os.environ['EVO_AGENT']}）不行。")
+        sys.exit(f"{what}只能老板本人做（Telegram 按钮 / 本机命令）；外部 Agent（EVO_AGENT={os.environ['EVO_AGENT']}）不行。")
 
 
 def gate_owner(s, gid):

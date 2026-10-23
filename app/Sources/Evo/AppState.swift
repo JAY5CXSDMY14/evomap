@@ -292,28 +292,14 @@ final class AppState: ObservableObject {
 
     // MARK: 闸门：通过 / 打回
 
-    func approve(_ card: GateCard) { resolve(card, args: card.approveArgs(), verb: card.approveChoice) }
+    // 第二十五轮（#12）：App 冻结，不再跑 evo approve。按钮只提示去 Telegram 批（或终端 evo approve）。
+    func approve(_ card: GateCard) { tellTelegram(card) }
 
-    func reject(_ card: GateCard, words: String?) { resolve(card, args: card.rejectArgs(words: words), verb: card.rejectChoice) }
+    func reject(_ card: GateCard, words: String?) { tellTelegram(card) }
 
-    private func resolve(_ card: GateCard, args: [String], verb: String) {
-        guard !resolving.contains(card.id) else { return }
-        resolving.insert(card.id)
-        // 先让卡片弹走（界面层带动画），evo 回话失败再弹回来
-        hiddenGates.insert(card.id)
-        Task {
-            let r = await Shell.evo(args, timeout: 120)
-            resolving.remove(card.id)
-            if r.ok {
-                flash = "\(verb)了：\(card.title)"
-                react(verb == card.approveChoice ? .approved : .rejected)
-                refresh()
-            } else {
-                hiddenGates.remove(card.id)
-                flash = "没成：\(r.tail.prefix(100))"
-            }
-            clearFlashLater()
-        }
+    private func tellTelegram(_ card: GateCard) {
+        flash = card.telegramHint
+        clearFlashLater()
     }
 
     func card(id: String) -> GateCard? { allCards.first { $0.id == id } }

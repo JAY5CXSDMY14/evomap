@@ -291,6 +291,8 @@ struct GateCardView: View {
                 Text(card.title).font(.system(size: 13.5, weight: .semibold)).foregroundStyle(Theme.textPrimary)
                     .lineLimit(2).fixedSize(horizontal: false, vertical: true)
             }
+            Text("批卡在 Telegram 里点（App 不再批卡）")
+                .font(.system(size: 10.5)).foregroundStyle(Theme.textSecondary)
             if rejecting {
                 HStack(spacing: 8) {
                     ThemedField(placeholder: "打回原话（会进返工说明）", text: $words) { sendReject() }

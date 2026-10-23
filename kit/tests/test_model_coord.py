@@ -458,20 +458,8 @@ def test_panel_team_endpoints(loop):
         code, _, body = req(base + "/api/team?code=AB", headers=auth)
         assert code == 200 and card(json.loads(body), "build")["badge"] == "跟随全局"
         code, _, body = req(base + "/api/team", json.dumps({"action": "set", "role": "verify", "model": "model-b", "thinking": "high"}).encode(), auth)
-        assert json.loads(body)["ok"], body
-        assert gcfg(loop)["roles"]["verify"]["models"] == ["model-b"]
-        code, _, body = req(base + "/api/team", json.dumps({"action": "set", "role": "build", "model": "model-z", "project": "AB"}).encode(), auth)
-        assert json.loads(body)["ok"] and card(json.loads(req(base + "/api/team?code=AB", headers=auth)[2]), "build")["badge"] == "本项目专用"
-        code, _, body = req(base + "/api/team", json.dumps({"action": "set", "role": "verify", "model": "model-a"}).encode(), auth)
-        assert not json.loads(body)["ok"] and "同一个模型" in json.loads(body)["error"]
-        assert not json.loads(req(base + "/api/team", json.dumps({"action": "rm"}).encode(), auth)[2])["ok"]
-    finally:
-        p.terminate(); p.wait(5)
-    p, base, token = start_panel(loop, {**loop.env, "EVO_AGENT": "muse"})
-    try:
-        auth["Authorization"] = f"Bearer {token}"
-        body = json.loads(req(base + "/api/team", json.dumps({"action": "set", "role": "verify", "model": "model-c"}).encode(), auth)[2])
-        assert not body["ok"] and "外部 Agent" in body["error"]
+        assert code == 410 and "evo" in json.loads(body)["error"]          # 第二十五轮（#12）：面板只读，换模型用 evo team set
+        assert "verify" not in (gcfg(loop).get("roles") or {}) or gcfg(loop)["roles"]["verify"].get("models") != ["model-b"]
     finally:
         p.terminate(); p.wait(5)
 

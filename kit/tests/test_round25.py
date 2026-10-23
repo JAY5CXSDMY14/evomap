@@ -161,3 +161,38 @@ def test_import_with_check_flag(loop):
     cfg = json.load(open(os.path.join(loop.projects, "CK", "config.json"), encoding="utf-8"))
     assert cfg["checks"] == ["ruff check .", "mypy ."] and "ui_preset" not in cfg and "arch_preset" not in cfg
     assert loop.evo("import", "CX", "--name", "x", "--path", repo, "--arch-preset", "python-fastapi").returncode != 0
+
+
+# ---------- #12 批准只在 Telegram（CLI 兜底）----------
+def test_no_telegram_falls_back_to_cli_approve_and_warns_once(loop):
+    loop.env.update(EVO_SMTP_HOST="smtp.fake", EVO_MAIL_TO="boss@example.com")
+    for k in ("EVO_TG_TOKEN", "EVO_TG_CHAT"):
+        loop.env.pop(k)
+    loop.project("AB", notify={"gate_push_minutes": 0})
+    loop.add("AB", extra=["--product"])
+    st = loop.status_json("AB")
+    assert st["approve_via"] == "cli" and "Telegram 没配好" in loop.ok("-p", "AB", "status").stdout
+    loop.tick("AB"); loop.tick("AB")
+    warn = [e for e in loop.outbox() if e["kind"] == "approve_channel_missing"]
+    assert len(warn) == 1 and warn[0]["level"] == "push"                       # 只推一次
+    mails = loop.mails()
+    assert any("Telegram 没配好" in m["subject"] for m in mails)
+    gid = loop.item("AB")["gates"]["do"]
+    assert any(f"evo -p AB approve {gid}" in m["text"] for m in mails)        # 邮件里给了能批卡的命令
+    loop.ok("-p", "AB", "approve", gid, "做")                                  # CLI 批卡照旧
+    assert loop.item("AB")["do_ok"]
+
+
+def test_telegram_configured_means_no_warning(loop):
+    loop.project("AB", notify={"gate_push_minutes": 0})
+    loop.add("AB", extra=["--product"])
+    assert loop.status_json("AB")["approve_via"] == "telegram"
+    loop.tick("AB")
+    assert not [e for e in loop.outbox() if e["kind"] == "approve_channel_missing"]
+    sent = [m for m in loop.telegram_sent() if "等你点头" in m["text"]]
+    assert sent and "reply_markup" in sent[0]
+
+
+def test_panel_is_read_only():
+    page = open(os.path.join(os.path.dirname(__file__), "..", "panel", "index.html"), encoding="utf-8").read()
+    assert "method:\"POST\"" not in page and "api/approve" not in page and "只读的看效果页" in page

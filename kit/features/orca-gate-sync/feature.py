@@ -13,7 +13,7 @@ CONFIG = {}
 def sync_external_gates(s, gates):
     """第十七轮 L-03 + 老板决定①（试运行，orca_gate_sync 默认开）：读 Orca 闸门结果，找出没经过 evo 就结掉的闸门。
     开着：「打回 / 不做 / 不同意 / 再等等 / 拒绝」照办；「通过 / 上线 / 做（老卡的同意 / 继续）」不执行，推一条「确认…？」，
-    老板在 evo 自己的入口（Telegram 按钮 / App / 面板 / evo approve）再点才生效。关掉：Orca 端的任何结果都要在 evo 入口确认。
+    老板在 evo 自己的入口（Telegram 按钮 / evo approve）再点才生效。关掉：Orca 端的任何结果都要在 evo 入口确认。
     工人也能调 orca 结闸门，所以「放行」类结果永远不直接算数。"""
     on = K.CFG.get("orca_gate_sync", CONFIG.get("execute_negative", True)) is not False   # 项目配置写了以它为准
     seen = s.setdefault("gate_ext_seen", [])
@@ -55,7 +55,7 @@ def sync_external_gates(s, gates):
         q = f"确认{verb} {who}？（Orca 端点了「{choice or '?'}」，在这里再点一次才生效）"
         conf[gid] = {"kind": kind, "item": k, "choice": choice, "at": TM.now(), "question": q, "options": K.GATE_OPTIONS.get(kind)}
         K.log(s, f"{who} 的{kind}闸门在 Orca 端被点了「{choice}」，没有执行，等老板在 evo 入口确认")
-        K.notify("gate_waiting", q, "Orca 端（手机或工人）结的闸门「放行」类结果不直接算数：点下面的按钮、App 或面板确认。",
+        K.notify("gate_waiting", q, "Orca 端（手机或工人）结的闸门「放行」类结果不直接算数：点下面的按钮确认（Telegram 不方便时 evo approve）。",
                item=k, gate=gid, options=K.GATE_OPTIONS.get(kind), confirm=True)
 
 

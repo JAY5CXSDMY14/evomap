@@ -126,6 +126,12 @@ public struct GateCard: Identifiable, Equatable, Sendable {
         return m < 1 ? "刚刚" : HeartbeatStatus.human(m)
     }
 
+    /// 第二十五轮（#12）：App 冻结，不再批卡。批卡只在 Telegram；Telegram 不方便时在终端跑 evo approve。
+    public static let approveFrozen = true
+    public var telegramHint: String {
+        "去 Telegram 批（App 不再批卡）；不方便时在终端跑 evo " + approveArgs().joined(separator: " ")
+    }
+
     /// evo 命令参数：通过 / 打回（带原话）。
     public func approveArgs() -> [String] { ["-p", project, "approve", gateID, approveChoice] }
     public func rejectArgs(words: String?) -> [String] {

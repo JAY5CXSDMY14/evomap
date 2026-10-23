@@ -495,13 +495,11 @@ def test_panel_limits_post_and_status(loop):
     loop.env["EVO_PANEL_KEYCHAIN"] = "0"
     p, base, token = start_panel(loop, loop.env)
     h = {"Content-Type": "application/json", "Authorization": f"Bearer {token}"}
-    post = lambda b: json.loads(req(base + "/api/limits", json.dumps(b).encode(), h)[2])
     try:
         assert req(base + "/api/limits", b"{}", {"Content-Type": "application/json"})[0] == 401
-        assert post({"code": "AB", "decider_reworks": 3, "item_hard_runs": 0, "item_hard_hours": 8})["ok"]
-        ov = json.load(open(loop.cfg_path("AB")))["overrides"]["limits"]
-        assert ov == {"decider_reworks": 3, "item_hard_runs": 0, "item_hard_hours": 8}
-        assert not post({"code": "AB", "item_hard_runs": -1})["ok"]
+        code, _, body = req(base + "/api/limits", json.dumps({"code": "AB", "item_hard_runs": 1}).encode(), h)
+        assert code == 410 and "evo" in json.loads(body)["error"]          # 第二十五轮（#12）：面板只读，改上限用 evo limits set
+        loop.ok("-p", "AB", "limits", "set", "decider_reworks=3", "item_hard_runs=0", "item_hard_hours=8")
         j = json.loads(req(base + "/api/p/AB", headers={"Authorization": f"Bearer {token}"})[2])
         assert j["limits"] == {"decider_reworks": 3, "item_hard_runs": 0, "item_hard_hours": 8}
     finally:

@@ -38,6 +38,8 @@ PUSH_KINDS.add("exec_down")
 KIND_NAMES.update({"model_blocked": "岗位停了", "magpie_down": "magpie 不通", "fallback_on": "切到备用"})     # 第十四轮
 # 第十七轮：一轮超时、主线本身红、拉 issue 连续失败（含 gh 登录失效）、决策岗连续卡住
 PUSH_KINDS |= {"tick_timeout", "main_red", "intake_down", "decider_stuck"}
+PUSH_KINDS.add("approve_channel_missing")          # 第二十五轮（#12）：批卡只在 Telegram，没配时推一次
+KIND_NAMES.update({"approve_channel_missing": "没处批卡"})
 KIND_NAMES.update({"tick_timeout": "一轮超时", "main_red": "主线红了", "intake_down": "拉不到 issue", "decider_stuck": "决策岗卡住"})
 ENV_ALIASES = {"EVO_TG_TOKEN": "TUBU_TG_TOKEN", "EVO_TG_CHAT": "TUBU_TG_CHAT", "TUBU_TG_TOKEN": "EVO_TG_TOKEN",
                "TUBU_TG_CHAT": "EVO_TG_CHAT"}
@@ -93,6 +95,15 @@ def http(url, data=None, headers=None, timeout=15, raw=None):
             return e.code, str(e)
     except Exception as e:
         return 0, str(e)
+
+
+def cli_hint(ev):
+    """批卡只在 Telegram（第二十五轮 #12）；Telegram 没配或发失败时，兜底渠道里给 evo approve 命令，不会无处可批。"""
+    if not ev.get("gate") or "evo -p" in (ev.get("body") or ""):
+        return ""
+    opts = (ev.get("data") or {}).get("options") or ["通过", "打回"]
+    return (f"\n\nTelegram 这次没发出去（或没配）：在 Mac 上跑 evo -p {ev.get('project') or '<代号>'} approve {ev['gate']} "
+            + " 或 ".join(opts[:3]))
 
 
 # ---------- 配置 ----------
@@ -154,6 +165,8 @@ class Notifier:
                            capture_output=True)
         for ch in self.channel_list():
             if hasattr(ch, "push"):
+                if ev.get("kind") == "gate_waiting" and getattr(ch, "name", None) != "telegram" and res.get("telegram") is not True:
+                    text = text + cli_hint(ev)              # 第二十五轮（#12）：Telegram 没发出去，邮件等兜底渠道带上能批卡的命令
                 try:
                     r = ch.push(self, ev, text, res)
                 except Exception as e:

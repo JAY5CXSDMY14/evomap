@@ -286,6 +286,8 @@ final class ViewModelTests: XCTestCase {
         XCTAssertEqual(look.rejectArgs(words: "  按钮太小 "), ["-p", "TB", "approve", "gate_12", "打回", "按钮太小"])
         XCTAssertEqual(look.rejectArgs(words: ""), ["-p", "TB", "approve", "gate_12", "打回"])
         XCTAssertTrue(look.rejectAsksWords)
+        XCTAssertTrue(GateCard.approveFrozen)                     // 第二十五轮（#12）：App 不再批卡，提示去 Telegram
+        XCTAssertTrue(look.telegramHint.contains("Telegram") && look.telegramHint.hasSuffix("evo -p TB approve gate_12 通过"))
         let now = ISOTime.parse("2026-10-20T12:30:00+08:00")!
         XCTAssertEqual(look.ageText(now: now), "50 分钟")
         XCTAssertNil(cards[1].ageText(now: now))

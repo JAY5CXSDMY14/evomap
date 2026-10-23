@@ -274,23 +274,7 @@ def test_panel_model_dropdowns(loop):
         assert code == 200 and j["magpie_ok"] and "group/evo-build" in j["models"]
         assert j["follow"] == {"build": ["model-a", "model-b"], "verify": ["model-a", "model-b"]}
         code, _, body = post(base, token, {"code": "AB", "role": "build", "model": "glm"})
-        assert json.loads(body)["ok"], body
-        assert json.load(open(loop.cfg_path("AB")))["overrides"]["roles"]["build"]["models"] == ["glm"]
-        assert json.loads(req(base + "/api/models/AB", headers=auth)[2])["override"]["build"] == ["glm"]
-        assert not json.loads(post(base, token, {"code": "AB", "role": "build", "model": "glm; rm -rf ~"})[2])["ok"]
-        assert json.loads(post(base, token, {"code": "AB", "role": "build", "model": ""})[2])["ok"]       # 跟随全局
-        assert "overrides" not in json.load(open(loop.cfg_path("AB")))
-        j = json.loads(req(base + "/api/models/AB", headers=auth)[2])                      # magpie 读不到：models 为 null，页面改手填
-        assert j["magpie_ok"] is False and j["models"] is None
-        page = req(base + "/", headers=auth)[2]
-        assert "施工模型" in page and "验收模型" in page and "跟随全局" in page
-    finally:
-        p.terminate(); p.wait(5)
-    # 外部 Agent 环境里起的面板：带口令也改不了模型
-    p, base, token = start_panel(loop, {**loop.env, "EVO_AGENT": "muse"})
-    try:
-        code, _, body = post(base, token, {"code": "AB", "role": "verify", "model": "glm"})
-        assert code == 200 and not json.loads(body)["ok"] and "外部 Agent" in json.loads(body)["error"]
+        assert code == 410 and "evo" in json.loads(body)["error"]          # 第二十五轮（#12）：面板只读，改模型用 evo models set
         assert "overrides" not in json.load(open(loop.cfg_path("AB")))
     finally:
         p.terminate(); p.wait(5)

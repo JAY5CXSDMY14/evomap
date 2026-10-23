@@ -50,6 +50,11 @@ class Telegram:
     """notify.channel 槽位上的渠道对象。"""
     name = "telegram"
 
+    def ready(self, n):
+        """第二十五轮（#12）：Telegram 能不能当批卡入口（channels 里有它、token 和 chat 都配了）。"""
+        tok, chat, _, _ = tg_cfg(n)
+        return "telegram" in n.channels() and bool(tok and chat)
+
     def push(self, n, ev, text, res):
         if "telegram" not in n.channels():
             return None
