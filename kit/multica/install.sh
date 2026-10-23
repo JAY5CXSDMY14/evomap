@@ -224,7 +224,14 @@ P
 ok "LaunchAgent → ${PLIST}（崩溃后 ${THROTTLE}s 重启；环境变量在 env 文件里，不进 plist）"
 trap - EXIT
 echo
-launchctl bootout "gui/$(id -u)/$LABEL" 2>/dev/null && info "已先卸掉旧的 ${LABEL}（要重新 bootstrap）"
-echo "装好了。接管前先停掉不归 launchd 管的 daemon：multica daemon stop（还在就 kill 那个 pid），确认 multica daemon status 不是 running，再："
-echo "  launchctl bootstrap gui/\$(id -u) $PLIST"
+WAS=0; launchctl bootout "gui/$(id -u)/$LABEL" 2>/dev/null && { WAS=1; info "已先卸掉旧的 ${LABEL}"; }
+if [ $WAS = 1 ] || [ "${MULTICA_AUTO_BOOTSTRAP:-0}" = 1 ]; then
+  # 卸完立刻 bootstrap 常报「5: Input/output error」（Air 10-23）：先 enable，等几秒，重试 3 次
+  launchctl enable "gui/$(id -u)/$LABEL" 2>/dev/null || true
+  BOK=0; for i in 1 2 3; do sleep 2; launchctl bootstrap "gui/$(id -u)" "$PLIST" 2>/dev/null && { BOK=1; break; }; done
+  if [ $BOK = 1 ]; then ok "已重新交给 launchd：${LABEL}"; else bad "bootstrap 3 次都失败，手动：launchctl bootstrap gui/\$(id -u) $PLIST"; fi
+else
+  echo "装好了。接管前先停掉不归 launchd 管的 daemon：multica daemon stop（还在就 kill 那个 pid），确认 multica daemon status 不是 running，再："
+  echo "  launchctl bootstrap gui/\$(id -u) $PLIST"
+fi
 echo "看日志：tail -f $LOGS/daemon.*.log ；查状态：multica daemon status ；multica runtime list"
