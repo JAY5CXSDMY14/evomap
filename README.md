@@ -157,6 +157,10 @@ Readest 在 magpie 基础上加了人工审批台、只处理自己的 PR、事�
 
 evoloop 本身也用 evoloop 维护：见本仓库根目录的 [LESSONS.md](LESSONS.md)。
 
+## 循环全景
+
+最新的整体循环（入口、账本、调度、工位、拍板，谁改什么）见 [docs/loop-overview.md](docs/loop-overview.md) 和渲染好的 [loop-overview.html](docs/loop-overview.html)。
+
 ## Multica 执行端
 
 新项目默认用 Multica 派工：任务落成 Multica issue，派给施工 / 验收 / 决策三个 agent，进度和验收结论也都在 issue 上。evo 不搬过去，只继续管排期、闸门和上限（返工次数、派工次数、单件时长）。为什么换、怎么部署、还踩过哪些坑，见 [docs/multica.md](docs/multica.md)。

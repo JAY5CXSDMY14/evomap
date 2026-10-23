@@ -3,6 +3,11 @@ title: evo 自动化循环 · 拓扑与状态机
 lang: zh
 ---
 
+```callout warn
+这页是 Orca 时代的旧图。最新的循环看 loop-overview（10-23）：执行端已换成 Multica。
+```
+
+
 > 现状说明，不是约束；Claude 审查后可提议修改（决策岗用 `propose`，老板点「做不做」）。
 
 ## A 一句话
