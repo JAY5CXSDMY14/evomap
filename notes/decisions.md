@@ -124,3 +124,7 @@
 - 错题本 Mechanism 字段 + 「已关单」一节（只有 code～static 级带指向才能关）。
 - 推送 / 远端租约用 git ls-remote 确认；远端名 push_remote → push_cmd 里认 → origin；`push_verify: false` 可关。
 - 我定的（保守）：scope 只认文件或目录（web 不再含 website/），带 .. / 绝对路径算越界；not_run 的测试不拦交卷（施工岗规则允许只改文档时不跑，验收岗照旧重跑）；验收正文里「未跑」不当作不通过（验收岗规则要求写未跑的检查），只认「跳过」类字样。
+
+## 2026-10-23 11:47 前台与备用模型
+- 前台暂定 Muse；约束：前台只通过 GitHub issue（统一模板/标签）进 evo，不直连 evo、不批闸门，以便日后换成别的前台只换入口。
+- 决策岗 Pro 用完时的备用模型：老板定 6.1sol，他自己在 magpie/evo team set 配。
