@@ -8,7 +8,7 @@
 #     2) 切换已超过 GUARD_MINUTES（默认 10）分钟，runner.json 的心跳还停在切换之前（新版本没转起来）
 #   → 把 ~/.evoloop/current 切回 releases/PREVIOUS 记的上一版，重启常驻进程，upgrade.json 记 rolled_back，推送一条。
 # 观察期过了且心跳正常 → upgrade.json 记 ok，之后不再管。
-# 另：每分钟顺带查 Multica 执行端（com.evoloop.multica-daemon）有没有被卸出 launchd，见下方「Multica 执行端自愈」。
+# 10-23 的「Multica 执行端自愈」11-23 已按老板要求删掉（daemon 会自己起不来，别再自动拉起、别再刷通知）。
 # 用法：evo-guard.sh [--once]（同上，跑一次就退）；EVO_DIR 可改目录（测试用）；GUARD_NOW 可固定现在的 epoch 秒（测试用）。
 set -uo pipefail
 EVO_DIR=${EVO_DIR:-$HOME/.evoloop}
@@ -42,27 +42,6 @@ if [ "$(uname)" = Darwin ] && [ -z "${GUARD_NO_NET:-}" ]; then
   osascript -e "display notification \"$3\" with title \"evo 看门狗\"" >/dev/null 2>&1 || true
 fi
 }
-
-# Multica 执行端自愈（10-23 老板批准，Air 测试期；没用就删这一段）：
-# daemon 的 LaunchAgent 在、但没加载（被 bootout 了）→ enable + bootstrap（重试 3 次）；加载了但没在跑 → kickstart。
-# 每次动手记 guard.log；推送一小时最多一次。只用 launchctl print，开销可忽略。GUARD_NO_MULTICA=1 关掉。
-MLABEL=com.evoloop.multica-daemon
-MPLIST=${GUARD_MULTICA_PLIST:-$HOME/Library/LaunchAgents/$MLABEL.plist}
-if [ -z "${GUARD_NO_MULTICA:-}" ] && [ -f "$MPLIST" ] && command -v launchctl >/dev/null 2>&1; then
-  DOM="gui/$(id -u)"; mwhat=""
-  if ! INFO=$(launchctl print "$DOM/$MLABEL" 2>/dev/null); then
-    launchctl enable "$DOM/$MLABEL" >/dev/null 2>&1 || true
-    mok=0; for i in 1 2 3; do sleep 2; launchctl bootstrap "$DOM" "$MPLIST" >/dev/null 2>&1 && { mok=1; break; }; done
-    if [ $mok = 1 ]; then mwhat="Multica 执行端被卸出 launchd，已重新挂上"; else mwhat="Multica 执行端被卸出 launchd，重挂 3 次失败，请手动：launchctl bootstrap $DOM $MPLIST"; fi
-  elif ! printf '%s' "$INFO" | grep -q 'state = running'; then
-    launchctl kickstart "$DOM/$MLABEL" >/dev/null 2>&1 && mwhat="Multica 执行端已加载但没在跑，已拉起" || mwhat="Multica 执行端没在跑，拉起失败"
-  fi
-  if [ -n "$mwhat" ]; then
-    say "$mwhat"
-    MST=$EVO_DIR/guard-multica.last; LAST=$(cat "$MST" 2>/dev/null); NOWM=$(now)
-    if [ -z "$LAST" ] || [ $(( NOWM - LAST )) -ge 3600 ]; then echo "$NOWM" > "$MST"; push multica_daemon_heal "Multica 自愈" "$mwhat"; fi
-  fi
-fi
 
 [ -f "$UP" ] || exit 0
 STATE=$(jget "$UP" state)
